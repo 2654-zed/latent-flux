@@ -1,4 +1,4 @@
-"""Latent Flux Expression Parser – parse and evaluate ∑_ψ ⟼ ∇↓ ≅ ↓! ⇑ ◉ syntax.
+"""Latent Flux Expression Parser – parse and evaluate ∑_ψ ⟼ ∇↓ ≅ ↓! ⇑ ◉ ⧖ syntax.
 
 EBNF Grammar (Latent Flux v0.4)
 ════════════════════════════════
@@ -16,9 +16,10 @@ EBNF Grammar (Latent Flux v0.4)
     number      ::= '-'? DIGIT+ ('.' DIGIT+)?
     symbol      ::= IDENT
 
-    OP          ::= '⟼' | '∑_ψ' | '∇↓' | '≅' | '↓!' | '⇑' | '◉'
+    OP          ::= '⟼' | '∑_ψ' | '∇↓' | '≅' | '↓!' | '⇑' | '◉' | '⧖'
                   | '->' | 'sum_psi' | 'squeeze' | '~=' | 'commit'
                   | 'cascade' | 'fold' | 'superpose' | 'flow' | 'equiv'
+                  | 'reservoir'
     STRING      ::= '"' [^"]* '"'
     IDENT       ::= [a-zA-Z_][a-zA-Z_0-9]*
     NEWLINE     ::= '\\n' | EOF
@@ -64,6 +65,7 @@ from flux_manifold.fold_reference import FoldReference, no_nan_critique, norm_bo
 from flux_manifold.dimensional_squeeze import DimensionalSqueeze
 from flux_manifold.tsp_solver import nearest_neighbor_tour
 from flux_manifold.flow_trace import FlowTrace, FlowTraceEntry, analyze_convergence
+from flux_manifold.reservoir_state import ReservoirState, SuperpositionReservoir
 
 
 # ── AST Nodes ──────────────────────────────────────────────────────
@@ -133,15 +135,16 @@ OPERATORS = {
     "⇑": "cascade", "cascade": "cascade",
     "◉": "fold", "fold": "fold",
     "∑_ψ": "superpose", "sum_psi": "superpose", "superpose": "superpose",
+    "⧖": "reservoir", "reservoir": "reservoir",
 }
 
 TOKEN_PATTERN = re.compile(
     r"""
     (\#[^\n]*)                         # Comment (skip)
     |("(?:[^"\\]|\\.)*")               # String literal
-    |(\∑_ψ|⟼|∇↓|≅|↓!|⇑|◉)          # Unicode operators
+    |(\∑_ψ|⟼|∇↓|≅|↓!|⇑|◉|⧖)          # Unicode operators
     |(\->|~=|sum_psi)                 # ASCII aliases
-    |((?:import|flow|squeeze|equiv|commit|cascade|fold|superpose|let)(?![a-zA-Z_0-9]))  # Keywords (word boundary)
+    |((?:import|flow|squeeze|equiv|commit|cascade|fold|superpose|reservoir|let)(?![a-zA-Z_0-9]))  # Keywords (word boundary)
     |(\|)                              # Pipe
     |(\[)                              # Open bracket
     |(\])                              # Close bracket
@@ -463,6 +466,9 @@ class EvalContext:
         self._imported: set[str] = set()
         # Flow Trace: structured diagnostics for non-convergence
         self.flow_trace = FlowTrace()
+        # Reservoir State (⧖): continuous memory across flow steps
+        self.reservoir: ReservoirState | None = None
+        self.sp_reservoir: SuperpositionReservoir | None = None
         # Import stack: tracks the chain of importing files for resolution
         self._import_dirs: list[str] = []
 
@@ -999,6 +1005,21 @@ def _eval_op(op: LFOp, current: Any, ctx: EvalContext) -> Any:
             corrected, _ = fr.check(current, step=0)
             return corrected
         raise TypeError(f"◉ expects array or SuperpositionTensor, got {type(current)}")
+
+    elif sym == "reservoir":
+        # ⧖: reservoir state — continuous memory via ESN dynamics
+        if isinstance(current, SuperpositionTensor):
+            if ctx.sp_reservoir is None:
+                ctx.sp_reservoir = SuperpositionReservoir(current.n, current.d)
+            readouts = ctx.sp_reservoir.step_all(current.states)
+            return current
+        elif isinstance(current, np.ndarray):
+            d = current.shape[-1] if current.ndim >= 1 else 1
+            if ctx.reservoir is None:
+                ctx.reservoir = ReservoirState(d)
+            readout = ctx.reservoir.step(current)
+            return current
+        raise TypeError(f"⧖ expects array or SuperpositionTensor, got {type(current)}")
 
     else:
         raise ValueError(f"Unknown operator: {sym!r}")

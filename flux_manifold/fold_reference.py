@@ -5,10 +5,21 @@ function. If the critique detects a problem (e.g., crossing edges
 in TSP), apply a correction before continuing flow.
 
 Notation:  ◉[state] ⊸ (λs. critique(s)) → corrected_state
+
+Reservoir-aware critiques:
+    Existing critiques ignore reservoir history (backward compatible).
+    Reservoir-aware critiques declare `reservoir_history` as a kwarg:
+
+        def my_critique(state, *, reservoir_history=None):
+            ...
+
+    FoldReference detects this via inspect.signature and passes the
+    reservoir history when available. No breaking change.
 """
 
 from __future__ import annotations
 
+import inspect
 import numpy as np
 from typing import Callable
 
@@ -38,13 +49,29 @@ class FoldReference:
         self.max_corrections = max_corrections
         self.history: list[dict] = []
         self._corrections_applied = 0
+        # Check if critique_fn accepts reservoir_history kwarg
+        self._accepts_reservoir = _accepts_kwarg(critique_fn, 'reservoir_history')
 
-    def check(self, state: np.ndarray, step: int) -> tuple[np.ndarray, bool]:
-        """Check state at given step. Returns (possibly corrected state, was_corrected)."""
+    def check(
+        self,
+        state: np.ndarray,
+        step: int,
+        reservoir_history: list[np.ndarray] | None = None,
+    ) -> tuple[np.ndarray, bool]:
+        """Check state at given step. Returns (possibly corrected state, was_corrected).
+
+        Args:
+            reservoir_history: Optional reservoir history for reservoir-aware critiques.
+        """
         if step % self.interval != 0:
             return state, False
 
-        ok, diagnosis, correction = self.critique_fn(state)
+        if self._accepts_reservoir and reservoir_history is not None:
+            ok, diagnosis, correction = self.critique_fn(
+                state, reservoir_history=reservoir_history
+            )
+        else:
+            ok, diagnosis, correction = self.critique_fn(state)
         record = {"step": step, "ok": ok, "diagnosis": diagnosis}
 
         if not ok and correction is not None and self._corrections_applied < self.max_corrections:
@@ -57,11 +84,17 @@ class FoldReference:
         self.history.append(record)
         return state, False
 
-    def check_batch(self, states: np.ndarray) -> tuple[np.ndarray, int]:
+    def check_batch(
+        self,
+        states: np.ndarray,
+        reservoir_histories: list[list[np.ndarray]] | None = None,
+    ) -> tuple[np.ndarray, int]:
         """Critique all N states in (N, d) matrix. Returns (corrected_states, n_corrections).
 
-        Applies critique_fn to each state, but avoids Python-level per-state loops
-        for built-in critiques by using vectorized numpy operations directly.
+        Args:
+            reservoir_histories: Optional per-candidate reservoir histories.
+                                 Only passed to critique_fn if it accepts
+                                 the reservoir_history kwarg.
         """
         N = states.shape[0]
         corrected = states.copy()
@@ -83,7 +116,14 @@ class FoldReference:
         for i in range(N):
             if n_corrections >= budget:
                 break
-            ok, diagnosis, correction = self.critique_fn(corrected[i])
+            if (self._accepts_reservoir
+                    and reservoir_histories is not None
+                    and i < len(reservoir_histories)):
+                ok, diagnosis, correction = self.critique_fn(
+                    corrected[i], reservoir_history=reservoir_histories[i]
+                )
+            else:
+                ok, diagnosis, correction = self.critique_fn(corrected[i])
             if not ok and correction is not None:
                 corrected[i] = correction.astype(np.float32)
                 n_corrections += 1
@@ -117,3 +157,38 @@ def norm_bound_critique(
             return False, f"norm={n:.2f} > {max_norm}", state * (max_norm / n)
         return True, f"norm={n:.2f} ok", None
     return _critique
+
+
+def reservoir_norm_critique(
+    max_norm: float = 10.0, max_reservoir_norm: float = 50.0,
+) -> CritiqueFn:
+    """Reservoir-aware critique: checks both state norm and reservoir state norms.
+
+    This is an example of a reservoir-aware critique function. It declares
+    the `reservoir_history` kwarg, which FoldReference detects via
+    inspect.signature and passes automatically when available.
+    """
+    def _critique(
+        state: np.ndarray,
+        *,
+        reservoir_history: list[np.ndarray] | None = None,
+    ) -> tuple[bool, str, np.ndarray | None]:
+        n = float(np.linalg.norm(state))
+        if n > max_norm:
+            return False, f"state norm={n:.2f} > {max_norm}", state * (max_norm / n)
+        if reservoir_history:
+            latest_h = reservoir_history[-1]
+            rn = float(np.linalg.norm(latest_h))
+            if rn > max_reservoir_norm:
+                return False, f"reservoir norm={rn:.2f} > {max_reservoir_norm}", state * 0.9
+        return True, "ok", None
+    return _critique
+
+
+def _accepts_kwarg(fn: object, kwarg_name: str) -> bool:
+    """Check if a callable accepts a specific keyword argument."""
+    try:
+        sig = inspect.signature(fn)
+        return kwarg_name in sig.parameters
+    except (ValueError, TypeError):
+        return False

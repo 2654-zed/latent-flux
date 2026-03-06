@@ -2,12 +2,21 @@
 
 Supports both single-state flow (d,) and batch flow (N, d) for O(1)
 parallel evaluation across a Superposition Tensor.
+
+Every flow invocation accepts an optional ConvergenceContract declaring
+its convergence tier (1=Provable, 2=Empirical, 3=Non-convergent).
+If no contract is provided, Tier 2 (EMPIRICAL) is assumed.
 """
 
 from __future__ import annotations
 
 import numpy as np
 from typing import Callable, Optional
+
+from flux_manifold.convergence import (
+    ConvergenceContract, ConvergenceResult, ConvergenceTier,
+    TIER_2_DEFAULT,
+)
 
 FlowFn = Callable[[np.ndarray, np.ndarray], np.ndarray]
 
@@ -42,16 +51,26 @@ def flux_flow(
     epsilon: float = 0.1,
     tol: float = 1e-3,
     max_steps: int = 1000,
+    contract: ConvergenceContract | None = None,
 ) -> np.ndarray:
     """Run FluxManifold flow from s0 toward attractor q.
+
+    Args:
+        contract: Optional convergence contract. Defaults to Tier 2 (EMPIRICAL).
+                  Tier 1 requires a Lipschitz bound and will raise if flow
+                  fails to converge. Tier 3 expects non-convergence.
 
     Returns the converged state.
     """
     _validate_inputs(s0, q, epsilon, tol, max_steps)
+    if contract is None:
+        contract = TIER_2_DEFAULT
     s = s0.astype(np.float32, copy=True)
     q = q.astype(np.float32, copy=False)
 
-    for _ in range(max_steps):
+    converged = False
+    steps_used = 0
+    for steps_used in range(1, max_steps + 1):
         delta = epsilon * f(s, q)
         # Guard overflow / NaN
         if np.any(np.isnan(delta)) or np.any(np.isinf(delta)):
@@ -66,7 +85,21 @@ def flux_flow(
             delta = delta * (dist / norm)
         s = s + delta
         if np.linalg.norm(s - q) < tol:
-            return s
+            converged = True
+            break
+
+    # Check convergence contract
+    result = ConvergenceResult(
+        contract=contract,
+        converged=converged,
+        steps_used=steps_used,
+        max_steps=max_steps,
+        final_drift=float(np.linalg.norm(s - q)),
+    )
+    result.check()
+    if result.failure_signal and contract.tier == ConvergenceTier.PROVABLE:
+        raise RuntimeError(result.failure_signal)
+
     return s
 
 
@@ -77,14 +110,20 @@ def flux_flow_traced(
     epsilon: float = 0.1,
     tol: float = 1e-3,
     max_steps: int = 1000,
+    contract: ConvergenceContract | None = None,
 ) -> dict:
     """Run FluxManifold flow and return full trace for analysis/logging.
 
+    Args:
+        contract: Optional convergence contract. Defaults to Tier 2.
+
     Returns dict with keys:
         converged_state, steps, converged (bool), drift_trace (list[float]),
-        path (list of states).
+        path (list of states), convergence_result (ConvergenceResult).
     """
     _validate_inputs(s0, q, epsilon, tol, max_steps)
+    if contract is None:
+        contract = TIER_2_DEFAULT
     s = s0.astype(np.float32, copy=True)
     q = q.astype(np.float32, copy=False)
 
@@ -113,12 +152,22 @@ def flux_flow_traced(
             converged = True
             break
 
+    conv_result = ConvergenceResult(
+        contract=contract,
+        converged=converged,
+        steps_used=len(drift_trace),
+        max_steps=max_steps,
+        final_drift=drift_trace[-1] if drift_trace else float(np.linalg.norm(s - q)),
+    )
+    conv_result.check()
+
     return {
         "converged_state": s,
         "steps": len(drift_trace),
         "converged": converged,
         "drift_trace": drift_trace,
         "path": path,
+        "convergence_result": conv_result,
     }
 
 

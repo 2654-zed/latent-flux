@@ -1,4 +1,4 @@
-"""Latent Flux Interpreter – all 7 primitives for transformer-native computation."""
+"""Latent Flux Interpreter – all 8 primitives for transformer-native computation."""
 
 # Core FluxManifold (⟼)
 from flux_manifold.core import flux_flow, flux_flow_traced, flux_flow_batch, flux_flow_traced_batch
@@ -20,7 +20,13 @@ from flux_manifold.commitment_sink import CommitmentSink
 from flux_manifold.abstraction_cascade import AbstractionCascade
 
 # Fold-Reference (◉)
-from flux_manifold.fold_reference import FoldReference, no_nan_critique, norm_bound_critique
+from flux_manifold.fold_reference import FoldReference, no_nan_critique, norm_bound_critique, reservoir_norm_critique
+
+# ⧖ Reservoir State
+from flux_manifold.reservoir_state import ReservoirState, SuperpositionReservoir
+
+# Convergence Contracts
+from flux_manifold.convergence import ConvergenceTier, ConvergenceContract, ConvergenceResult
 
 # Dimensional Squeeze (∇↓)
 from flux_manifold.dimensional_squeeze import DimensionalSqueeze
@@ -71,7 +77,11 @@ __all__ = [
     # ⇑ Abstraction Cascade
     "AbstractionCascade",
     # ◉ Fold-Reference
-    "FoldReference", "no_nan_critique", "norm_bound_critique",
+    "FoldReference", "no_nan_critique", "norm_bound_critique", "reservoir_norm_critique",
+    # ⧖ Reservoir State
+    "ReservoirState", "SuperpositionReservoir",
+    # Convergence Contracts
+    "ConvergenceTier", "ConvergenceContract", "ConvergenceResult",
     # ∇↓ Dimensional Squeeze
     "DimensionalSqueeze",
     # Topological Squeeze

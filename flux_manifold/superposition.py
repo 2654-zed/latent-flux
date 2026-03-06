@@ -36,6 +36,16 @@ class SuperpositionTensor:
             if w.shape != (self.n,):
                 raise ValueError(f"weights shape {w.shape} != ({self.n},)")
             self.weights = w / w.sum()  # normalize
+        # Optional coupled reservoir (⧖)
+        self._reservoir = None  # SuperpositionReservoir or None
+
+    def attach_reservoir(self, reservoir) -> None:
+        """Couple a SuperpositionReservoir to this tensor.
+
+        Once attached, reweight_by_drift and prune will keep
+        reservoir histories coupled with candidate states.
+        """
+        self._reservoir = reservoir
 
     @classmethod
     def from_random(
@@ -78,13 +88,21 @@ class SuperpositionTensor:
         return trace
 
     def reweight_by_drift(self, q: np.ndarray) -> None:
-        """Reweight states: closer to q gets higher weight (softmax of -dist)."""
+        """Reweight states: closer to q gets higher weight (softmax of -dist).
+
+        If a SuperpositionReservoir is attached, reservoir histories are
+        reordered to stay coupled with their candidate states.
+        """
         dists = np.linalg.norm(self.states - q, axis=1)
         # Softmax of negative distances → closer = higher weight
         logits = -dists
         logits -= logits.max()  # numerical stability
         w = np.exp(logits)
         self.weights = (w / w.sum()).astype(np.float32)
+        # Couple reservoir: reorder by descending weight
+        if self._reservoir is not None:
+            order = np.argsort(self.weights)[::-1]
+            self._reservoir.reorder(order)
 
     def collapse_to_best(self, q: np.ndarray) -> np.ndarray:
         """Collapse superposition: return the state closest to q."""
@@ -97,7 +115,11 @@ class SuperpositionTensor:
         return self.mean_state()
 
     def prune(self, keep: int) -> None:
-        """Keep only the top-k states by weight."""
+        """Keep only the top-k states by weight.
+
+        If a SuperpositionReservoir is attached, pruned reservoir
+        histories are discarded alongside their candidate states.
+        """
         if keep >= self.n:
             return
         idx = np.argsort(self.weights)[::-1][:keep]
@@ -105,3 +127,5 @@ class SuperpositionTensor:
         self.weights = self.weights[idx]
         self.weights /= self.weights.sum()
         self.n = keep
+        if self._reservoir is not None:
+            self._reservoir.prune(idx)
