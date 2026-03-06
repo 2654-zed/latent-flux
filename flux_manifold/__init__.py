@@ -25,6 +25,20 @@ from flux_manifold.fold_reference import FoldReference, no_nan_critique, norm_bo
 # Dimensional Squeeze (∇↓)
 from flux_manifold.dimensional_squeeze import DimensionalSqueeze
 
+# Topological Squeeze (§4 ontology)
+from flux_manifold.topological_squeeze import TopologicalSqueeze, TopologyDiagnostics
+
+# Hamiltonian Flows (§2 ontology)
+from flux_manifold.hamiltonian import (
+    HamiltonianFlowEngine, HamiltonianState,
+    hamiltonian_flow, hamiltonian_flow_batch,
+)
+
+# Quantum Interference (§3 ontology)
+from flux_manifold.quantum_interference import (
+    QuantumInterferenceEngine, InterferenceResult,
+)
+
 # Full interpreter
 from flux_manifold.interpreter import LatentFluxInterpreter
 
@@ -57,6 +71,13 @@ __all__ = [
     "FoldReference", "no_nan_critique", "norm_bound_critique",
     # ∇↓ Dimensional Squeeze
     "DimensionalSqueeze",
+    # Topological Squeeze
+    "TopologicalSqueeze", "TopologyDiagnostics",
+    # Hamiltonian Flows
+    "HamiltonianFlowEngine", "HamiltonianState",
+    "hamiltonian_flow", "hamiltonian_flow_batch",
+    # Quantum Interference
+    "QuantumInterferenceEngine", "InterferenceResult",
     # Interpreter
     "LatentFluxInterpreter",
     # TSP
