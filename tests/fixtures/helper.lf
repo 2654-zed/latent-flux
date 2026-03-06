@@ -1,0 +1,3 @@
+# helper.lf — test module for import system
+helper_origin = [0, 0, 0]
+helper_target = [1, 1, 1]

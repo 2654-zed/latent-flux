@@ -1,0 +1,3 @@
+# importer.lf — tests that import works relative to this file
+import "helper"
+result = helper_origin ⟼ helper_target | ↓!

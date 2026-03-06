@@ -49,6 +49,11 @@ def cmd_run(filepath: str, verbose: bool = False) -> None:
         for m in messages:
             print(f"  {m}")
 
+    # Print Flow Trace if any non-convergence occurred
+    if ctx.flow_trace.has_failures and not verbose:
+        # Already emitted via messages in verbose mode
+        pass  # trace was already emitted via on_message callback
+
     print(f"── Elapsed: {elapsed:.3f}s ──")
 
 

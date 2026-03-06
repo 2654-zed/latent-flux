@@ -1,0 +1,3 @@
+# sub/nested_importer.lf — tests nested import resolution
+import "../helper"
+nested_result = helper_origin ⟼ helper_target | ↓!

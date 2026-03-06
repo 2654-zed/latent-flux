@@ -28,6 +28,9 @@ from flux_manifold.dimensional_squeeze import DimensionalSqueeze
 # Topological Squeeze (§4 ontology)
 from flux_manifold.topological_squeeze import TopologicalSqueeze, TopologyDiagnostics
 
+# Flow Trace (structured error diagnostics)
+from flux_manifold.flow_trace import FlowTrace, FlowTraceEntry, analyze_convergence
+
 # Hamiltonian Flows (§2 ontology)
 from flux_manifold.hamiltonian import (
     HamiltonianFlowEngine, HamiltonianState,
@@ -73,6 +76,8 @@ __all__ = [
     "DimensionalSqueeze",
     # Topological Squeeze
     "TopologicalSqueeze", "TopologyDiagnostics",
+    # Flow Trace
+    "FlowTrace", "FlowTraceEntry", "analyze_convergence",
     # Hamiltonian Flows
     "HamiltonianFlowEngine", "HamiltonianState",
     "hamiltonian_flow", "hamiltonian_flow_batch",

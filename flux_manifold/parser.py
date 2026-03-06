@@ -63,6 +63,7 @@ from flux_manifold.abstraction_cascade import AbstractionCascade
 from flux_manifold.fold_reference import FoldReference, no_nan_critique, norm_bound_critique
 from flux_manifold.dimensional_squeeze import DimensionalSqueeze
 from flux_manifold.tsp_solver import nearest_neighbor_tour
+from flux_manifold.flow_trace import FlowTrace, FlowTraceEntry, analyze_convergence
 
 
 # ── AST Nodes ──────────────────────────────────────────────────────
@@ -76,6 +77,11 @@ class LFVector:
 class LFNumber:
     """Literal number."""
     value: float
+
+@dataclass
+class LFString:
+    """Literal string."""
+    value: str
 
 @dataclass
 class LFSymbol:
@@ -344,6 +350,10 @@ class Parser:
             self.consume()
             return LFNumber(value=float(tok[1]))
 
+        if tok[0] == "STRING":
+            self.consume()
+            return LFString(value=tok[1])
+
         if tok[0] == "LBRACKET":
             return self.parse_vector()
 
@@ -451,6 +461,10 @@ class EvalContext:
         self.on_message = on_message or (lambda msg: None)
         # Track imported modules to avoid re-import
         self._imported: set[str] = set()
+        # Flow Trace: structured diagnostics for non-convergence
+        self.flow_trace = FlowTrace()
+        # Import stack: tracks the chain of importing files for resolution
+        self._import_dirs: list[str] = []
 
     def set(self, name: str, value: Any) -> None:
         self.variables[name] = value
@@ -461,22 +475,36 @@ class EvalContext:
         return self.variables[name]
 
 
-def _resolve_import_path(path: str) -> str:
-    """Resolve an import path to a filesystem .lf file."""
+def _resolve_import_path(path: str, import_dirs: list[str] | None = None) -> str:
+    """Resolve an import path to a filesystem .lf file.
+
+    Search order:
+      1. Relative to the importing file's directory (top of import_dirs stack)
+      2. Relative to stdlib/ next to the package
+      3. Relative to CWD
+    """
     import os
-    # Search relative to the stdlib directory first, then CWD
-    base_dirs = [
-        os.path.join(os.path.dirname(__file__), "..", "stdlib"),
-        os.path.join(os.path.dirname(__file__), "stdlib"),
-        os.getcwd(),
-    ]
     # Normalize: strip .lf extension if provided
     if path.endswith(".lf"):
         path = path[:-3]
+
+    base_dirs: list[str] = []
+
+    # 1. Relative to the importing file's directory
+    if import_dirs:
+        base_dirs.append(import_dirs[-1])
+
+    # 2. Relative to the package's stdlib directory
+    base_dirs.append(os.path.join(os.path.dirname(__file__), "..", "stdlib"))
+    base_dirs.append(os.path.join(os.path.dirname(__file__), "stdlib"))
+
+    # 3. CWD
+    base_dirs.append(os.getcwd())
+
     for base in base_dirs:
         candidate = os.path.join(base, path + ".lf")
         if os.path.isfile(candidate):
-            return candidate
+            return os.path.abspath(candidate)
     raise FileNotFoundError(f"Cannot resolve import: {path!r}")
 
 
@@ -515,15 +543,26 @@ def evaluate_program(ast: LFProgram, ctx: EvalContext | None = None) -> Any:
 
 
 def _eval_import(node: LFImport, ctx: EvalContext) -> None:
-    """Execute an import statement — load and eval a .lf file."""
+    """Execute an import statement — load and eval a .lf file.
+
+    Resolves the path relative to the importing file's directory first,
+    then stdlib, then CWD. Tracks the import stack so nested imports
+    resolve relative to their own file.
+    """
+    import os
     if node.path in ctx._imported:
         return  # already imported
-    filepath = _resolve_import_path(node.path)
+    filepath = _resolve_import_path(node.path, ctx._import_dirs)
     with open(filepath, "r", encoding="utf-8") as f:
         source = f.read()
     ctx._imported.add(node.path)
-    program = parse_program(source)
-    evaluate_program(program, ctx)
+    # Push this file's directory onto the import stack
+    ctx._import_dirs.append(os.path.dirname(os.path.abspath(filepath)))
+    try:
+        program = parse_program(source)
+        evaluate_program(program, ctx)
+    finally:
+        ctx._import_dirs.pop()
 
 
 def evaluate(ast: LFPipeline, ctx: EvalContext | None = None) -> Any:
@@ -544,6 +583,8 @@ def _eval_stage(node: Any, current: Any, ctx: EvalContext) -> Any:
     elif isinstance(node, LFVector):
         return _eval_vector(node)
     elif isinstance(node, LFNumber):
+        return node.value
+    elif isinstance(node, LFString):
         return node.value
     elif isinstance(node, LFSymbol):
         return ctx.get(node.name)
@@ -697,6 +738,67 @@ def _eval_func(node: LFFuncCall, ctx: EvalContext) -> Any:
             if length < best:
                 best = length
         return best
+
+    # ── I/O: External State Loading ─────────────────────────────
+    elif name == "load_json":
+        # load_json("path.json") — load JSON as ndarray or SuperpositionTensor
+        import json as _json
+        import os
+        path = str(raw_args[0])
+        # Resolve relative to import stack or CWD
+        if not os.path.isabs(path) and ctx._import_dirs:
+            candidate = os.path.join(ctx._import_dirs[-1], path)
+            if os.path.isfile(candidate):
+                path = candidate
+        with open(path, "r", encoding="utf-8") as _f:
+            data = _json.load(_f)
+        return _json_to_array(data)
+
+    elif name == "load_csv":
+        # load_csv("path.csv", header?) — load CSV as ndarray
+        # header=1 means skip first row (default), header=0 means no header
+        import csv as _csv
+        import os
+        path = str(raw_args[0])
+        has_header = int(raw_args[1]) if len(raw_args) > 1 else 1
+        if not os.path.isabs(path) and ctx._import_dirs:
+            candidate = os.path.join(ctx._import_dirs[-1], path)
+            if os.path.isfile(candidate):
+                path = candidate
+        rows: list[list[float]] = []
+        with open(path, "r", encoding="utf-8", newline="") as _f:
+            reader = _csv.reader(_f)
+            for i, row in enumerate(reader):
+                if i == 0 and has_header:
+                    continue
+                numeric_row: list[float] = []
+                for cell in row:
+                    cell = cell.strip()
+                    if cell == "":
+                        continue
+                    try:
+                        numeric_row.append(float(cell))
+                    except ValueError:
+                        continue
+                if numeric_row:
+                    rows.append(numeric_row)
+        if not rows:
+            return np.array([], dtype=np.float32)
+        # Pad rows to same length
+        max_cols = max(len(r) for r in rows)
+        for r in rows:
+            while len(r) < max_cols:
+                r.append(0.0)
+        return np.array(rows, dtype=np.float32)
+
+    elif name == "to_manifold":
+        # to_manifold(data) — cast ndarray to SuperpositionTensor
+        data = raw_args[0]
+        arr = np.asarray(data, dtype=np.float32)
+        if arr.ndim == 1:
+            arr = arr.reshape(1, -1)
+        return SuperpositionTensor(arr)
+
     else:
         # Check if it's a user-defined function in the context
         if name in ctx.variables:
@@ -704,6 +806,54 @@ def _eval_func(node: LFFuncCall, ctx: EvalContext) -> Any:
             if callable(fn):
                 return fn(*raw_args)
         raise NameError(f"Unknown function: {name!r}")
+
+
+def _json_to_array(data):
+    """Convert parsed JSON data to numpy array.
+
+    Handles:
+      - list of numbers -> 1D array
+      - list of lists -> 2D array
+      - dict with numeric values -> 1D array (values only)
+      - dict with 'data'/'states'/'points' key -> recurse on that key
+    """
+    if isinstance(data, dict):
+        # Look for common data keys
+        for key in ("data", "states", "points", "rows", "values"):
+            if key in data:
+                return _json_to_array(data[key])
+        # Fall back to dict values (if all numeric)
+        vals = list(data.values())
+        if vals and all(isinstance(v, (int, float)) for v in vals):
+            return np.array(vals, dtype=np.float32)
+        return _json_to_array(vals)
+    if isinstance(data, list):
+        if not data:
+            return np.array([], dtype=np.float32)
+        if isinstance(data[0], (int, float)):
+            return np.array(data, dtype=np.float32)
+        if isinstance(data[0], (list, tuple)):
+            max_len = max(len(row) for row in data)
+            rows = []
+            for row in data:
+                r = [float(x) for x in row if isinstance(x, (int, float))]
+                while len(r) < max_len:
+                    r.append(0.0)
+                rows.append(r)
+            return np.array(rows, dtype=np.float32)
+        if isinstance(data[0], dict):
+            # list of dicts: extract numeric values from each
+            rows = []
+            for item in data:
+                row = [float(v) for v in item.values() if isinstance(v, (int, float))]
+                rows.append(row)
+            if rows:
+                max_len = max(len(r) for r in rows)
+                for r in rows:
+                    while len(r) < max_len:
+                        r.append(0.0)
+            return np.array(rows, dtype=np.float32) if rows else np.array([], dtype=np.float32)
+    return np.array([float(data)], dtype=np.float32)
 
 
 def _eval_op(op: LFOp, current: Any, ctx: EvalContext) -> Any:
@@ -732,18 +882,36 @@ def _eval_op(op: LFOp, current: Any, ctx: EvalContext) -> Any:
         q = np.asarray(q, dtype=np.float32)
 
         if isinstance(current, SuperpositionTensor):
+            entropy_before = current.entropy()
             trace = current.flow_all(q, ctx.flow_fn,
                                       epsilon=ctx.epsilon, tol=ctx.tol,
                                       max_steps=ctx.max_steps)
             ctx.last_trace = trace
             current.reweight_by_drift(q)
             ctx.last_superposition = current
+            entropy_after = current.entropy()
+
+            # Flow Trace: analyze convergence and emit diagnostics
+            entry = analyze_convergence(trace, ctx.tol)
+            entry.entropy_before = entropy_before
+            entry.entropy_after = entropy_after
+            if entry.status != "ok":
+                ctx.flow_trace.add(entry)
+                ctx.on_message(ctx.flow_trace.format())
+
             return current
         elif isinstance(current, np.ndarray):
             trace = flux_flow_traced(current, q, ctx.flow_fn,
                                       epsilon=ctx.epsilon, tol=ctx.tol,
                                       max_steps=ctx.max_steps)
             ctx.last_trace = trace
+
+            # Flow Trace: analyze convergence
+            entry = analyze_convergence(trace, ctx.tol)
+            if entry.status != "ok":
+                ctx.flow_trace.add(entry)
+                ctx.on_message(ctx.flow_trace.format())
+
             return trace["converged_state"]
         else:
             raise TypeError(f"⟼ expects array or SuperpositionTensor, got {type(current)}")
@@ -869,6 +1037,8 @@ def run_file(filepath: str, ctx: EvalContext | None = None, **kwargs) -> Any:
     ctx = ctx or EvalContext(**kwargs)
     abs_path = os.path.abspath(filepath)
     file_dir = os.path.dirname(abs_path)
+    # Push file's directory onto the import stack for resolution
+    ctx._import_dirs.append(file_dir)
     # Set CWD to the file's directory for import resolution
     old_cwd = os.getcwd()
     try:
@@ -879,3 +1049,4 @@ def run_file(filepath: str, ctx: EvalContext | None = None, **kwargs) -> Any:
         return evaluate_program(program, ctx)
     finally:
         os.chdir(old_cwd)
+        ctx._import_dirs.pop()
