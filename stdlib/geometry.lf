@@ -1,0 +1,55 @@
+# ═══════════════════════════════════════════════════════════════
+# geometry.lf — Standard flow gradients for Latent Flux
+# ═══════════════════════════════════════════════════════════════
+#
+# Provides canonical attractor and repulsive configurations.
+# Import: import "geometry"
+#
+# These define standard geometric states used as attractors,
+# initial conditions, and reference points for flow dynamics.
+# ═══════════════════════════════════════════════════════════════
+
+# ── Canonical attractors ──────────────────────────────────────
+
+# Origin attractor in 2D (zero-point collapse target)
+origin_2d = zeros(2)
+
+# Origin attractor in 8D
+origin_8d = zeros(8)
+
+# Origin attractor in 32D
+origin_32d = zeros(32)
+
+# Unit attractor in 2D (unit normalization target)
+unit_2d = ones(2)
+
+# Unit attractor in 8D
+unit_8d = ones(8)
+
+# Unit attractor in 32D
+unit_32d = ones(32)
+
+# ── Standard initial superpositions ───────────────────────────
+
+# Small 2D exploration (5 candidates)
+explore_2d = random(5, 2)
+
+# Medium 8D exploration (10 candidates)
+explore_8d = random(10, 8)
+
+# Large 32D exploration (20 candidates)
+explore_32d = random(20, 32)
+
+# High-density 64D exploration (32 candidates)
+explore_64d = random(32, 64)
+
+# ── Canonical flow patterns ──────────────────────────────────
+
+# Converge 2D: superpose → flow to origin → commit
+converge_2d = ∑_ψ random(5, 2) ⟼ zeros(2) | ↓!
+
+# Converge 8D: superpose → flow to origin → fold → commit
+converge_8d = ∑_ψ random(10, 8) ⟼ zeros(8) | ◉ | ↓!
+
+# Full pipeline 32D: superpose → squeeze → flow → fold → equiv → commit → cascade
+pipeline_32d = ∑_ψ random(20, 32) | squeeze 16 | -> zeros(16) | ◉ | ~= 0.1 | commit | cascade 3

@@ -32,7 +32,12 @@ from flux_manifold.interpreter import LatentFluxInterpreter
 from flux_manifold.tsp_solver import LatentFluxTSP, solve_tsp
 
 # Parser + REPL
-from flux_manifold.parser import parse, evaluate, run, EvalContext
+from flux_manifold.parser import (
+    parse, parse_program, evaluate, evaluate_program,
+    run, run_file, EvalContext,
+    LFPipeline, LFOp, LFVector, LFNumber, LFSymbol, LFFuncCall,
+    LFImport, LFLet, LFProgram,
+)
 
 __all__ = [
     # ⟼ FluxManifold
@@ -57,5 +62,8 @@ __all__ = [
     # TSP
     "LatentFluxTSP", "solve_tsp",
     # Parser + REPL
-    "parse", "evaluate", "run", "EvalContext",
+    "parse", "parse_program", "evaluate", "evaluate_program",
+    "run", "run_file", "EvalContext",
+    "LFPipeline", "LFOp", "LFVector", "LFNumber", "LFSymbol", "LFFuncCall",
+    "LFImport", "LFLet", "LFProgram",
 ]

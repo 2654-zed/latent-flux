@@ -131,26 +131,19 @@ class LatentFluxInterpreter:
         total_steps = int(batch_trace["total_steps"])
         converged_count = int(batch_trace["converged"].sum())
 
-        # Aggregate drift trace (from best candidate)
-        best_idx = int(np.argmin([
-            np.linalg.norm(self._superposition.states[i] - q_work)
-            for i in range(self._superposition.n)
-        ]))
+        # Aggregate drift trace (from best candidate) — vectorized
+        dists = np.linalg.norm(self._superposition.states - q_work, axis=1)
+        best_idx = int(np.argmin(dists))
         drift_matrix = batch_trace["drift_traces"]  # (iters, N)
         combined_drift = []
         if drift_matrix.size > 0:
             col = drift_matrix[:, best_idx]
             combined_drift = col[~np.isnan(col)].tolist()
 
-        # ── Step 4: ◉ Fold-Reference (post-flow critique) ──────
-        fold_corrections = 0
-        for i in range(self._superposition.n):
-            corrected, was_corrected = self.fold_ref.check(
-                self._superposition.states[i], step=i
-            )
-            if was_corrected:
-                self._superposition.states[i] = corrected
-                fold_corrections += 1
+        # ── Step 4: ◉ Fold-Reference (post-flow critique, batch) ──
+        self._superposition.states, fold_corrections = self.fold_ref.check_batch(
+            self._superposition.states
+        )
 
         # ── Step 5: ≅ DriftEquivalence (reweight by quality) ────
         self._superposition.reweight_by_drift(q_work)

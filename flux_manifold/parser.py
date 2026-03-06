@@ -1,18 +1,50 @@
 """Latent Flux Expression Parser – parse and evaluate ∑_ψ ⟼ ∇↓ ≅ ↓! ⇑ ◉ syntax.
 
-Grammar (simplified):
-    expr     ::= pipeline
-    pipeline ::= atom (OP atom)*
-    atom     ::= SYMBOL | NUMBER | VECTOR | '(' pipeline ')' | func_call
-    OP       ::= '⟼' | '∇↓' | '≅' | '↓!' | '⇑' | '◉' | '∑_ψ' | '|'
+EBNF Grammar (Latent Flux v0.4)
+════════════════════════════════
+
+    program     ::= (statement NEWLINE)*
+    statement   ::= import_stmt | let_stmt | pipeline
+    import_stmt ::= 'import' STRING
+    let_stmt    ::= IDENT '=' pipeline
+    pipeline    ::= stage (('|' | OP) stage?)*
+    stage       ::= op_expr | atom
+    op_expr     ::= OP atom?
+    atom        ::= vector | number | symbol | func_call | '(' pipeline ')'
+    vector      ::= '[' number (',' number)* (';' number (',' number)*)* ']'
+    func_call   ::= IDENT '(' (atom (',' atom)*)? ')'
+    number      ::= '-'? DIGIT+ ('.' DIGIT+)?
+    symbol      ::= IDENT
+
+    OP          ::= '⟼' | '∑_ψ' | '∇↓' | '≅' | '↓!' | '⇑' | '◉'
+                  | '->' | 'sum_psi' | 'squeeze' | '~=' | 'commit'
+                  | 'cascade' | 'fold' | 'superpose' | 'flow' | 'equiv'
+    STRING      ::= '"' [^"]* '"'
+    IDENT       ::= [a-zA-Z_][a-zA-Z_0-9]*
+    NEWLINE     ::= '\\n' | EOF
+    COMMENT     ::= '#' [^\\n]* NEWLINE
+
+Canonical Pipeline (unidirectional):
+
+    ∑_ψ candidates ⟼ attractor | ◉ | ∇↓ dim | ≅ tol | ↓! | ⇑ levels
+
+    1. ∑_ψ  Bind superposition (N candidates)
+    2. ⟼    Flow all states toward attractor (vectorized batch)
+    3. ◉    Self-critique / fold-reference
+    4. ∇↓   Dimensional squeeze
+    5. ≅    Drift equivalence check
+    6. ↓!   Commitment sink (irreversible collapse)
+    7. ⇑    Abstraction cascade
+
+Operators are left-associative. The pipe '|' is syntactic sugar for
+sequential application. Evaluation is strictly left-to-right.
 
 Syntax examples:
     ∑_ψ [0.1, 0.2; 0.3, 0.4] ⟼ [0, 0]
     state ⟼ [1,1] | ∇↓ 8 | ≅ 0.05 | ↓! | ⇑ 3
     ∑_ψ random(10, 32) ⟼ zeros(32) | ◉ | ↓!
-
-The parser builds an AST of operations, then the evaluator executes
-them left-to-right as a pipeline.
+    import "stdlib/geometry"
+    x = random(5, 8)
 """
 
 from __future__ import annotations
@@ -64,8 +96,24 @@ class LFPipeline:
 @dataclass
 class LFOp:
     """A pipeline operator with optional argument."""
-    symbol: str  # '⟼', '∇↓', '≅', '↓!', '⇑', '◉', '∑_ψ'
+    symbol: str  # 'flow', 'squeeze', 'equiv', 'commit', 'cascade', 'fold', 'superpose'
     arg: Any = None  # Operand (vector, number, None)
+
+@dataclass
+class LFImport:
+    """Import statement: import "stdlib/geometry" """
+    path: str
+
+@dataclass
+class LFLet:
+    """Let-binding statement: x = pipeline"""
+    name: str
+    value: Any  # pipeline AST
+
+@dataclass
+class LFProgram:
+    """A sequence of statements (multi-line .lf program)."""
+    statements: list[Any]  # list of LFPipeline | LFImport | LFLet
 
 
 # ── Tokenizer ─────────────────────────────────────────────────────
@@ -83,9 +131,11 @@ OPERATORS = {
 
 TOKEN_PATTERN = re.compile(
     r"""
-    (\∑_ψ|⟼|∇↓|≅|↓!|⇑|◉)          # Unicode operators
+    (\#[^\n]*)                         # Comment (skip)
+    |("(?:[^"\\]|\\.)*")               # String literal
+    |(\∑_ψ|⟼|∇↓|≅|↓!|⇑|◉)          # Unicode operators
     |(\->|~=|sum_psi)                 # ASCII aliases
-    |(flow|squeeze|equiv|commit|cascade|fold|superpose)  # Word operators
+    |((?:import|flow|squeeze|equiv|commit|cascade|fold|superpose|let)(?![a-zA-Z_0-9]))  # Keywords (word boundary)
     |(\|)                              # Pipe
     |(\[)                              # Open bracket
     |(\])                              # Close bracket
@@ -93,6 +143,7 @@ TOKEN_PATTERN = re.compile(
     |(\))                              # Close paren
     |(;)                               # Row separator in matrices
     |(,)                               # Comma
+    |(=)                               # Assignment
     |(-?[0-9]+\.?[0-9]*)              # Number
     |([a-zA-Z_][a-zA-Z_0-9]*)        # Identifier
     |(\s+)                             # Whitespace (skip)
@@ -115,9 +166,22 @@ def tokenize(source: str) -> list[tuple[str, str]]:
         if val.strip() == "":
             continue  # skip whitespace
 
+        # Skip comments
+        if val.startswith("#"):
+            continue
+
+        # String literals
+        if val.startswith('"'):
+            tokens.append(("STRING", val[1:-1]))  # strip quotes
+            continue
+
         # Classify
         if val in OPERATORS:
             tokens.append(("OP", OPERATORS[val]))
+        elif val == "import":
+            tokens.append(("IMPORT", "import"))
+        elif val == "let":
+            tokens.append(("LET", "let"))
         elif val == "|":
             tokens.append(("PIPE", "|"))
         elif val == "[":
@@ -132,6 +196,8 @@ def tokenize(source: str) -> list[tuple[str, str]]:
             tokens.append(("SEMI", ";"))
         elif val == ",":
             tokens.append(("COMMA", ","))
+        elif val == "=":
+            tokens.append(("ASSIGN", "="))
         elif re.match(r"^-?[0-9]", val):
             tokens.append(("NUMBER", val))
         else:
@@ -163,12 +229,69 @@ class Parser:
         self.pos += 1
         return tok
 
+    def parse_program(self) -> LFProgram:
+        """Parse a multi-statement .lf program."""
+        statements: list[Any] = []
+        while self.peek() is not None:
+            stmt = self.parse_statement()
+            if stmt is not None:
+                statements.append(stmt)
+        return LFProgram(statements=statements)
+
+    def parse_statement(self) -> Any:
+        """Parse a single statement: import, let-binding, or pipeline."""
+        tok = self.peek()
+        if tok is None:
+            return None
+
+        # import "path"
+        if tok[0] == "IMPORT":
+            return self.parse_import()
+
+        # let x = expr  OR  IDENT = expr
+        if tok[0] == "LET":
+            return self.parse_let()
+
+        # Check for bare assignment: IDENT = pipeline
+        if tok[0] == "IDENT" and self.pos + 1 < len(self.tokens):
+            next_tok = self.tokens[self.pos + 1]
+            if next_tok[0] == "ASSIGN":
+                return self.parse_let()
+
+        # Otherwise: pipeline
+        return self.parse()
+
+    def parse_import(self) -> LFImport:
+        """Parse: import "stdlib/geometry" """
+        self.consume("IMPORT")
+        path_tok = self.consume("STRING")
+        return LFImport(path=path_tok[1])
+
+    def parse_let(self) -> LFLet:
+        """Parse: let x = pipeline  OR  x = pipeline"""
+        if self.peek() and self.peek()[0] == "LET":
+            self.consume("LET")
+        name_tok = self.consume("IDENT")
+        self.consume("ASSIGN")
+        value = self.parse()
+        return LFLet(name=name_tok[1], value=value)
+
     def parse(self) -> LFPipeline:
         """Parse full expression as a pipeline."""
         stages = [self.parse_stage()]
 
         while self.peek() is not None:
             tok = self.peek()
+            # Stop at tokens that belong to the next statement
+            if tok[0] in ("IMPORT", "LET"):
+                break
+            # Stop at IDENT = (next assignment)
+            if tok[0] == "IDENT" and self.pos + 1 < len(self.tokens):
+                if self.tokens[self.pos + 1][0] == "ASSIGN":
+                    break
+            # ∑_ψ (superpose) always starts a new pipeline, never continues one
+            if tok[0] == "OP" and tok[1] == "superpose":
+                break
             if tok[0] == "PIPE":
                 self.consume("PIPE")
                 stages.append(self.parse_stage())
@@ -199,7 +322,10 @@ class Parser:
         arg = None
         nxt = self.peek()
         if nxt is not None and nxt[0] in ("NUMBER", "LBRACKET", "IDENT"):
-            if nxt[0] != "IDENT" or nxt[1] not in OPERATORS:
+            # Don't consume IDENT if it's the start of the next assignment (IDENT =)
+            if nxt[0] == "IDENT" and self.pos + 1 < len(self.tokens) and self.tokens[self.pos + 1][0] == "ASSIGN":
+                pass  # next statement boundary
+            elif nxt[0] != "IDENT" or nxt[1] not in OPERATORS:
                 # Don't consume the next operator as an argument
                 if nxt[0] == "IDENT" and self.pos + 1 < len(self.tokens) and self.tokens[self.pos + 1][0] == "LPAREN":
                     arg = self.parse_func_call()
@@ -289,6 +415,13 @@ def parse(source: str) -> LFPipeline:
     return ast
 
 
+def parse_program(source: str) -> LFProgram:
+    """Parse a multi-statement Latent Flux program into an AST."""
+    tokens = tokenize(source)
+    parser = Parser(tokens)
+    return parser.parse_program()
+
+
 # ── Evaluator ──────────────────────────────────────────────────────
 
 FLOW_FNS = {
@@ -316,6 +449,8 @@ class EvalContext:
         self.commitment = CommitmentSink()
         # Callback for runtime messages (commit triggers, etc.)
         self.on_message = on_message or (lambda msg: None)
+        # Track imported modules to avoid re-import
+        self._imported: set[str] = set()
 
     def set(self, name: str, value: Any) -> None:
         self.variables[name] = value
@@ -324,6 +459,71 @@ class EvalContext:
         if name not in self.variables:
             raise NameError(f"Undefined variable: {name!r}")
         return self.variables[name]
+
+
+def _resolve_import_path(path: str) -> str:
+    """Resolve an import path to a filesystem .lf file."""
+    import os
+    # Search relative to the stdlib directory first, then CWD
+    base_dirs = [
+        os.path.join(os.path.dirname(__file__), "..", "stdlib"),
+        os.path.join(os.path.dirname(__file__), "stdlib"),
+        os.getcwd(),
+    ]
+    # Normalize: strip .lf extension if provided
+    if path.endswith(".lf"):
+        path = path[:-3]
+    for base in base_dirs:
+        candidate = os.path.join(base, path + ".lf")
+        if os.path.isfile(candidate):
+            return candidate
+    raise FileNotFoundError(f"Cannot resolve import: {path!r}")
+
+
+def evaluate(ast: LFPipeline, ctx: EvalContext | None = None) -> Any:
+    """Evaluate a parsed Latent Flux pipeline."""
+    ctx = ctx or EvalContext()
+    result: Any = None
+
+    for stage in ast.stages:
+        result = _eval_stage(stage, result, ctx)
+
+    return result
+
+
+def evaluate_program(ast: LFProgram, ctx: EvalContext | None = None) -> Any:
+    """Evaluate a multi-statement Latent Flux program."""
+    ctx = ctx or EvalContext()
+    result: Any = None
+
+    for stmt in ast.statements:
+        if isinstance(stmt, LFImport):
+            _eval_import(stmt, ctx)
+        elif isinstance(stmt, LFLet):
+            # Each let-binding gets a fresh commitment sink
+            ctx.commitment = CommitmentSink()
+            value = evaluate(stmt.value, ctx)
+            ctx.set(stmt.name, value)
+            result = value
+        elif isinstance(stmt, LFPipeline):
+            ctx.commitment = CommitmentSink()
+            result = evaluate(stmt, ctx)
+        else:
+            raise TypeError(f"Unknown statement type: {type(stmt)}")
+
+    return result
+
+
+def _eval_import(node: LFImport, ctx: EvalContext) -> None:
+    """Execute an import statement — load and eval a .lf file."""
+    if node.path in ctx._imported:
+        return  # already imported
+    filepath = _resolve_import_path(node.path)
+    with open(filepath, "r", encoding="utf-8") as f:
+        source = f.read()
+    ctx._imported.add(node.path)
+    program = parse_program(source)
+    evaluate_program(program, ctx)
 
 
 def evaluate(ast: LFPipeline, ctx: EvalContext | None = None) -> Any:
@@ -351,6 +551,13 @@ def _eval_stage(node: Any, current: Any, ctx: EvalContext) -> Any:
         return _eval_func(node, ctx)
     elif isinstance(node, LFPipeline):
         return evaluate(node, ctx)
+    elif isinstance(node, LFLet):
+        value = evaluate(node.value, ctx)
+        ctx.set(node.name, value)
+        return value
+    elif isinstance(node, LFImport):
+        _eval_import(node, ctx)
+        return current
     else:
         raise TypeError(f"Unknown AST node: {type(node)}")
 
@@ -404,7 +611,98 @@ def _eval_func(node: LFFuncCall, ctx: EvalContext) -> Any:
         from flux_manifold.tsp_solver import nearest_neighbor_tour, order_to_state
         nn = nearest_neighbor_tour(cities)
         return order_to_state(nn, len(cities))
+    elif name == "entropy":
+        # entropy(superposition) — Shannon entropy of weight distribution
+        arg = raw_args[0]
+        if isinstance(arg, SuperpositionTensor):
+            return arg.entropy()
+        raise TypeError(f"entropy expects SuperpositionTensor, got {type(arg)}")
+    elif name == "norm":
+        # norm(vector) — L2 norm
+        arg = raw_args[0]
+        if isinstance(arg, np.ndarray):
+            return float(np.linalg.norm(arg))
+        return abs(float(arg))
+    elif name == "dist":
+        # dist(a, b) — L2 distance
+        a, b = raw_args[0], raw_args[1]
+        return float(np.linalg.norm(np.asarray(a) - np.asarray(b)))
+    elif name == "dim":
+        # dim(vector_or_superposition) — dimensionality
+        arg = raw_args[0]
+        if isinstance(arg, SuperpositionTensor):
+            return float(arg.d)
+        if isinstance(arg, np.ndarray):
+            return float(arg.shape[-1])
+        raise TypeError(f"dim expects array or SuperpositionTensor, got {type(arg)}")
+    elif name == "candidates":
+        # candidates(superposition) — number of states
+        arg = raw_args[0]
+        if isinstance(arg, SuperpositionTensor):
+            return float(arg.n)
+        if isinstance(arg, np.ndarray) and arg.ndim == 2:
+            return float(arg.shape[0])
+        raise TypeError(f"candidates expects SuperpositionTensor or 2D array")
+    elif name == "tour_length":
+        # tour_length(cities, state) — decode state to tour, compute length
+        cities_ = raw_args[0]
+        state = raw_args[1]
+        from flux_manifold.tsp_solver import tour_length as _tour_length, state_to_order
+        order = state_to_order(np.asarray(state, dtype=np.float32))
+        return float(_tour_length(np.asarray(cities_), order))
+    elif name == "emit":
+        # emit(value) — print a runtime message
+        ctx.on_message(str(raw_args[0]))
+        return raw_args[0]
+    elif name == "tsp_cities":
+        # tsp_cities(n, seed?) — generate n random 2D city coordinates
+        n = int(raw_args[0])
+        seed = int(raw_args[1]) if len(raw_args) > 1 else ctx.seed
+        rng = np.random.default_rng(seed)
+        return rng.random((n, 2)).astype(np.float32)
+    elif name == "tsp_candidates":
+        # tsp_candidates(k, cities) — generate k random tour-encoded states
+        k = int(raw_args[0])
+        cities = raw_args[1]
+        n = len(cities)
+        from flux_manifold.tsp_solver import order_to_state
+        rng = np.random.default_rng(ctx.seed)
+        states = np.empty((k, n), dtype=np.float32)
+        for i in range(k):
+            perm = rng.permutation(n)
+            states[i] = order_to_state(perm, n)
+        return SuperpositionTensor(states)
+    elif name == "tsp_flow":
+        # tsp_flow(cities, state) — one step of TSP flow with crossing repulsion
+        cities = raw_args[0]
+        state = raw_args[1]
+        from flux_manifold.tsp_solver import _crossing_repulsion
+        grad = _crossing_repulsion(np.asarray(state), np.asarray(cities), strength=0.3)
+        return np.asarray(state, dtype=np.float32) + grad.astype(np.float32)
+    elif name == "best_tour":
+        # best_tour(cities, superposition) — extract best tour length from superposition
+        cities = np.asarray(raw_args[0])
+        sp = raw_args[1]
+        from flux_manifold.tsp_solver import tour_length as _tl, state_to_order
+        if isinstance(sp, SuperpositionTensor):
+            states = sp.states
+        else:
+            states = np.asarray(sp)
+            if states.ndim == 1:
+                states = states.reshape(1, -1)
+        best = float("inf")
+        for s in states:
+            order = state_to_order(s)
+            length = _tl(cities, order)
+            if length < best:
+                best = length
+        return best
     else:
+        # Check if it's a user-defined function in the context
+        if name in ctx.variables:
+            fn = ctx.variables[name]
+            if callable(fn):
+                return fn(*raw_args)
         raise NameError(f"Unknown function: {name!r}")
 
 
@@ -524,12 +822,10 @@ def _eval_op(op: LFOp, current: Any, ctx: EvalContext) -> Any:
         raise TypeError(f"⇑ expects array or SuperpositionTensor, got {type(current)}")
 
     elif sym == "fold":
-        # ◉: fold-reference (self-critique)
+        # ◉: fold-reference (self-critique) — batch vectorized
         fr = FoldReference(critique_fn=no_nan_critique, interval=1)
         if isinstance(current, SuperpositionTensor):
-            for i in range(current.n):
-                corrected, _ = fr.check(current.states[i], step=i)
-                current.states[i] = corrected
+            current.states, _ = fr.check_batch(current.states)
             return current
         elif isinstance(current, np.ndarray):
             corrected, _ = fr.check(current, step=0)
@@ -556,3 +852,30 @@ def run(source: str, ctx: EvalContext | None = None, **kwargs) -> Any:
     ctx = ctx or EvalContext(**kwargs)
     ast = parse(source)
     return evaluate(ast, ctx)
+
+
+def run_file(filepath: str, ctx: EvalContext | None = None, **kwargs) -> Any:
+    """Parse and evaluate a .lf file (multi-statement program).
+
+    Args:
+        filepath: Path to the .lf file.
+        ctx: Optional evaluation context.
+        **kwargs: Passed to EvalContext constructor if ctx is None.
+
+    Returns:
+        The result of the last statement.
+    """
+    import os
+    ctx = ctx or EvalContext(**kwargs)
+    abs_path = os.path.abspath(filepath)
+    file_dir = os.path.dirname(abs_path)
+    # Set CWD to the file's directory for import resolution
+    old_cwd = os.getcwd()
+    try:
+        os.chdir(file_dir)
+        with open(abs_path, "r", encoding="utf-8") as f:
+            source = f.read()
+        program = parse_program(source)
+        return evaluate_program(program, ctx)
+    finally:
+        os.chdir(old_cwd)

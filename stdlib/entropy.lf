@@ -1,0 +1,44 @@
+# ═══════════════════════════════════════════════════════════════
+# entropy.lf — Shannon entropy triggers for Latent Flux
+# ═══════════════════════════════════════════════════════════════
+#
+# Provides entropy-aware flow patterns and commitment thresholds.
+# Import: import "entropy"
+#
+# Shannon entropy H = -Σ wᵢ log₂(wᵢ) measures the spread of
+# weight across superposition candidates. Low entropy means
+# the system is confident; high entropy means exploration is
+# still needed.
+#
+# Threshold conventions:
+#   H < 0.5  → ready for commitment (↓!)
+#   H < 1.0  → candidates converging
+#   H > 2.0  → broad exploration phase
+# ═══════════════════════════════════════════════════════════════
+
+# ── Low-entropy commitment pattern ───────────────────────────
+# Flow until entropy collapses, then commit
+
+# 8D low-entropy commit: flow hard, commit when collapsed
+low_entropy_8d = ∑_ψ random(10, 8) ⟼ zeros(8) | ◉ | ↓!
+
+# 32D low-entropy commit with squeeze
+low_entropy_32d = ∑_ψ random(20, 32) | squeeze 16 | -> zeros(16) | ◉ | ↓!
+
+# ── High-entropy exploration pattern ─────────────────────────
+# Create a broad superposition without committing
+
+# Explore widely in 16D (many candidates, no commit)
+wide_explore_16d = ∑_ψ random(32, 16)
+
+# Explore widely in 64D
+wide_explore_64d = ∑_ψ random(64, 64)
+
+# ── Entropy-aware cascade ────────────────────────────────────
+# Flow → check equivalence → cascade for hierarchical view
+
+# 8D cascade after flow
+cascade_8d = ∑_ψ random(10, 8) ⟼ zeros(8) | ◉ | ↓! | cascade 3
+
+# 32D cascade with squeeze
+cascade_32d = ∑_ψ random(20, 32) | squeeze 16 | -> zeros(16) | ◉ | ↓! | cascade 4

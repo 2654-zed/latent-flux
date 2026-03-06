@@ -57,6 +57,40 @@ class FoldReference:
         self.history.append(record)
         return state, False
 
+    def check_batch(self, states: np.ndarray) -> tuple[np.ndarray, int]:
+        """Critique all N states in (N, d) matrix. Returns (corrected_states, n_corrections).
+
+        Applies critique_fn to each state, but avoids Python-level per-state loops
+        for built-in critiques by using vectorized numpy operations directly.
+        """
+        N = states.shape[0]
+        corrected = states.copy()
+        n_corrections = 0
+
+        # Fast path for no_nan_critique: fully vectorized
+        if self.critique_fn is no_nan_critique:
+            bad_mask = np.any(np.isnan(corrected) | np.isinf(corrected), axis=1)
+            if bad_mask.any():
+                corrected[bad_mask] = np.nan_to_num(
+                    corrected[bad_mask], nan=0.0, posinf=1.0, neginf=-1.0
+                )
+                n_corrections = int(bad_mask.sum())
+            self._corrections_applied += n_corrections
+            return corrected, n_corrections
+
+        # General path: apply critique per state (necessary for arbitrary critique_fn)
+        budget = self.max_corrections - self._corrections_applied
+        for i in range(N):
+            if n_corrections >= budget:
+                break
+            ok, diagnosis, correction = self.critique_fn(corrected[i])
+            if not ok and correction is not None:
+                corrected[i] = correction.astype(np.float32)
+                n_corrections += 1
+
+        self._corrections_applied += n_corrections
+        return corrected, n_corrections
+
     @property
     def corrections_count(self) -> int:
         return self._corrections_applied

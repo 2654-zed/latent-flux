@@ -1,0 +1,42 @@
+# ═══════════════════════════════════════════════════════════════
+# tsp.lf — Travelling Salesman benchmark in pure Latent Flux
+# ═══════════════════════════════════════════════════════════════
+#
+# Solves a 10-city TSP instance using all 7 Latent Flux primitives:
+#
+#   ∑_ψ   Superposition Tensor     — 20 random tour candidates
+#   ⟼     FluxManifold             — flow toward nearest-neighbor attractor
+#   ∇↓    DimensionalSqueeze       — (not needed for 10-city, d=n)
+#   ≅     DriftEquivalence         — check convergence quality
+#   ↓!    CommitmentSink           — irreversible collapse to best
+#   ⇑     AbstractionCascade       — hierarchical tour abstraction
+#   ◉     FoldReference            — self-critique NaN/inf guard
+#
+# Run: python -m flux_manifold run tsp.lf
+# ═══════════════════════════════════════════════════════════════
+
+# ── Generate problem instance ────────────────────────────────
+cities = tsp_cities(10, 42)
+
+# ── Compute nearest-neighbor attractor ───────────────────────
+attractor = nearest_neighbor(cities)
+
+# ── Evaluate NN baseline ─────────────────────────────────────
+nn_length = tour_length(cities, attractor)
+
+# ── Build superposition of 20 random tours ───────────────────
+candidates = tsp_candidates(20, cities)
+
+# ── Full Latent Flux pipeline ────────────────────────────────
+# superpose → flow toward NN attractor → fold-critique → commit
+result = ∑_ψ candidates ⟼ attractor | ◉ | ↓!
+
+# ── Measure result ───────────────────────────────────────────
+flux_length = tour_length(cities, result)
+
+# ── Abstraction cascade of the solution ──────────────────────
+hierarchy = ∑_ψ candidates ⟼ attractor | ◉ | ⇑ 3
+
+# ── Report ───────────────────────────────────────────────────
+emit(nn_length)
+emit(flux_length)

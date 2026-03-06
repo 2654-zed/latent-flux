@@ -123,6 +123,43 @@ def _crossing_repulsion(state: np.ndarray, cities: np.ndarray,
     return gradient
 
 
+def _crossing_repulsion_batch(states: np.ndarray, cities: np.ndarray,
+                              strength: float = 0.3) -> np.ndarray:
+    """Compute crossing repulsion gradients for an (N, d) batch of states.
+
+    Each state is a continuous tour encoding. The gradient pushes crossing
+    edges apart via geometric repulsion. This is inherently per-tour
+    (each tour has its own crossing structure), but we avoid Python-level
+    row iteration by using numpy operations where possible.
+    """
+    N, d = states.shape
+    gradients = np.zeros_like(states)
+    if cities.shape[1] != 2:
+        return gradients
+
+    # Pre-decode all orders at once
+    orders = np.argsort(states, axis=1).astype(np.int32)  # (N, d)
+    n = d
+
+    for k in range(N):
+        order = orders[k]
+        gradient = np.zeros(d, dtype=states.dtype)
+        for i in range(n):
+            for j in range(i + 2, n):
+                if j == (i + n - 1) % n:
+                    continue
+                a, b = int(order[i]), int(order[(i + 1) % n])
+                c, dd = int(order[j]), int(order[(j + 1) % n])
+                if _segments_intersect(cities[a], cities[b], cities[c], cities[dd]):
+                    uncrossed = order.copy()
+                    uncrossed[i + 1:j + 1] = uncrossed[i + 1:j + 1][::-1]
+                    target = order_to_state(uncrossed, n)
+                    gradient += strength * (target - states[k])
+        gradients[k] = gradient
+
+    return gradients
+
+
 def make_tsp_crossing_flow(
     cities: np.ndarray,
     repulsion_strength: float = 0.3,
@@ -143,11 +180,10 @@ def make_tsp_crossing_flow(
             repulsion = _crossing_repulsion(s, cities, repulsion_strength)
             return base + repulsion
         else:
-            # Batch: compute attractor pull vectorized, repulsion per-state
+            # Batch: vectorized attractor pull + batch repulsion
             norms = np.linalg.norm(diff, axis=1, keepdims=True)
             base = np.where(norms > 1e-12, diff / np.maximum(norms, 1e-12), 0.0)
-            for i in range(s.shape[0]):
-                base[i] += _crossing_repulsion(s[i], cities, repulsion_strength)
+            base += _crossing_repulsion_batch(s, cities, repulsion_strength)
             return base
 
     return flow
@@ -246,12 +282,15 @@ class LatentFluxTSP:
             self.squeeze = DimensionalSqueeze(target_dim=min(32, self.n_cities // 2))
 
     def _generate_candidates(self, rng: np.random.Generator) -> np.ndarray:
-        """Generate N initial tour candidates as state vectors."""
-        candidates = []
-        for _ in range(self.n_candidates):
-            perm = rng.permutation(self.n_cities).astype(np.int32)
-            candidates.append(order_to_state(perm, self.n_cities))
-        return np.array(candidates, dtype=np.float32)
+        """Generate N initial tour candidates as state vectors (vectorized)."""
+        # Generate N random permutations and encode as continuous states
+        n = self.n_cities
+        candidates = np.zeros((self.n_candidates, n), dtype=np.float32)
+        for k in range(self.n_candidates):
+            perm = rng.permutation(n).astype(np.int32)
+            # Vectorized encoding: rank / (n-1)
+            candidates[k, perm] = np.arange(n, dtype=np.float32) / max(n - 1, 1)
+        return candidates
 
     def solve(self) -> dict:
         """Run the full Latent Flux TSP pipeline.
@@ -285,36 +324,28 @@ class LatentFluxTSP:
         total_steps = int(trace["total_steps"])
         converged_count = int(trace["converged"].sum())
 
-        # ── ◉ Fold-Reference: fix crossings ─────────────────────
-        fold_corrections = 0
-        for i in range(superposition.n):
-            state = superposition.states[i]
-            if self.squeeze is not None:
-                state = self.squeeze.unsqueeze(state)
-            corrected, was_corrected = self.fold_ref.check(state, step=i)
-            if was_corrected:
-                if self.squeeze is not None:
-                    superposition.states[i] = self.squeeze.squeeze(corrected)
-                else:
-                    superposition.states[i] = corrected
-                fold_corrections += 1
+        # ── ◉ Fold-Reference: fix crossings (batch) ────────────
+        if self.squeeze is not None:
+            unsqueezed = self.squeeze.unsqueeze(superposition.states)
+            unsqueezed, fold_corrections = self.fold_ref.check_batch(unsqueezed)
+            superposition.states = self.squeeze.squeeze(unsqueezed)
+        else:
+            superposition.states, fold_corrections = self.fold_ref.check_batch(
+                superposition.states
+            )
 
         # ── ≅ DriftEquivalence reweight ─────────────────────────
         superposition.reweight_by_drift(q)
         entropy = superposition.entropy()
 
-        # ── Evaluate all tour lengths ───────────────────────────
-        lengths: list[float] = []
+        # ── Evaluate all tour lengths (vectorized decode) ───────
         final_states = superposition.states.copy()
         if self.squeeze is not None:
-            final_states = np.array([
-                self.squeeze.unsqueeze(s) for s in final_states
-            ])
+            final_states = self.squeeze.unsqueeze(final_states)
 
-        for i in range(superposition.n):
-            order = state_to_order(final_states[i])
-            length = tour_length(self.cities, order)
-            lengths.append(length)
+        # Batch decode: argsort each row to get orders, compute tour lengths
+        all_orders = np.argsort(final_states, axis=1).astype(np.int32)  # (N, n_cities)
+        lengths = [tour_length(self.cities, all_orders[i]) for i in range(superposition.n)]
 
         best_candidate = int(np.argmin(lengths))
         best_length = lengths[best_candidate]

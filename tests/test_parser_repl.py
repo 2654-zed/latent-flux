@@ -5,6 +5,8 @@ import pytest
 from flux_manifold.parser import (
     tokenize, parse, evaluate, run, EvalContext,
     LFVector, LFNumber, LFSymbol, LFFuncCall, LFPipeline, LFOp,
+    parse_program, evaluate_program, run_file,
+    LFImport, LFLet, LFProgram,
 )
 from flux_manifold.superposition import SuperpositionTensor
 
@@ -268,6 +270,231 @@ class TestREPLCommands:
         from flux_manifold.repl import _handle_command
         result = _handle_command(":vars", EvalContext())
         assert "no variables" in result
+
+
+# ── Tokenizer: keyword word-boundary ──────────────────────────────
+
+class TestTokenizerKeywordBoundary:
+    def test_keyword_not_prefix(self):
+        """Keywords should not match as prefix of identifiers."""
+        tokens = tokenize("cascade_8d = commit_result")
+        idents = [t for t in tokens if t[0] == "IDENT"]
+        assert ("IDENT", "cascade_8d") in idents
+        assert ("IDENT", "commit_result") in idents
+        # No OP tokens
+        ops = [t for t in tokens if t[0] == "OP"]
+        assert len(ops) == 0
+
+    def test_keyword_standalone(self):
+        """Standalone keywords still tokenize as OP."""
+        tokens = tokenize("cascade 3")
+        assert ("OP", "cascade") in tokens
+
+    def test_comment_skipped(self):
+        tokens = tokenize("# this is a comment\nzeros(2)")
+        assert all(t[1] != "this" for t in tokens)
+        assert ("IDENT", "zeros") in tokens
+
+    def test_string_literal(self):
+        tokens = tokenize('"hello world"')
+        assert ("STRING", "hello world") in tokens
+
+    def test_import_keyword(self):
+        tokens = tokenize('import "geometry"')
+        assert ("IMPORT", "import") in tokens
+        assert ("STRING", "geometry") in tokens
+
+    def test_let_keyword(self):
+        tokens = tokenize("let x = 42")
+        assert ("LET", "let") in tokens
+        assert ("ASSIGN", "=") in tokens
+
+    def test_assign_token(self):
+        tokens = tokenize("x = 5")
+        assert ("IDENT", "x") in tokens
+        assert ("ASSIGN", "=") in tokens
+
+
+# ── Program parsing ───────────────────────────────────────────────
+
+class TestParseProgram:
+    def test_single_assignment(self):
+        prog = parse_program("x = zeros(2)")
+        assert isinstance(prog, LFProgram)
+        assert len(prog.statements) == 1
+        assert isinstance(prog.statements[0], LFLet)
+        assert prog.statements[0].name == "x"
+
+    def test_let_assignment(self):
+        prog = parse_program("let y = ones(3)")
+        assert isinstance(prog, LFProgram)
+        assert prog.statements[0].name == "y"
+
+    def test_multi_statement(self):
+        src = "a = zeros(2)\nb = ones(3)\nc = random(5, 8)"
+        prog = parse_program(src)
+        assert len(prog.statements) == 3
+        names = [s.name for s in prog.statements]
+        assert names == ["a", "b", "c"]
+
+    def test_import_statement(self):
+        prog = parse_program('import "geometry"')
+        assert len(prog.statements) == 1
+        assert isinstance(prog.statements[0], LFImport)
+        assert prog.statements[0].path == "geometry"
+
+    def test_pipeline_statement(self):
+        prog = parse_program("∑_ψ random(5, 2) ⟼ zeros(2) | ↓!")
+        assert len(prog.statements) == 1
+        assert isinstance(prog.statements[0], LFPipeline)
+
+    def test_mixed_statements(self):
+        src = "a = zeros(2)\n∑_ψ random(5, 2) ⟼ a | ↓!"
+        prog = parse_program(src)
+        assert len(prog.statements) == 2
+        assert isinstance(prog.statements[0], LFLet)
+        assert isinstance(prog.statements[1], LFPipeline)
+
+    def test_comments_ignored(self):
+        src = "# comment\nx = zeros(2)\n# another comment\ny = ones(3)"
+        prog = parse_program(src)
+        assert len(prog.statements) == 2
+
+    def test_operator_arg_assignment_boundary(self):
+        """Operator followed by IDENT = should not consume the IDENT as arg."""
+        src = "a = ∑_ψ random(5, 2) ⟼ zeros(2) | ↓!\nb = ones(3)"
+        prog = parse_program(src)
+        assert len(prog.statements) == 2
+        assert prog.statements[0].name == "a"
+        assert prog.statements[1].name == "b"
+
+
+# ── Program evaluation ────────────────────────────────────────────
+
+class TestEvaluateProgram:
+    def test_let_binds_variable(self):
+        prog = parse_program("x = zeros(4)")
+        ctx = EvalContext()
+        evaluate_program(prog, ctx)
+        assert "x" in ctx.variables
+        np.testing.assert_allclose(ctx.variables["x"], [0, 0, 0, 0])
+
+    def test_multi_let_references(self):
+        prog = parse_program("a = zeros(2)\nb = ∑_ψ random(5, 2) ⟼ a | ↓!")
+        ctx = EvalContext()
+        evaluate_program(prog, ctx)
+        assert "a" in ctx.variables
+        assert "b" in ctx.variables
+        # b should be near [0, 0] after flowing to a
+        np.testing.assert_allclose(ctx.variables["b"], [0, 0], atol=0.3)
+
+    def test_commitment_reset_per_statement(self):
+        """Each let-binding gets a fresh CommitmentSink."""
+        prog = parse_program("a = [1, 2] | commit\nb = [3, 4] | commit")
+        ctx = EvalContext()
+        evaluate_program(prog, ctx)
+        np.testing.assert_allclose(ctx.variables["a"], [1, 2])
+        np.testing.assert_allclose(ctx.variables["b"], [3, 4])
+
+
+# ── Built-in functions ────────────────────────────────────────────
+
+class TestBuiltinFunctions:
+    def test_entropy(self):
+        ctx = EvalContext()
+        sp = run("random(5, 4)", ctx=ctx)
+        assert isinstance(sp, SuperpositionTensor)
+        h = sp.entropy()
+        assert h > 0
+
+    def test_norm(self):
+        result = run("norm([3, 4])")
+        assert abs(result - 5.0) < 1e-5
+
+    def test_dist(self):
+        ctx = EvalContext()
+        ctx.set("a", np.array([0, 0], dtype=np.float32))
+        ctx.set("b", np.array([3, 4], dtype=np.float32))
+        result = run("dist(a, b)", ctx=ctx)
+        assert abs(result - 5.0) < 1e-5
+
+    def test_dim_vector(self):
+        result = run("dim([1, 2, 3])")
+        assert result == 3.0
+
+    def test_dim_superposition(self):
+        result = run("dim(random(5, 8))")
+        assert result == 8.0
+
+    def test_candidates(self):
+        result = run("candidates(random(10, 4))")
+        assert result == 10.0
+
+    def test_emit(self):
+        msgs = []
+        ctx = EvalContext(on_message=lambda m: msgs.append(m))
+        run("emit(42)", ctx=ctx)
+        assert "42" in msgs[0] or "42.0" in msgs[0]
+
+    def test_tsp_cities(self):
+        result = run("tsp_cities(5, 42)")
+        assert isinstance(result, np.ndarray)
+        assert result.shape == (5, 2)
+
+    def test_tsp_candidates(self):
+        ctx = EvalContext()
+        ctx.set("c", np.random.default_rng(42).random((5, 2)).astype(np.float32))
+        result = run("tsp_candidates(10, c)", ctx=ctx)
+        assert isinstance(result, SuperpositionTensor)
+        assert result.n == 10
+        assert result.d == 5
+
+    def test_tour_length(self):
+        ctx = EvalContext()
+        cities = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], dtype=np.float32)
+        ctx.set("c", cities)
+        nn = run("nearest_neighbor(c)", ctx=ctx)
+        ctx.set("t", nn)
+        length = run("tour_length(c, t)", ctx=ctx)
+        assert isinstance(length, float)
+        assert length > 0
+
+    def test_best_tour(self):
+        ctx = EvalContext()
+        cities = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], dtype=np.float32)
+        ctx.set("c", cities)
+        sp = run("tsp_candidates(5, c)", ctx=ctx)
+        ctx.set("sp", sp)
+        best = run("best_tour(c, sp)", ctx=ctx)
+        assert isinstance(best, float)
+        assert best > 0
+
+
+# ── File execution ────────────────────────────────────────────────
+
+class TestRunFile:
+    def test_geometry_lf(self):
+        ctx = EvalContext()
+        run_file("stdlib/geometry.lf", ctx=ctx)
+        assert len(ctx.variables) == 13
+        assert "origin_2d" in ctx.variables
+        assert "converge_2d" in ctx.variables
+        np.testing.assert_allclose(ctx.variables["origin_2d"], [0, 0])
+
+    def test_entropy_lf(self):
+        ctx = EvalContext()
+        run_file("stdlib/entropy.lf", ctx=ctx)
+        assert len(ctx.variables) == 6
+        assert "cascade_8d" in ctx.variables
+        assert isinstance(ctx.variables["cascade_8d"], list)
+
+    def test_tsp_lf(self):
+        ctx = EvalContext()
+        run_file("tsp.lf", ctx=ctx)
+        assert "flux_length" in ctx.variables
+        assert "nn_length" in ctx.variables
+        assert ctx.variables["flux_length"] > 0
+        assert ctx.variables["nn_length"] > 0
 
     def test_handle_vars_with_data(self):
         from flux_manifold.repl import _handle_command
