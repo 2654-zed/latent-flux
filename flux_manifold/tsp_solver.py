@@ -77,53 +77,109 @@ def nearest_neighbor_tour(cities: np.ndarray, start: int = 0) -> np.ndarray:
     return np.array(order, dtype=np.int32)
 
 
-# ── TSP-specific flow function ──────────────────────────────────────
+# ── TSP-specific flow function with geometric crossing repulsion ──
+
+def _segments_intersect(p1, p2, p3, p4):
+    """Check if segment p1-p2 intersects p3-p4 (2D only)."""
+    d1 = p2 - p1
+    d2 = p4 - p3
+    cross = d1[0] * d2[1] - d1[1] * d2[0]
+    if abs(cross) < 1e-10:
+        return False
+    t = ((p3[0] - p1[0]) * d2[1] - (p3[1] - p1[1]) * d2[0]) / cross
+    u = ((p3[0] - p1[0]) * d1[1] - (p3[1] - p1[1]) * d1[0]) / cross
+    return 0 < t < 1 and 0 < u < 1
+
+
+def _crossing_repulsion(state: np.ndarray, cities: np.ndarray,
+                         strength: float = 0.3) -> np.ndarray:
+    """Compute repulsive gradient that pushes crossing edges apart in latent space.
+
+    Instead of a discrete 2-opt swap, we compute the geometric direction toward
+    the uncrossed configuration and return a continuous gradient. The topology
+    untangles dynamically over multiple flow steps.
+    """
+    order = state_to_order(state)
+    n = len(order)
+    gradient = np.zeros_like(state)
+
+    if cities.shape[1] != 2:
+        return gradient
+
+    for i in range(n):
+        for j in range(i + 2, n):
+            if j == (i + n - 1) % n:
+                continue
+            a, b = int(order[i]), int(order[(i + 1) % n])
+            c, d = int(order[j]), int(order[(j + 1) % n])
+            if _segments_intersect(cities[a], cities[b], cities[c], cities[d]):
+                # Compute geometric target: the uncrossed configuration
+                uncrossed = order.copy()
+                uncrossed[i + 1:j + 1] = uncrossed[i + 1:j + 1][::-1]
+                target = order_to_state(uncrossed, n)
+                # Continuous gradient toward uncrossed geometry
+                gradient += strength * (target - state)
+
+    return gradient
+
+
+def make_tsp_crossing_flow(
+    cities: np.ndarray,
+    repulsion_strength: float = 0.3,
+) -> FlowFn:
+    """Create a flow function with built-in geometric crossing repulsion.
+
+    The vector field combines:
+      1. Attractor pull (normalized difference toward q)
+      2. Crossing repulsion (continuous gradient that pushes crossing edges apart)
+
+    Edge crossings are resolved dynamically during flow, not by discrete swaps.
+    """
+    def flow(s: np.ndarray, q: np.ndarray) -> np.ndarray:
+        diff = q - s
+        if s.ndim == 1:
+            norm = np.linalg.norm(diff)
+            base = diff / max(norm, 1e-12) if norm > 1e-12 else np.zeros_like(diff)
+            repulsion = _crossing_repulsion(s, cities, repulsion_strength)
+            return base + repulsion
+        else:
+            # Batch: compute attractor pull vectorized, repulsion per-state
+            norms = np.linalg.norm(diff, axis=1, keepdims=True)
+            base = np.where(norms > 1e-12, diff / np.maximum(norms, 1e-12), 0.0)
+            for i in range(s.shape[0]):
+                base[i] += _crossing_repulsion(s[i], cities, repulsion_strength)
+            return base
+
+    return flow
+
 
 def tsp_flow_fn(s: np.ndarray, q: np.ndarray) -> np.ndarray:
-    """Flow that pulls toward the nearest-neighbor attractor with smoothing."""
+    """Basic TSP flow that pulls toward the nearest-neighbor attractor."""
     diff = q - s
-    norm = np.linalg.norm(diff)
-    if norm < 1e-12:
-        return np.zeros_like(diff)
-    return diff / norm
+    if s.ndim == 1:
+        norm = np.linalg.norm(diff)
+        if norm < 1e-12:
+            return np.zeros_like(diff)
+        return diff / norm
+    norms = np.linalg.norm(diff, axis=1, keepdims=True)
+    return np.where(norms > 1e-12, diff / np.maximum(norms, 1e-12), 0.0)
 
 
-# ── TSP-specific critique (Fold-Reference) ─────────────────────────
+# ── TSP-specific critique (Fold-Reference) — geometric gradient ──
 
-def make_crossing_critique(cities: np.ndarray) -> CritiqueFn:
-    """Build a critique function that detects and fixes edge crossings."""
+def make_crossing_critique(cities: np.ndarray, repulsion_strength: float = 0.3) -> CritiqueFn:
+    """Build a critique that applies geometric repulsion for crossings.
 
-    def _segments_intersect(p1, p2, p3, p4):
-        """Check if segment p1-p2 intersects p3-p4 (2D only)."""
-        d1 = p2 - p1
-        d2 = p4 - p3
-        cross = d1[0] * d2[1] - d1[1] * d2[0]
-        if abs(cross) < 1e-10:
-            return False
-        t = ((p3[0] - p1[0]) * d2[1] - (p3[1] - p1[1]) * d2[0]) / cross
-        u = ((p3[0] - p1[0]) * d1[1] - (p3[1] - p1[1]) * d1[0]) / cross
-        return 0 < t < 1 and 0 < u < 1
-
+    Instead of a discrete 2-opt swap, the critique computes a continuous
+    repulsive gradient and applies it to the state, nudging the topology
+    toward an uncrossed configuration.
+    """
     def critique(state: np.ndarray) -> tuple[bool, str, np.ndarray | None]:
-        order = state_to_order(state)
-        n = len(order)
-        if cities.shape[1] != 2:
-            return True, "skip (not 2D)", None
-
-        # Find first crossing and fix via 2-opt swap
-        for i in range(n):
-            for j in range(i + 2, n):
-                if j == (i + n - 1) % n:
-                    continue
-                a, b = int(order[i]), int(order[(i + 1) % n])
-                c, d = int(order[j]), int(order[(j + 1) % n])
-                if _segments_intersect(cities[a], cities[b], cities[c], cities[d]):
-                    # 2-opt: reverse the segment between i+1 and j
-                    new_order = order.copy()
-                    new_order[i + 1:j + 1] = new_order[i + 1:j + 1][::-1]
-                    corrected = order_to_state(new_order, n)
-                    return False, f"crossing at edges {i}-{j}", corrected
-
+        gradient = _crossing_repulsion(state, cities, repulsion_strength)
+        grad_norm = np.linalg.norm(gradient)
+        if grad_norm > 1e-8:
+            corrected = state + gradient
+            return False, f"crossing repulsion applied (‖∇‖={grad_norm:.4f})", corrected
         return True, "no crossings", None
 
     return critique
@@ -166,6 +222,9 @@ class LatentFluxTSP:
         nn_tour = nearest_neighbor_tour(cities)
         self.nn_length = tour_length(cities, nn_tour)
         self.attractor = order_to_state(nn_tour, self.n_cities)
+
+        # Use geometric crossing flow instead of plain attractor pull
+        self.flow_fn = make_tsp_crossing_flow(cities, repulsion_strength=0.3)
 
         # Primitives
         self.equivalence = DriftEquivalence(tolerance=equiv_tolerance)
@@ -217,14 +276,14 @@ class LatentFluxTSP:
             candidates_raw = self._generate_candidates(rng)
             superposition = SuperpositionTensor(candidates_raw)
 
-        # ── ∑_ψ + ⟼ Flow all candidates toward attractor ───────
-        traces = superposition.flow_all(
-            q, tsp_flow_fn,
+        # ── ∑_ψ + ⟼ Flow all candidates toward attractor (batch) ──
+        trace = superposition.flow_all(
+            q, self.flow_fn,
             epsilon=self.epsilon, tol=self.tol, max_steps=self.max_steps,
         )
 
-        total_steps = sum(t["steps"] for t in traces)
-        converged_count = sum(1 for t in traces if t["converged"])
+        total_steps = int(trace["total_steps"])
+        converged_count = int(trace["converged"].sum())
 
         # ── ◉ Fold-Reference: fix crossings ─────────────────────
         fold_corrections = 0
@@ -263,7 +322,12 @@ class LatentFluxTSP:
 
         # ── ↓! Commitment Sink ──────────────────────────────────
         best_state = final_states[best_candidate]
-        best_drift = traces[best_candidate]["drift_trace"]
+        # Extract per-state drift trace for the best candidate
+        drift_matrix = trace["drift_traces"]  # (iters, N)
+        best_drift = []
+        if drift_matrix.size > 0:
+            col = drift_matrix[:, best_candidate]
+            best_drift = col[~np.isnan(col)].tolist()
         committed = self.commitment.try_commit(
             superposition, q, best_drift
         )

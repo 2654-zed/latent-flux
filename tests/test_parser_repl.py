@@ -231,6 +231,30 @@ class TestEvaluator:
         with pytest.raises((ValueError, TypeError)):
             run("[1, 2] | flow")
 
+    def test_commit_emits_message(self):
+        """↓! should call on_message callback."""
+        messages = []
+        ctx = EvalContext(on_message=lambda msg: messages.append(msg))
+        run("[1, 2, 3] | commit", ctx=ctx)
+        assert len(messages) == 1
+        assert "Committed" in messages[0]
+
+    def test_commit_superposition_emits_entropy(self):
+        """↓! on superposition emits entropy message."""
+        messages = []
+        ctx = EvalContext(on_message=lambda msg: messages.append(msg))
+        run("∑_ψ [1, 0; 0, 1] ⟼ [0, 0] | ↓!", ctx=ctx)
+        assert any("Entropy" in m for m in messages)
+
+    def test_nearest_neighbor_function(self):
+        """nearest_neighbor(cities) returns state vector."""
+        ctx = EvalContext()
+        cities = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], dtype=np.float32)
+        ctx.set("cities", cities)
+        result = run("nearest_neighbor(cities)", ctx=ctx)
+        assert isinstance(result, np.ndarray)
+        assert len(result) == 4
+
 
 # ── REPL commands ──────────────────────────────────────────────────
 

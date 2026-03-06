@@ -12,6 +12,8 @@ from flux_manifold.tsp_solver import (
     state_to_order,
     nearest_neighbor_tour,
     make_crossing_critique,
+    make_tsp_crossing_flow,
+    _crossing_repulsion,
 )
 
 
@@ -64,6 +66,44 @@ class TestCrossingCritique:
         state = order_to_state(clean_order, 4)
         ok, diag, correction = critique(state)
         assert ok
+
+
+class TestGeometricCrossingFlow:
+    def test_repulsion_nonzero_for_crossing(self):
+        """Crossing tour produces nonzero repulsive gradient."""
+        cities = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], dtype=np.float32)
+        crossing_order = np.array([0, 2, 1, 3], dtype=np.int32)
+        state = order_to_state(crossing_order, 4)
+        grad = _crossing_repulsion(state, cities, strength=0.3)
+        assert np.linalg.norm(grad) > 1e-6
+
+    def test_repulsion_zero_for_clean_tour(self):
+        """Clean tour produces zero repulsive gradient."""
+        cities = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], dtype=np.float32)
+        clean_order = np.array([0, 1, 2, 3], dtype=np.int32)
+        state = order_to_state(clean_order, 4)
+        grad = _crossing_repulsion(state, cities, strength=0.3)
+        assert np.linalg.norm(grad) < 1e-8
+
+    def test_crossing_flow_includes_repulsion(self):
+        """make_tsp_crossing_flow combines attractor pull + repulsion."""
+        cities = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], dtype=np.float32)
+        flow = make_tsp_crossing_flow(cities, repulsion_strength=0.5)
+        crossing_order = np.array([0, 2, 1, 3], dtype=np.int32)
+        state = order_to_state(crossing_order, 4)
+        q = np.zeros(4, dtype=np.float32)
+        delta = flow(state, q)
+        # Should include both attractor pull and repulsion
+        assert np.linalg.norm(delta) > 0
+
+    def test_crossing_flow_batch(self):
+        """Crossing flow works with batch (N, d) input."""
+        cities = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], dtype=np.float32)
+        flow = make_tsp_crossing_flow(cities)
+        S = np.random.default_rng(42).random((3, 4)).astype(np.float32)
+        q = np.zeros(4, dtype=np.float32)
+        delta = flow(S, q)
+        assert delta.shape == (3, 4)
 
 
 # ── LatentFluxInterpreter ─────────────────────────────────────────

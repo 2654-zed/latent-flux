@@ -122,21 +122,25 @@ class LatentFluxInterpreter:
                 self.n_candidates, working_d, seed=self.seed
             )
 
-        # ── Step 3: ⟼ FluxManifold flow (all candidates) ───────
-        all_traces = self._superposition.flow_all(
+        # ── Step 3: ⟼ FluxManifold flow (all candidates, batch) ─
+        batch_trace = self._superposition.flow_all(
             q_work, self.flow_fn,
             epsilon=self.epsilon, tol=self.tol, max_steps=self.max_steps,
         )
 
-        total_steps = sum(t["steps"] for t in all_traces)
-        converged_count = sum(1 for t in all_traces if t["converged"])
+        total_steps = int(batch_trace["total_steps"])
+        converged_count = int(batch_trace["converged"].sum())
 
         # Aggregate drift trace (from best candidate)
         best_idx = int(np.argmin([
             np.linalg.norm(self._superposition.states[i] - q_work)
             for i in range(self._superposition.n)
         ]))
-        combined_drift = all_traces[best_idx]["drift_trace"]
+        drift_matrix = batch_trace["drift_traces"]  # (iters, N)
+        combined_drift = []
+        if drift_matrix.size > 0:
+            col = drift_matrix[:, best_idx]
+            combined_drift = col[~np.isnan(col)].tolist()
 
         # ── Step 4: ◉ Fold-Reference (post-flow critique) ──────
         fold_corrections = 0

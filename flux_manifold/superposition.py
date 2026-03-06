@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 from typing import Callable
 
-from flux_manifold.core import FlowFn, flux_flow_traced
+from flux_manifold.core import FlowFn, flux_flow_traced, flux_flow_traced_batch
 
 
 class SuperpositionTensor:
@@ -64,18 +64,18 @@ class SuperpositionTensor:
         epsilon: float = 0.1,
         tol: float = 1e-3,
         max_steps: int = 1000,
-    ) -> list[dict]:
-        """Flow every state toward q independently. Returns list of traces."""
-        results = []
-        for i in range(self.n):
-            trace = flux_flow_traced(
-                self.states[i], q, f,
-                epsilon=epsilon, tol=tol, max_steps=max_steps,
-            )
-            results.append(trace)
-            # Update internal state to converged position
-            self.states[i] = trace["converged_state"]
-        return results
+    ) -> dict:
+        """Flow every state toward q simultaneously using vectorized batch ops.
+
+        Returns the batch trace dict from flux_flow_traced_batch:
+            converged_states, steps, converged, total_steps, drift_traces
+        """
+        trace = flux_flow_traced_batch(
+            self.states, q, f,
+            epsilon=epsilon, tol=tol, max_steps=max_steps,
+        )
+        self.states = trace["converged_states"]
+        return trace
 
     def reweight_by_drift(self, q: np.ndarray) -> None:
         """Reweight states: closer to q gets higher weight (softmax of -dist)."""

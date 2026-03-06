@@ -30,6 +30,7 @@ from flux_manifold.commitment_sink import CommitmentSink
 from flux_manifold.abstraction_cascade import AbstractionCascade
 from flux_manifold.fold_reference import FoldReference, no_nan_critique, norm_bound_critique
 from flux_manifold.dimensional_squeeze import DimensionalSqueeze
+from flux_manifold.tsp_solver import nearest_neighbor_tour
 
 
 # ── AST Nodes ──────────────────────────────────────────────────────
@@ -302,7 +303,8 @@ class EvalContext:
     """Evaluation context holding variables and configuration."""
 
     def __init__(self, seed: int = 42, epsilon: float = 0.1, tol: float = 1e-3,
-                 max_steps: int = 500, flow_name: str = "normalize"):
+                 max_steps: int = 500, flow_name: str = "normalize",
+                 on_message: Any = None):
         self.variables: dict[str, Any] = {}
         self.seed = seed
         self.epsilon = epsilon
@@ -312,6 +314,8 @@ class EvalContext:
         self.last_trace: dict | None = None
         self.last_superposition: SuperpositionTensor | None = None
         self.commitment = CommitmentSink()
+        # Callback for runtime messages (commit triggers, etc.)
+        self.on_message = on_message or (lambda msg: None)
 
     def set(self, name: str, value: Any) -> None:
         self.variables[name] = value
@@ -392,6 +396,14 @@ def _eval_func(node: LFFuncCall, ctx: EvalContext) -> Any:
         var_name = node.args[0].name if isinstance(node.args[0], LFSymbol) else str(raw_args[0])
         ctx.set(var_name, raw_args[1] if len(raw_args) > 1 else None)
         return raw_args[1] if len(raw_args) > 1 else None
+    elif name == "nearest_neighbor":
+        # nearest_neighbor(cities) — compute NN tour attractor
+        cities = raw_args[0]
+        if not isinstance(cities, np.ndarray):
+            raise TypeError(f"nearest_neighbor expects array, got {type(cities)}")
+        from flux_manifold.tsp_solver import nearest_neighbor_tour, order_to_state
+        nn = nearest_neighbor_tour(cities)
+        return order_to_state(nn, len(cities))
     else:
         raise NameError(f"Unknown function: {name!r}")
 
@@ -422,10 +434,10 @@ def _eval_op(op: LFOp, current: Any, ctx: EvalContext) -> Any:
         q = np.asarray(q, dtype=np.float32)
 
         if isinstance(current, SuperpositionTensor):
-            traces = current.flow_all(q, ctx.flow_fn,
-                                       epsilon=ctx.epsilon, tol=ctx.tol,
-                                       max_steps=ctx.max_steps)
-            ctx.last_trace = traces[0] if traces else None
+            trace = current.flow_all(q, ctx.flow_fn,
+                                      epsilon=ctx.epsilon, tol=ctx.tol,
+                                      max_steps=ctx.max_steps)
+            ctx.last_trace = trace
             current.reweight_by_drift(q)
             ctx.last_superposition = current
             return current
@@ -473,19 +485,30 @@ def _eval_op(op: LFOp, current: Any, ctx: EvalContext) -> Any:
     elif sym == "commit":
         # ↓!: commitment sink
         if ctx.commitment.committed:
+            ctx.on_message("[Already Committed]")
             return ctx.commitment.committed_state
         if isinstance(current, SuperpositionTensor):
+            entropy = current.entropy()
             best = current.collapse_to_best(current.mean_state())
-            return ctx.commitment.commit(best, reason="repl_commit")
+            result = ctx.commitment.commit(best, reason="repl_commit")
+            ctx.on_message(f"[Collapse Triggered: Entropy {entropy:.4f} → Committed]")
+            return result
         elif isinstance(current, dict) and "state" in current:
             inner = current["state"]
             if isinstance(inner, SuperpositionTensor):
+                entropy = inner.entropy()
                 best = inner.collapse_to_best(inner.mean_state())
-                return ctx.commitment.commit(best, reason="repl_commit")
+                result = ctx.commitment.commit(best, reason="repl_commit")
+                ctx.on_message(f"[Collapse Triggered: Entropy {entropy:.4f} → Committed]")
+                return result
             elif isinstance(inner, np.ndarray):
-                return ctx.commitment.commit(inner.copy(), reason="repl_commit")
+                result = ctx.commitment.commit(inner.copy(), reason="repl_commit")
+                ctx.on_message("[↓! Committed]")
+                return result
         elif isinstance(current, np.ndarray):
-            return ctx.commitment.commit(current.copy(), reason="repl_commit")
+            result = ctx.commitment.commit(current.copy(), reason="repl_commit")
+            ctx.on_message("[↓! Committed]")
+            return result
         raise TypeError(f"↓! expects array or SuperpositionTensor, got {type(current)}")
 
     elif sym == "cascade":

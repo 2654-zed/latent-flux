@@ -14,11 +14,13 @@ from flux_manifold.parser import parse, evaluate, run, EvalContext
 
 BANNER = r"""
   ╔═══════════════════════════════════════════════════════════╗
-  ║               Latent Flux REPL  v0.2                      ║
+  ║               Latent Flux REPL  v0.3                      ║
   ║  Operators: ∑_ψ  ⟼  ∇↓  ≅  ↓!  ⇑  ◉                   ║
   ║  ASCII:     sum_psi -> squeeze ~= commit cascade fold     ║
   ║  Pipe:      expr | op1 | op2                              ║
   ║  Functions: random(n,d) zeros(d) ones(d) randn(d)         ║
+  ║             nearest_neighbor(cities)                       ║
+  ║  Assign:    x = <expr>                                    ║
   ║  Commands:  :help :vars :reset :set <key> <val> :quit     ║
   ╚═══════════════════════════════════════════════════════════╝
 """
@@ -45,7 +47,8 @@ HELP = """
     random(10, 32) | superpose | squeeze 8 | -> zeros(8) | cascade 3
 
   Variables:
-    let x = <expr>               Assign result to variable
+    x = <expr>                   Assign result to variable
+    let x = <expr>               Also works
     x                            Use variable in expression
 
   REPL commands:
@@ -170,12 +173,19 @@ def _handle_command(line: str, ctx: EvalContext) -> str | None:
 
 def repl(ctx: EvalContext | None = None) -> None:
     """Run the interactive Latent Flux REPL."""
-    ctx = ctx or EvalContext()
+    messages: list[str] = []
+
+    def _on_message(msg: str) -> None:
+        messages.append(msg)
+
+    ctx = ctx or EvalContext(on_message=_on_message)
+    if ctx.on_message.__func__ if hasattr(ctx.on_message, '__func__') else True:
+        ctx.on_message = _on_message
     print(BANNER)
 
     while True:
         try:
-            line = input("flux> ").strip()
+            line = input("LF> ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n  Goodbye.")
             break
@@ -192,21 +202,34 @@ def repl(ctx: EvalContext | None = None) -> None:
             print(result)
             continue
 
-        # Variable assignment: let x = expr
+        # Variable assignment: x = expr  OR  let x = expr
         var_name = None
         expr_str = line
         if line.startswith("let ") and "=" in line:
             eq_pos = line.index("=")
             var_name = line[4:eq_pos].strip()
             expr_str = line[eq_pos + 1:].strip()
+        elif "=" in line and not line.startswith("["):
+            # Direct assignment: x = expr (but not [1,2] ⟼ ...)
+            eq_pos = line.index("=")
+            candidate = line[:eq_pos].strip()
+            rest = line[eq_pos + 1:].strip()
+            # Only treat as assignment if LHS is a valid identifier
+            if candidate.isidentifier() and rest:
+                var_name = candidate
+                expr_str = rest
 
         # Parse and evaluate
         try:
+            messages.clear()
             ast = parse(expr_str)
             result = evaluate(ast, ctx)
             if var_name:
                 ctx.set(var_name, result)
                 print(f"  {var_name} =")
+            # Print any runtime messages (commit triggers, etc.)
+            for msg in messages:
+                print(f"  {msg}")
             print(_format_result(result))
         except Exception as e:
             print(f"  Error: {e}")

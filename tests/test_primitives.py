@@ -47,9 +47,11 @@ class TestSuperposition:
     def test_flow_all_converges(self):
         sp = SuperpositionTensor.from_random(4, 8, seed=42, scale=0.5)
         q = np.zeros(8, dtype=np.float32)
-        traces = sp.flow_all(q, normalize_flow, epsilon=0.1, tol=1e-2, max_steps=500)
-        assert len(traces) == 4
-        assert all(t["converged"] for t in traces)
+        trace = sp.flow_all(q, normalize_flow, epsilon=0.1, tol=1e-2, max_steps=500)
+        # Batch trace: dict with converged_states, steps, converged, etc.
+        assert isinstance(trace, dict)
+        assert trace["converged"].shape == (4,)
+        assert trace["converged"].all()
 
     def test_reweight_by_drift(self):
         states = np.array([[0.1, 0], [10, 0]], dtype=np.float32)

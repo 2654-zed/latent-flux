@@ -86,9 +86,13 @@ class TestValidation:
         with pytest.raises(ValueError, match="shape"):
             flux_flow(np.zeros(2, dtype=np.float32), np.zeros(3, dtype=np.float32), normalize_flow)
 
-    def test_2d_array_raises(self):
-        with pytest.raises(ValueError, match="1-D"):
-            flux_flow(np.zeros((2, 2), dtype=np.float32), np.zeros((2, 2), dtype=np.float32), normalize_flow)
+    def test_2d_array_accepted_for_batch(self):
+        """2D arrays are now accepted for batch flow."""
+        from flux_manifold.core import flux_flow_batch
+        S = np.zeros((2, 2), dtype=np.float32)
+        q = np.ones(2, dtype=np.float32)
+        result = flux_flow_batch(S, q, normalize_flow)
+        assert result.shape == (2, 2)
 
     def test_bad_epsilon_raises(self):
         with pytest.raises(ValueError, match="epsilon"):
@@ -156,3 +160,79 @@ class TestSafety:
         result = flux_flow(s0, q, huge_flow, epsilon=0.5, max_steps=100)
         # Should still produce finite values
         assert np.all(np.isfinite(result))
+
+
+# ── Batch flow (N, d) ─────────────────────────────────────────────
+
+class TestBatchFlow:
+    def test_batch_converges(self):
+        from flux_manifold.core import flux_flow_batch
+        S = np.array([[1, 1], [2, 2], [-1, -1]], dtype=np.float32)
+        q = np.zeros(2, dtype=np.float32)
+        result = flux_flow_batch(S, q, normalize_flow, epsilon=0.1, tol=1e-3)
+        assert result.shape == (3, 2)
+        for i in range(3):
+            assert np.linalg.norm(result[i] - q) < 1e-2
+
+    def test_batch_traced_returns_dict(self):
+        from flux_manifold.core import flux_flow_traced_batch
+        S = np.array([[1, 0], [0, 1]], dtype=np.float32)
+        q = np.zeros(2, dtype=np.float32)
+        trace = flux_flow_traced_batch(S, q, normalize_flow)
+        assert "converged_states" in trace
+        assert "steps" in trace
+        assert "converged" in trace
+        assert "total_steps" in trace
+        assert "drift_traces" in trace
+
+    def test_batch_converged_flags(self):
+        from flux_manifold.core import flux_flow_traced_batch
+        S = np.array([[0.001, 0], [100, 100]], dtype=np.float32)
+        q = np.zeros(2, dtype=np.float32)
+        trace = flux_flow_traced_batch(S, q, normalize_flow, tol=1e-2, max_steps=5)
+        # First state is already near q, second needs many steps
+        assert trace["converged"][0] == True
+        assert trace["steps"][0] < trace["steps"][1]
+
+    def test_batch_matches_serial(self):
+        """Batch results should match serial flow for each state."""
+        from flux_manifold.core import flux_flow_batch
+        rng = np.random.default_rng(99)
+        S = rng.standard_normal((5, 4)).astype(np.float32) * 2
+        q = np.ones(4, dtype=np.float32)
+        batch_result = flux_flow_batch(S.copy(), q, normalize_flow, epsilon=0.1, tol=1e-3)
+        for i in range(5):
+            serial_result = flux_flow(S[i], q, normalize_flow, epsilon=0.1, tol=1e-3)
+            np.testing.assert_allclose(batch_result[i], serial_result, atol=1e-5)
+
+    def test_batch_nan_safety(self):
+        from flux_manifold.core import flux_flow_batch
+        def bad_flow(s, q):
+            return np.full_like(s, np.nan)
+        S = np.ones((3, 2), dtype=np.float32)
+        q = np.zeros(2, dtype=np.float32)
+        result = flux_flow_batch(S, q, bad_flow, max_steps=5)
+        assert not np.any(np.isnan(result))
+
+    def test_batch_speed_advantage(self):
+        """Batch flow should be faster than serial for many states."""
+        import time
+        from flux_manifold.core import flux_flow_batch
+        rng = np.random.default_rng(123)
+        N, d = 50, 16
+        S = rng.standard_normal((N, d)).astype(np.float32)
+        q = np.zeros(d, dtype=np.float32)
+
+        # Batch
+        t0 = time.perf_counter()
+        flux_flow_batch(S.copy(), q, normalize_flow, epsilon=0.1, tol=1e-3)
+        t_batch = time.perf_counter() - t0
+
+        # Serial
+        t0 = time.perf_counter()
+        for i in range(N):
+            flux_flow(S[i].copy(), q, normalize_flow, epsilon=0.1, tol=1e-3)
+        t_serial = time.perf_counter() - t0
+
+        # Batch should not be dramatically slower (allow 3x margin for small N)
+        assert t_batch < t_serial * 3

@@ -1,7 +1,7 @@
 """Latent Flux Interpreter – all 7 primitives for transformer-native computation."""
 
 # Core FluxManifold (⟼)
-from flux_manifold.core import flux_flow, flux_flow_traced
+from flux_manifold.core import flux_flow, flux_flow_traced, flux_flow_batch, flux_flow_traced_batch
 from flux_manifold.flows import normalize_flow, sin_flow, damped_flow, adaptive_flow
 
 # Baselines
@@ -36,7 +36,7 @@ from flux_manifold.parser import parse, evaluate, run, EvalContext
 
 __all__ = [
     # ⟼ FluxManifold
-    "flux_flow", "flux_flow_traced",
+    "flux_flow", "flux_flow_traced", "flux_flow_batch", "flux_flow_traced_batch",
     "normalize_flow", "sin_flow", "damped_flow", "adaptive_flow",
     # Baselines
     "random_walk", "gradient_descent", "static_baseline",
