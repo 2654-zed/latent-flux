@@ -66,6 +66,8 @@ from flux_manifold.dimensional_squeeze import DimensionalSqueeze
 from flux_manifold.tsp_solver import nearest_neighbor_tour
 from flux_manifold.flow_trace import FlowTrace, FlowTraceEntry, analyze_convergence
 from flux_manifold.reservoir_state import ReservoirState, SuperpositionReservoir
+from flux_manifold.recursive_flow import RecursiveFlow
+from flux_manifold.attractor_competition import AttractorCompetition
 
 
 # ── AST Nodes ──────────────────────────────────────────────────────
@@ -136,15 +138,17 @@ OPERATORS = {
     "◉": "fold", "fold": "fold",
     "∑_ψ": "superpose", "sum_psi": "superpose", "superpose": "superpose",
     "⧖": "reservoir", "reservoir": "reservoir",
+    "↺": "recurse", "recurse": "recurse",
+    "⊗": "compete", "compete": "compete",
 }
 
 TOKEN_PATTERN = re.compile(
     r"""
     (\#[^\n]*)                         # Comment (skip)
     |("(?:[^"\\]|\\.)*")               # String literal
-    |(\∑_ψ|⟼|∇↓|≅|↓!|⇑|◉|⧖)          # Unicode operators
+    |(\∑_ψ|⟼|∇↓|≅|↓!|⇑|◉|⧖|↺|⊗)      # Unicode operators
     |(\->|~=|sum_psi)                 # ASCII aliases
-    |((?:import|flow|squeeze|equiv|commit|cascade|fold|superpose|reservoir|let)(?![a-zA-Z_0-9]))  # Keywords (word boundary)
+    |((?:import|flow|squeeze|equiv|commit|cascade|fold|superpose|reservoir|recurse|compete|let)(?![a-zA-Z_0-9]))  # Keywords (word boundary)
     |(\|)                              # Pipe
     |(\[)                              # Open bracket
     |(\])                              # Close bracket
@@ -1020,6 +1024,52 @@ def _eval_op(op: LFOp, current: Any, ctx: EvalContext) -> Any:
             readout = ctx.reservoir.step(current)
             return current
         raise TypeError(f"⧖ expects array or SuperpositionTensor, got {type(current)}")
+
+    elif sym == "recurse":
+        # ↺: recursive flow — geometric fixed-point iteration
+        q = _eval_stage(op.arg, current, ctx) if op.arg is not None else None
+        if q is None:
+            raise ValueError("↺ requires a target attractor")
+        q = np.asarray(q, dtype=np.float32)
+        if isinstance(current, np.ndarray):
+            rf = RecursiveFlow(
+                flow_fn=ctx.flow_fn,
+                attractor=q,
+                epsilon=ctx.epsilon,
+                tol=ctx.tol,
+                max_iterations=ctx.max_steps,
+            )
+            result = rf.run(current)
+            return result["final_state"]
+        raise TypeError(f"↺ expects array, got {type(current)}")
+
+    elif sym == "compete":
+        # ⊗: attractor competition — geometric pattern matching
+        # Parse: competing attractors as a matrix argument
+        arg = _eval_stage(op.arg, current, ctx) if op.arg is not None else None
+        if arg is None:
+            raise ValueError("⊗ requires attractor matrix argument")
+        attractors = np.asarray(arg, dtype=np.float32)
+        if attractors.ndim == 1:
+            attractors = attractors.reshape(1, -1)
+        labels = [f"attractor_{i}" for i in range(attractors.shape[0])]
+        ac = AttractorCompetition(
+            attractors=attractors,
+            labels=labels,
+            flow_fn=ctx.flow_fn,
+            epsilon=ctx.epsilon,
+            tol=ctx.tol,
+            max_steps=ctx.max_steps,
+        )
+        if isinstance(current, np.ndarray):
+            if current.ndim == 1:
+                result = ac.compete(current)
+                return np.asarray(attractors[result["winner_idx"]], dtype=np.float32)
+            results = ac.compete_batch(current)
+            return np.array(
+                [attractors[r["winner_idx"]] for r in results], dtype=np.float32
+            )
+        raise TypeError(f"⊗ expects array, got {type(current)}")
 
     else:
         raise ValueError(f"Unknown operator: {sym!r}")

@@ -28,6 +28,7 @@ from flux_manifold.abstraction_cascade import AbstractionCascade
 from flux_manifold.fold_reference import FoldReference, CritiqueFn, no_nan_critique
 from flux_manifold.dimensional_squeeze import DimensionalSqueeze
 from flux_manifold.flows import normalize_flow
+from flux_manifold.reservoir_state import ReservoirState, SuperpositionReservoir
 
 
 class LatentFluxInterpreter:
@@ -49,6 +50,7 @@ class LatentFluxInterpreter:
         critique_fn: CritiqueFn | None = None,
         critique_interval: int = 10,
         squeeze_dim: int | None = None,
+        use_reservoir: bool = False,
         seed: int = 42,
     ):
         self.d = d
@@ -74,6 +76,9 @@ class LatentFluxInterpreter:
         self.squeeze: DimensionalSqueeze | None = None
         if squeeze_dim is not None and squeeze_dim < d:
             self.squeeze = DimensionalSqueeze(target_dim=squeeze_dim)
+
+        self.use_reservoir = use_reservoir
+        self._reservoir: SuperpositionReservoir | None = None
 
         # State
         self._superposition: SuperpositionTensor | None = None
@@ -141,6 +146,13 @@ class LatentFluxInterpreter:
             combined_drift = col[~np.isnan(col)].tolist()
 
         # ── Step 4: ◉ Fold-Reference (post-flow critique, batch) ──
+        # Optional ⧖ reservoir step: feed post-flow states through ESN
+        if self.use_reservoir and self._superposition is not None:
+            n, d_work = self._superposition.states.shape
+            if self._reservoir is None:
+                self._reservoir = SuperpositionReservoir(n, d_work, seed=self.seed)
+            self._reservoir.step_all(self._superposition.states)
+
         self._superposition.states, fold_corrections = self.fold_ref.check_batch(
             self._superposition.states
         )

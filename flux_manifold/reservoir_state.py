@@ -46,6 +46,8 @@ class ReservoirState:
         d: int,
         reservoir_scale: int = 4,
         spectral_radius: float = 0.9,
+        input_scaling: float = 0.1,
+        leak_rate: float = 0.3,
         seed: int = 42,
         reservoir_memory_warning_threshold: int = 100_000_000,  # 100 MB in bytes
     ):
@@ -58,18 +60,25 @@ class ReservoirState:
                 f"spectral_radius must be in (0, 1.0) for echo state property, "
                 f"got {spectral_radius}"
             )
+        if not (0.0 < leak_rate <= 1.0):
+            raise ValueError(
+                f"leak_rate must be in (0, 1.0] — 1.0=no memory (Markovian), "
+                f"near 0=long memory. Got {leak_rate}"
+            )
 
         self.d = d
         self.reservoir_scale = reservoir_scale
         self.r = d * reservoir_scale
         self.spectral_radius = spectral_radius
+        self.input_scaling = input_scaling
+        self.leak_rate = leak_rate
         self.seed = seed
         self._warning_threshold = reservoir_memory_warning_threshold
 
         rng = np.random.default_rng(seed)
 
-        # W_in: input → reservoir (r × d), scaled for stable dynamics
-        self.W_in = (rng.standard_normal((self.r, d)) * 0.1).astype(np.float32)
+        # W_in: input → reservoir (r × d), scaled by input_scaling
+        self.W_in = (rng.standard_normal((self.r, d)) * input_scaling).astype(np.float32)
 
         # W_res: reservoir → reservoir (r × r), sparse, scaled to spectral_radius
         # Sparse initialization (~10% density) is standard ESN practice
@@ -96,9 +105,20 @@ class ReservoirState:
         """Current reservoir hidden state h ∈ ℝ^r."""
         return self._h.copy()
 
+    def get_history(self, last_n: int | None = None) -> list[np.ndarray]:
+        """Reservoir state history.
+
+        Args:
+            last_n: If provided, return only the last N entries.
+                    None returns the full history.
+        """
+        if last_n is None:
+            return list(self._history)
+        return list(self._history[-last_n:])
+
     @property
     def history(self) -> list[np.ndarray]:
-        """Full history of hidden states."""
+        """Full history of hidden states (property alias for get_history())."""
         return list(self._history)
 
     @property
@@ -123,10 +143,12 @@ class ReservoirState:
 
         x = x.astype(np.float32, copy=False)
 
-        # ESN dynamics: h(t+1) = tanh(W_in · x + W_res · h(t))
-        self._h = np.tanh(
+        # ESN dynamics with leak rate:
+        # h(t+1) = (1 - leak_rate) * h(t) + leak_rate * tanh(W_in · x + W_res · h(t))
+        activation = np.tanh(
             self.W_in @ x + self.W_res @ self._h
         ).astype(np.float32)
+        self._h = ((1 - self.leak_rate) * self._h + self.leak_rate * activation).astype(np.float32)
 
         self._history.append(self._h.copy())
 
@@ -163,6 +185,28 @@ class ReservoirState:
     def is_committed(self) -> bool:
         return self._committed
 
+    # ── Method aliases for spec compatibility ─────────────────
+
+    def update(self, state: np.ndarray) -> np.ndarray:
+        """Alias for step() — updates reservoir with new state, returns readout."""
+        return self.step(state)
+
+    def read(self) -> np.ndarray:
+        """Alias for readout() — returns current readout without advancing."""
+        return self.readout()
+
+    def memory_bytes(self) -> int:
+        """Current memory allocation in bytes.
+
+        Includes weight matrices, hidden state, and history.
+        """
+        base = (
+            self.W_in.nbytes + self.W_res.nbytes + self.W_out.nbytes
+            + self._h.nbytes
+        )
+        history_bytes = sum(h.nbytes for h in self._history)
+        return base + history_bytes
+
     def reset(self) -> None:
         """Reset reservoir to initial state (zero hidden, empty history).
 
@@ -192,12 +236,15 @@ class SuperpositionReservoir:
         d: int,
         reservoir_scale: int = 4,
         spectral_radius: float = 0.9,
+        input_scaling: float = 0.1,
+        leak_rate: float = 0.3,
         seed: int = 42,
         reservoir_memory_warning_threshold: int = 100_000_000,
     ):
         self.n = n
         self.d = d
         self.reservoir_scale = reservoir_scale
+        self.leak_rate = leak_rate
         self._warning_threshold = reservoir_memory_warning_threshold
 
         # Check memory before allocating
@@ -208,7 +255,8 @@ class SuperpositionReservoir:
         # The weight matrices are shared to save memory — only hidden states differ
         self._template = ReservoirState(
             d=d, reservoir_scale=reservoir_scale,
-            spectral_radius=spectral_radius, seed=seed,
+            spectral_radius=spectral_radius, input_scaling=input_scaling,
+            leak_rate=leak_rate, seed=seed,
             reservoir_memory_warning_threshold=reservoir_memory_warning_threshold,
         )
 
@@ -257,8 +305,13 @@ class SuperpositionReservoir:
         for i in range(self.n):
             x = states[i].astype(np.float32, copy=False)
             # Shared weight matrices, per-candidate hidden state
-            self._hidden_states[i] = np.tanh(
+            # ESN with leak rate
+            activation = np.tanh(
                 self._template.W_in @ x + self._template.W_res @ self._hidden_states[i]
+            ).astype(np.float32)
+            self._hidden_states[i] = (
+                (1 - self.leak_rate) * self._hidden_states[i]
+                + self.leak_rate * activation
             ).astype(np.float32)
             self._histories[i].append(self._hidden_states[i].copy())
             readouts[i] = self._template.W_out @ self._hidden_states[i]

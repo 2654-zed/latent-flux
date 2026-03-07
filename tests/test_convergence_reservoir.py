@@ -350,3 +350,129 @@ class TestParserReservoir:
         result = run("∑_ψ [1.0, 2.0; 3.0, 4.0] | ⧖", ctx=ctx)
         assert isinstance(result, SuperpositionTensor)
         assert ctx.sp_reservoir is not None
+
+
+# ── Spec-Required Reservoir Extension Tests ────────────────────────
+
+class TestReservoirExtensions:
+    """Tests for leak_rate, input_scaling, method aliases, memory_bytes."""
+
+    def test_reservoir_update_changes_state(self):
+        rs = ReservoirState(d=4, seed=0)
+        h_before = rs.hidden_state.copy()
+        rs.update(np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32))
+        h_after = rs.hidden_state
+        assert not np.allclose(h_before, h_after), "update() must change hidden state"
+
+    def test_reservoir_memory_decays_with_leak_rate(self):
+        x = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+        # High leak = fast decay (more Markovian)
+        rs_high = ReservoirState(d=4, leak_rate=0.9, seed=0)
+        rs_high.step(x)
+        for _ in range(10):
+            rs_high.step(np.zeros(4, dtype=np.float32))
+        norm_high = np.linalg.norm(rs_high.hidden_state)
+
+        # Low leak = slow decay (long memory)
+        rs_low = ReservoirState(d=4, leak_rate=0.1, seed=0)
+        rs_low.step(x)
+        for _ in range(10):
+            rs_low.step(np.zeros(4, dtype=np.float32))
+        norm_low = np.linalg.norm(rs_low.hidden_state)
+
+        assert norm_low > norm_high, (
+            f"Low leak_rate should retain more memory: "
+            f"norm_low={norm_low:.6f} vs norm_high={norm_high:.6f}"
+        )
+
+    def test_reservoir_readout_dimension_matches_input(self):
+        for d in [2, 4, 8, 16]:
+            rs = ReservoirState(d=d, seed=0)
+            x = np.ones(d, dtype=np.float32)
+            y = rs.step(x)
+            assert y.shape == (d,), f"readout shape {y.shape} != ({d},)"
+            r = rs.read()
+            assert r.shape == (d,), f"read() shape {r.shape} != ({d},)"
+
+    def test_reservoir_superposition_coupling(self):
+        states = np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]], dtype=np.float32)
+        sp_res = SuperpositionReservoir(n=3, d=2, seed=0)
+        sp_res.step_all(states)
+        h2_before_reorder = sp_res._hidden_states[2].copy()
+        # Reorder: reverse
+        sp_res.reorder([2, 1, 0])
+        h0_after = sp_res._hidden_states[0]
+        # After reorder, hidden_states[0] should be what was hidden_states[2]
+        np.testing.assert_allclose(h0_after, h2_before_reorder, atol=1e-6)
+
+    def test_reservoir_foldreference_integration(self):
+        rs = ReservoirState(d=4, seed=0)
+        rs.step(np.ones(4, dtype=np.float32))
+        critique = reservoir_norm_critique(max_norm=100.0)
+        fr = FoldReference(critique_fn=critique, interval=1)
+        state = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
+        corrected, was_corrected = fr.check(
+            state, step=0, reservoir_history=rs.get_history()
+        )
+        assert isinstance(corrected, np.ndarray)
+        assert corrected.shape == (4,)
+
+    def test_reservoir_memory_warning_threshold(self):
+        rs = ReservoirState(d=4, reservoir_memory_warning_threshold=1)
+        x = np.ones(4, dtype=np.float32)
+        rs.step(x)
+        # memory_bytes should exceed threshold=1 after any step
+        assert rs.memory_bytes() > 1
+
+    def test_reservoir_reset_preserves_w_out(self):
+        rs = ReservoirState(d=4, seed=0)
+        W_out_before = rs.W_out.copy()
+        rs.step(np.ones(4, dtype=np.float32))
+        rs.step(np.ones(4, dtype=np.float32) * 2)
+        assert rs.history_length == 2
+        rs.reset()
+        assert rs.history_length == 0
+        np.testing.assert_array_equal(
+            rs.hidden_state, np.zeros(rs.r, dtype=np.float32)
+        )
+        np.testing.assert_array_equal(rs.W_out, W_out_before)
+
+    def test_reservoir_commit_returns_readout_not_raw(self):
+        rs = ReservoirState(d=4, seed=0)
+        rs.step(np.ones(4, dtype=np.float32))
+        expected = rs.readout().copy()
+        committed = rs.commit()
+        np.testing.assert_allclose(committed, expected, atol=1e-7)
+        assert committed.shape == (4,)
+        assert rs.is_committed
+        with pytest.raises(RuntimeError):
+            rs.step(np.ones(4, dtype=np.float32))
+
+    def test_leak_rate_validation(self):
+        with pytest.raises(ValueError, match="leak_rate"):
+            ReservoirState(d=4, leak_rate=0.0)
+        with pytest.raises(ValueError, match="leak_rate"):
+            ReservoirState(d=4, leak_rate=-0.1)
+        # 1.0 should be allowed (fully Markovian)
+        rs = ReservoirState(d=4, leak_rate=1.0)
+        assert rs.leak_rate == 1.0
+
+    def test_input_scaling_affects_dynamics(self):
+        x = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
+        rs_small = ReservoirState(d=4, input_scaling=0.01, seed=0)
+        y_small = rs_small.step(x)
+        rs_large = ReservoirState(d=4, input_scaling=1.0, seed=0)
+        y_large = rs_large.step(x)
+        # Larger input scaling should produce larger hidden state activation
+        assert np.linalg.norm(y_large) > np.linalg.norm(y_small)
+
+    def test_get_history_last_n(self):
+        rs = ReservoirState(d=4, seed=0)
+        for i in range(5):
+            rs.step(np.ones(4, dtype=np.float32) * (i + 1))
+        full = rs.get_history()
+        assert len(full) == 5
+        last_2 = rs.get_history(last_n=2)
+        assert len(last_2) == 2
+        np.testing.assert_array_equal(last_2[0], full[3])
+        np.testing.assert_array_equal(last_2[1], full[4])

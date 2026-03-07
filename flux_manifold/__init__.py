@@ -28,6 +28,12 @@ from flux_manifold.reservoir_state import ReservoirState, SuperpositionReservoir
 # Convergence Contracts
 from flux_manifold.convergence import ConvergenceTier, ConvergenceContract, ConvergenceResult
 
+# ↺ Recursive Flow
+from flux_manifold.recursive_flow import RecursiveFlow
+
+# ⊗ Attractor Competition
+from flux_manifold.attractor_competition import AttractorCompetition
+
 # Dimensional Squeeze (∇↓)
 from flux_manifold.dimensional_squeeze import DimensionalSqueeze
 
@@ -80,6 +86,10 @@ __all__ = [
     "FoldReference", "no_nan_critique", "norm_bound_critique", "reservoir_norm_critique",
     # ⧖ Reservoir State
     "ReservoirState", "SuperpositionReservoir",
+    # ↺ Recursive Flow
+    "RecursiveFlow",
+    # ⊗ Attractor Competition
+    "AttractorCompetition",
     # Convergence Contracts
     "ConvergenceTier", "ConvergenceContract", "ConvergenceResult",
     # ∇↓ Dimensional Squeeze
