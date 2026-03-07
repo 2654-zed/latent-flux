@@ -30,10 +30,11 @@ ds/dt = f(s, q)       s ∈ ℝ^d,  q ∈ ℝ^d (attractor),  f: ℝ^d × ℝ^d 
 
 ## Language Primitives
 
-Latent Flux has exactly **7 primitives**. Each operates on continuous states in ℝ^d. Together they form a complete compute cycle: explore → flow → critique → accept → commit → abstract.
+<!-- AUTOGEN:PRIMITIVES_TABLE -->
+Latent Flux has exactly **10 primitives**. Each operates on continuous states in ℝ^d. Together they form a complete compute cycle: explore → flow → critique → accept → commit → abstract → remember → recurse → compete.
 
 | Symbol | Name | Signature | Semantics |
-|--------|------|-----------|-----------|
+|--------|------|-----------|----------|
 | **⟼** | FluxManifold | `s₀, q, f → s*` | Continuous flow: iterate `s ← s + ε·f(s, q)` until `‖s − q‖ < tol` |
 | **∑_ψ** | Superposition Tensor | `{sᵢ, wᵢ}ⁿ → batch` | Weighted parallel exploration of N candidate states |
 | **∇↓** | Dimensional Squeeze | `ℝ^d → ℝ^k` where `k < d` | Lossy projection (PCA or random) to reduce dimensionality early |
@@ -41,6 +42,10 @@ Latent Flux has exactly **7 primitives**. Each operates on continuous states in 
 | **↓!** | Commitment Sink | `s → s` (irreversible) | Lock state when entropy is low or drift stabilizes. Cannot be undone. |
 | **◉** | Fold-Reference | `(s, step) → s'` | Mid-flow self-critique: detect NaN, norm blowup, edge crossings; apply correction |
 | **⇑** | Abstraction Cascade | `ℝ^d → [ℝ^k₁, ℝ^k₂, …]` | Hierarchical PCA reduction into decreasing-dimensional summaries |
+| **⧖** | Reservoir State | `s → s` (memory) | Continuous memory via ESN dynamics — information echoes across flow steps |
+| **↺** | Recursive Flow | `s₀, q → s*` | Fixed-point iteration with geometric termination (attractor convergence or entropy collapse) |
+| **⊗** | Attractor Competition | `s, {aₖ} → winner` | Geometric pattern matching: state flows under simultaneous attraction, basin determines winner |
+<!-- AUTOGEN:END_PRIMITIVES_TABLE -->
 
 ### Formal Definitions
 
@@ -109,24 +114,64 @@ Given states S ∈ ℝ^(N×d):
 Each level returns: {dim, states, components, explained_variance_ratio}
 ```
 
+**⧖ Reservoir State (ESN continuous memory)**
+```
+Given input x(t) ∈ ℝ^d, reservoir hidden state h(t) ∈ ℝ^r where r = scale × d:
+  h(t+1) = (1 − leak_rate) · h(t) + leak_rate · tanh(W_in · x(t) + W_res · h(t))
+  y(t)   = W_out · h(t+1) ∈ ℝ^d          (readout projection)
+Spectral radius of W_res < 1.0 guarantees echo state property (fading memory).
+commit() → returns W_out · h, discards history, locks reservoir (linear type).
+```
+
+**↺ Recursive Flow (fixed-point iteration)**
+```
+Given s₀ ∈ ℝ^d, attractor q, flow function f:
+  repeat:
+    s_{t+1} = inner_flow(s_t, q, f, inner_steps)
+    if ‖s_{t+1} − q‖ < tol: terminate (attractor_reached)
+    if s_{t+1} ≅ s_t:       terminate (fixed_point)
+    if t > max_iterations:   terminate (timeout)
+  return s_final
+Termination is geometric: either the attractor captures the state,
+or successive iterations map to the same point (fixed point).
+```
+
+**⊗ Attractor Competition (geometric pattern matching)**
+```
+Given state x ∈ ℝ^d, attractors {a₁, …, aₖ} ∈ ℝ^(K×d):
+  For each step:
+    pull_k  = f(x, aₖ)                              (attraction to each basin)
+    repel_k = −ρ · Σ_{j≠k} (aₖ − aⱼ)/‖aₖ − aⱼ‖²   (inter-attractor repulsion)
+    x ← x + ε · mean(pull_k + repel_k)
+  Winner = argmin_k ‖x − aₖ‖
+Replaces if/else branching with geometric basin membership.
+```
+
 ---
 
 ## Execution Model
 
-The interpreter orchestrates all 7 primitives in a fixed pipeline:
+The interpreter orchestrates all 10 primitives. The core pipeline runs 7 in sequence; the remaining 3 (⧖, ↺, ⊗) are composable extensions:
 
 ```
 Input: attractor q ∈ ℝ^d
 
-  ┌─────────────────────────────────────────────────────┐
-  │ 1. ∇↓  Dimensional Squeeze   (compress if high-d)  │
-  │ 2. ∑_ψ Superposition Tensor  (N random candidates) │
-  │ 3. ⟼   FluxManifold          (batch flow → q)      │
-  │ 4. ◉   Fold-Reference        (self-critique)       │
-  │ 5. ≅   DriftEquivalence      (accept if close)     │
-  │ 6. ↓!  Commitment Sink       (irreversible lock)   │
-  │ 7. ⇑   Abstraction Cascade   (hierarchical view)   │
-  └─────────────────────────────────────────────────────┘
+  ┌────────────────────────────────────────────────────────┐
+  │ 1. ∇↓  Dimensional Squeeze   (compress if high-d)     │
+  │ 2. ∑_ψ Superposition Tensor  (N random candidates)    │
+  │ 3. ⟼   FluxManifold          (batch flow → q)         │
+  │ 3b.⧖   Reservoir State       (ESN memory, optional)   │
+  │ 4. ◉   Fold-Reference        (self-critique)          │
+  │ 5. ≅   DriftEquivalence      (accept if close)        │
+  │ 6. ↓!  Commitment Sink       (irreversible lock)      │
+  │ 7. ⇑   Abstraction Cascade   (hierarchical view)      │
+  └────────────────────────────────────────────────────────┘
+
+  Composable extensions (usable in parser pipelines):
+  ┌────────────────────────────────────────────────────────┐
+  │ ↺   Recursive Flow         (fixed-point iteration)  │
+  │ ⊗   Attractor Competition  (geometric classification)│
+  └────────────────────────────────────────────────────────┘
 
 Output: {committed_state, equivalence_quality, abstraction_levels, ...}
 ```
@@ -148,9 +193,9 @@ pipeline  ::= atom (OP atom?)*
 atom      ::= vector | number | symbol | func_call | '(' pipeline ')'
 vector    ::= '[' number (',' number)* (';' number (',' number)*)* ']'
 func_call ::= IDENT '(' args ')'
-OP        ::= '⟼' | '∇↓' | '≅' | '↓!' | '⇑' | '◉' | '∑_ψ'
+OP        ::= '⟼' | '∇↓' | '≅' | '↓!' | '⇑' | '◉' | '∑_ψ' | '⧖' | '↺' | '⊗'
             | '->' | 'squeeze' | '~=' | 'commit' | 'cascade' | 'fold' | 'sum_psi'
-            | '|'
+            | 'reservoir' | 'recurse' | 'compete' | '|'
 ```
 
 ### Operators
@@ -164,6 +209,9 @@ OP        ::= '⟼' | '∇↓' | '≅' | '↓!' | '⇑' | '◉' | '∑_ψ'
 | `↓!` | `commit` | — | Commit (irreversible) |
 | `⇑` | `cascade` | integer levels | Build abstraction cascade |
 | `◉` | `fold` | — | Apply fold-reference critique |
+| `⧖` | `reservoir` | — | Step through reservoir (continuous memory) |
+| `↺` | `recurse` | target vector | Recursive flow to fixed-point |
+| `⊗` | `compete` | attractor matrix | Attractor competition (geometric classify) |
 | `\|` | `\|` | — | Generic pipe (pass value through) |
 
 ### Built-in Functions
@@ -277,7 +325,7 @@ pip install -r requirements.txt    # numpy, scipy, matplotlib
 # Run all benchmarks + TSP demos
 python run_benchmarks.py
 
-# Run tests (172 tests)
+# Run tests
 python -m pytest tests/ -v
 
 # Launch REPL
@@ -439,6 +487,72 @@ ds.unsqueeze(compressed) → ndarray   # (k,) → (d,)  lossy
 ds.compression_ratio     → float | None
 ```
 
+### ReservoirState — `flux_manifold.reservoir_state`
+
+```python
+rs = ReservoirState(d=8, reservoir_scale=4, spectral_radius=0.9,
+                    input_scaling=0.1, leak_rate=0.3, seed=42)
+
+rs.step(x)          → ndarray   # evolve reservoir, return readout (d,)
+rs.update(x)        → ndarray   # alias for step()
+rs.readout()        → ndarray   # current readout without advancing
+rs.read()           → ndarray   # alias for readout()
+rs.commit()         → ndarray   # return readout, lock reservoir
+rs.reset()          → None      # zero hidden state + clear history
+rs.get_history(n)   → list      # last n hidden states (None = all)
+rs.memory_bytes()   → int       # current allocation in bytes
+rs.hidden_state     → ndarray   # (r,) current hidden state (copy)
+rs.is_committed     → bool
+
+# Superposition reservoir (per-candidate ESN states)
+sp_rs = SuperpositionReservoir(n=16, d=8, leak_rate=0.3, seed=42)
+sp_rs.step_all(states)   → ndarray  # (N, d) readouts
+sp_rs.readout_all()      → ndarray
+sp_rs.reorder(indices)   → None     # keeps coupled with SuperpositionTensor
+```
+
+### RecursiveFlow — `flux_manifold.recursive_flow`
+
+```python
+rf = RecursiveFlow(flow_fn, attractor, epsilon=0.1, tol=1e-3,
+                   max_iterations=100, inner_steps=50,
+                   fixed_point_tol=1e-4, seed=42)
+
+result = rf.run(initial_state)     → dict
+result = rf.run_batch(states)      → list[dict]
+
+# Result dict:
+#   final_state           ndarray (d,)
+#   iterations            int
+#   converged             bool
+#   termination           "attractor_reached" | "fixed_point" | "timeout"
+#   trajectory            list[ndarray]
+#   drift_trace           list[float]
+#   fixed_point_distances list[float]
+```
+
+### AttractorCompetition — `flux_manifold.attractor_competition`
+
+```python
+ac = AttractorCompetition(
+    attractors, labels, flow_fn,
+    epsilon=0.1, tol=1e-2, max_steps=500,
+    repulsion=0.05, seed=42,
+)
+
+result  = ac.compete(state)         → dict
+results = ac.compete_batch(states)  → list[dict]
+summary = ac.summary(results)       → dict
+
+# Result dict:
+#   winner       str        (label of winning attractor)
+#   winner_idx   int
+#   margin       float      (distance gap: 2nd closest − closest)
+#   certainty    float ∈ [0, 1]
+#   contested    bool       (margin < tol)
+#   trajectory   list[ndarray]
+```
+
 ### LatentFluxInterpreter — `flux_manifold.interpreter`
 
 ```python
@@ -448,7 +562,7 @@ interp = LatentFluxInterpreter(
     equiv_tolerance=0.05, entropy_threshold=0.5,
     drift_window=10, drift_commit_threshold=0.01,
     cascade_levels=3, critique_fn=None, critique_interval=10,
-    squeeze_dim=None, seed=42,
+    squeeze_dim=None, use_reservoir=False, seed=42,
 )
 
 result = interp.evaluate(q, initial_states=None) → dict
@@ -603,10 +717,19 @@ flux_manifold/
   abstraction_cascade.py      # ⇑  AbstractionCascade
   fold_reference.py           # ◉  FoldReference + built-in critiques
   dimensional_squeeze.py      # ∇↓ DimensionalSqueeze
-  interpreter.py              # Full 7-primitive pipeline orchestrator
+  reservoir_state.py          # ⧖  ReservoirState + SuperpositionReservoir (ESN)
+  recursive_flow.py           # ↺  RecursiveFlow (fixed-point iteration)
+  attractor_competition.py    # ⊗  AttractorCompetition (geometric classify)
+  convergence.py              # Convergence contracts (Tier 1/2/3)
+  hamiltonian.py              # Hamiltonian flow engine (§2 ontology)
+  quantum_interference.py     # Quantum interference engine (§3 ontology)
+  topological_squeeze.py      # Topological squeeze (§4 ontology)
+  flow_trace.py               # Structured error diagnostics
+  interpreter.py              # Full 10-primitive pipeline orchestrator
   tsp_solver.py               # TSP proof-of-concept (crossing repulsion)
-  parser.py                   # Expression parser + AST + evaluator
+  parser.py                   # Expression parser + AST + evaluator (10 operators)
   repl.py                     # Interactive REPL (LF> prompt)
+  pheno_log.py                # Phenomenological logging (JSONL)
   visualize.py                # 8 matplotlib plot functions
   baselines.py                # Random walk, gradient descent, static
   benchmarks.py               # Tier A/B/C benchmarks
@@ -615,12 +738,18 @@ flux_manifold/
 
 tests/
   test_core.py                # Core engine + batch flow + safety
-  test_primitives.py          # All 6 additional primitives
+  test_primitives.py          # All 7 base primitives
   test_interpreter.py         # Interpreter + TSP + crossing repulsion
   test_parser_repl.py         # Tokenizer + parser + evaluator + REPL
-  test_benchmarks.py          # Benchmark pass/fail assertions
-  test_baselines.py           # Baseline correctness
-  test_visualize.py           # Plot generation
+  test_convergence_reservoir.py  # Reservoir + convergence tests
+  test_attractor_competition.py  # Attractor competition (⊗)
+  test_recursive_flow.py         # Recursive flow (↺)
+  test_infrastructure.py         # Ontology infrastructure
+  test_ontology.py               # Ontology expansion tests
+  test_benchmarks.py             # Benchmark pass/fail assertions
+  test_baselines.py              # Baseline correctness
+  test_visualize.py              # Plot generation
+  proof/                         # Proof test suite (5 properties + meta)
 
 run_benchmarks.py             # Entry point: all benchmarks + TSP demos
 requirements.txt              # numpy>=1.24, scipy>=1.10, matplotlib>=3.7
@@ -630,7 +759,9 @@ requirements.txt              # numpy>=1.24, scipy>=1.10, matplotlib>=3.7
 
 ## Tests
 
-172 tests across 7 test files.
+<!-- AUTOGEN:TESTS -->
+409 tests across 18 test files.
+<!-- AUTOGEN:END_TESTS -->
 
 ```bash
 python -m pytest tests/ -v
@@ -638,13 +769,19 @@ python -m pytest tests/ -v
 
 | File | Focus | Count |
 |------|-------|-------|
-| `test_core.py` | Core flow, batch ops, input validation, NaN/overflow safety | ~26 |
-| `test_primitives.py` | ∑_ψ, ≅, ↓!, ⇑, ◉, ∇↓ | ~40 |
-| `test_interpreter.py` | Full pipeline, TSP encoding, geometric crossing | ~24 |
-| `test_parser_repl.py` | Tokenizer, parser, AST evaluation, REPL commands | ~41 |
+| `test_core.py` | Core flow, batch ops, input validation, NaN/overflow safety | 29 |
+| `test_primitives.py` | ∑_ψ, ≅, ↓!, ⇑, ◉, ∇↓ | 41 |
+| `test_interpreter.py` | Full pipeline, TSP encoding, geometric crossing | 20 |
+| `test_parser_repl.py` | Tokenizer, parser, AST evaluation, REPL commands | 85 |
+| `test_convergence_reservoir.py` | ⧖ Reservoir + convergence contracts | 55 |
+| `test_attractor_competition.py` | ⊗ Attractor competition + security demo | 15 |
+| `test_recursive_flow.py` | ↺ Recursive flow + 3 test problems | 12 |
+| `test_infrastructure.py` | Ontology infrastructure | 37 |
+| `test_ontology.py` | Ontology expansion | 39 |
 | `test_benchmarks.py` | Tier A/B/C, kill tests | 12 |
 | `test_baselines.py` | Random walk, gradient descent, static | 5 |
 | `test_visualize.py` | All 8 plot functions | 12 |
+| `proof/` | Translation, expressibility, cognitive, emergence, irreducibility, meta | 47 |
 
 ---
 
@@ -656,7 +793,7 @@ python -m pytest tests/ -v
 
 3. **Irreversibility is a feature.** `↓!` (commitment) cannot be undone. This prevents infinite reconsideration and forces the system to converge to a decision.
 
-4. **Everything is a flow.** There are no conditionals or branches. Control is replaced by continuous dynamics: flow strength, drift thresholds, entropy decay, and geometric gradients.
+4. **Everything is a flow.** There are no discrete conditionals or boolean branches. Loops terminate geometrically (↺ fixed-point detection), classification is by basin membership (⊗ attractor competition), memory is continuous dynamics (⧖ reservoir). Python safety valves (max_iterations, max_steps) are concessions to the host language, not logic.
 
 5. **Composable primitives.** Each primitive is a standalone class with no hidden dependencies. The interpreter is one possible wiring; the parser lets you compose them in any order.
 
