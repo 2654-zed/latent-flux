@@ -730,11 +730,23 @@ flux_manifold/
   parser.py                   # Expression parser + AST + evaluator (10 operators)
   repl.py                     # Interactive REPL (LF> prompt)
   pheno_log.py                # Phenomenological logging (JSONL)
+  kalman_reservoir.py          # ⧖+ KalmanReservoir (UKF-based state estimator)
+  changepoint.py              # Bayesian Online Change Point Detection (BOCPD)
+  multi_scale_reservoir.py    # Multi-timescale reservoir (micro/meso/macro)
   visualize.py                # 8 matplotlib plot functions
   baselines.py                # Random walk, gradient descent, static
   benchmarks.py               # Tier A/B/C benchmarks
   kill_tests.py               # 5 kill tests
   monitor.py                  # JSON trace logging
+
+backtest/
+  bellman_ford.py             # Baseline arbitrage detector (Bellman-Ford)
+  latent_flux_searcher.py     # Geometric arbitrage detector (FluxManifold)
+  data_ingestion.py           # PoolState + JSON parsing
+  run_live_backtest.py        # BF vs LF side-by-side harness
+  report.py                   # CSV + summary report generator
+  data/
+    uniswap_v3_30d.json       # 30-day Uniswap V3 hourly data
 
 tests/
   test_core.py                # Core engine + batch flow + safety
@@ -801,6 +813,118 @@ python -m pytest tests/ -v
 
 ---
 
+## Backtest System
+
+A side-by-side comparison framework that tests Latent Flux geometric arbitrage detection against a Bellman-Ford baseline on real Uniswap V3 hourly data (7,194 records, 10 pools, 721 hours, Feb 8 – Mar 10 2026).
+
+### Architecture
+
+```
+backtest/
+  bellman_ford.py             # Baseline: negative-cycle detection (immutable)
+  latent_flux_searcher.py     # LF: geometric search via FluxManifold primitives
+  data_ingestion.py           # PoolState dataclass + JSON parsing
+  run_live_backtest.py        # Harness: BF vs LF on live data
+  report.py                   # CSV + summary generation
+  data/
+    uniswap_v3_30d.json       # 30-day hourly pool snapshots
+```
+
+### Five-Phase Enhancement Pipeline
+
+The Latent Flux searcher has been upgraded with 5 signal-quality improvements:
+
+| Phase | Component | File | Description |
+|-------|-----------|------|-------------|
+| **1** | UKF + S-Score | `kalman_reservoir.py` | Unscented Kalman Filter replaces EMA; OU-process S-score per edge |
+| **2** | Changepoint Detection | `changepoint.py` | Adams & MacKay (2007) BOCPD with Normal-Gamma prior; resets UKF on regime change |
+| **3** | SCC + Johnson's Cycles | `latent_flux_searcher.py` | Tarjan SCC pre-filter + `networkx.simple_cycles` for complete enumeration |
+| **4** | Fee-Tier Filter + Gas Cost | `latent_flux_searcher.py` | Fee-weighted threshold, 280k gas estimation, Flashbots tip, `net_profit_usd` |
+| **5** | Multi-Timescale Signal | `multi_scale_reservoir.py` | 3-scale parallel reservoir (micro/meso/macro), `scale_agreement ∈ [0,1]` |
+
+### New Primitives
+
+**KalmanReservoir** (`flux_manifold/kalman_reservoir.py`)
+```python
+from flux_manifold.kalman_reservoir import KalmanReservoir
+
+kr = KalmanReservoir(d=20, process_noise=1e-4, measurement_noise=1e-3)
+smoothed = kr.step(market_state)        # same interface as ReservoirState
+cov      = kr.get_covariance()           # posterior variance per dim
+drifts   = kr.get_drifts()               # drift estimate per dim
+regime   = kr.regime_change_detected     # True if BOCPD triggered this step
+events   = kr.changepoint_events         # list of (step, dim) tuples
+```
+- 3-state UKF per edge: `[log_price, drift, log_volatility]`
+- Van der Merwe sigma points (α=1e-3, β=2, κ=0)
+- Adaptive gain: inflates Q×10 when innovation > 3σ
+- Integrated BOCPD: auto-resets filter on regime change
+
+**BayesianChangePoint** (`flux_manifold/changepoint.py`)
+```python
+from flux_manifold.changepoint import BayesianChangePoint
+
+cp = BayesianChangePoint(hazard_rate=1/300, threshold=0.5)
+for obs in observations:
+    prob = cp.update(obs)       # returns P(r < 10)
+    if cp.is_changepoint():
+        print(f"Regime change at step {cp.step_count}")
+```
+- Adams & MacKay (2007) online BOCPD
+- Normal-Gamma conjugate prior
+- MAP run-length tracking with O(T) updates
+- Run-length pruning at 500 for bounded memory
+
+**MultiScaleReservoir** (`flux_manifold/multi_scale_reservoir.py`)
+```python
+from flux_manifold.multi_scale_reservoir import MultiScaleReservoir
+
+ms = MultiScaleReservoir(d=20)
+outputs = ms.step(market_state)           # dict of scale → smoothed
+agreement = ms.get_scale_agreement()      # ∈ [0, 1]
+```
+- Three parallel reservoirs: micro (leak=0.3, ~3h), meso (leak=0.05, ~20h), macro (leak=0.01, ~100h)
+- Scale agreement via deviation-direction correlation across all 3 timescales
+
+### Signal Metadata
+
+Each Latent Flux signal is enriched with a `SignalMeta` dataclass:
+
+```python
+@dataclass
+class SignalMeta:
+    s_score: float                # OU S-score (mean-reversion strength)
+    mean_reversion_speed: float   # κ from OU fit
+    s_score_valid: bool           # AR(1) fit quality
+    scale_agreement: float        # multi-scale agreement [0, 1]
+    net_profit_usd: float         # gross − gas − tip
+    fee_weighted_threshold: float # sum of fee rates along cycle
+    regime_change: bool           # changepoint detected this block
+```
+
+### Results (30-day backtest)
+
+```
+Baseline:    BF = 129 signals,  LF = 203 signals
+S-scores:    188/203 valid,  Mean |S| = 0.14,  Max |S| = 1.26
+Changepoints: 200 events across 20 edge dimensions
+Executable:  38/203 net-positive (max $4.09, total $39.74)
+Scale agreement: mean = 1.0
+High-confidence lead rate: 91.5%
+```
+
+### Running the Backtest
+
+```bash
+# Baseline (EMA reservoir)
+python backtest/run_live_backtest.py
+
+# Full enhanced pipeline (UKF + BOCPD + multi-scale)
+python backtest/run_live_backtest.py --use-kalman
+```
+
+---
+
 ## Constraints
 
 - Dimension cap: d ≤ 1024
@@ -814,6 +938,7 @@ python -m pytest tests/ -v
 numpy>=1.24
 scipy>=1.10
 matplotlib>=3.7
+networkx>=3.0
 Python ≥ 3.10
 ```
 

@@ -25,6 +25,7 @@ import math
 import sys
 import os
 from collections import defaultdict
+from dataclasses import dataclass, field
 from itertools import permutations
 
 import numpy as np
@@ -33,6 +34,8 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flux_manifold.reservoir_state import ReservoirState
+from flux_manifold.kalman_reservoir import KalmanReservoir
+from flux_manifold.multi_scale_reservoir import MultiScaleReservoir
 from flux_manifold.recursive_flow import RecursiveFlow
 from flux_manifold.attractor_competition import AttractorCompetition
 from flux_manifold.flows import normalize_flow
@@ -115,12 +118,98 @@ def _find_candidate_cycles(
 ) -> list[list[Edge]]:
     """Generate candidate arbitrage cycles from the token graph.
 
-    Uses DFS limited to max_hops depth. Ranks by theoretical profit
-    and returns the top candidates. This is NOT exhaustive enumeration
-    of all paths — it samples structurally promising cycles.
+    Uses Tarjan SCC pre-filtering + Johnson's algorithm (via networkx)
+    for complete enumeration of simple cycles up to max_hops length.
+    Falls back to DFS if networkx unavailable.
 
     Returns list of cycles (each cycle = list of Edges forming a loop).
     """
+    try:
+        import networkx as nx
+        return _find_cycles_johnson(tokens, edges, max_hops, max_candidates, nx)
+    except ImportError:
+        return _find_cycles_dfs(tokens, edges, max_hops, max_candidates)
+
+
+def _find_cycles_johnson(
+    tokens: list[str],
+    edges: list[Edge],
+    max_hops: int,
+    max_candidates: int,
+    nx,
+) -> list[list[Edge]]:
+    """Johnson's algorithm with SCC pre-filtering for complete cycle enumeration."""
+    # Build directed multigraph (multiple edges between same token pair)
+    G = nx.DiGraph()
+    # Edge lookup: (src, dst) → list of edges (multiple pools possible)
+    edge_lookup: dict[tuple[str, str], list[Edge]] = defaultdict(list)
+    for e in edges:
+        G.add_edge(e.src, e.dst)
+        edge_lookup[(e.src, e.dst)].append(e)
+
+    # SCC pre-filter: only keep nodes in strongly connected components
+    sccs = list(nx.strongly_connected_components(G))
+    scc_nodes = set()
+    for scc in sccs:
+        if len(scc) >= 2:  # Need at least 2 nodes for a cycle
+            scc_nodes.update(scc)
+
+    if not scc_nodes:
+        return []
+
+    G_scc = G.subgraph(scc_nodes)
+
+    # Johnson's algorithm: enumerate all simple cycles up to max_hops
+    # networkx.simple_cycles uses Johnson's algorithm
+    cycles_scored: list[tuple[float, list[Edge]]] = []
+
+    for node_cycle in nx.simple_cycles(G_scc, length_bound=max_hops):
+        if len(node_cycle) < 2:
+            continue
+        # node_cycle is [A, B, C] representing A→B→C→A
+        # For each edge in the cycle, pick the best (highest rate) pool
+        cycle_edges: list[Edge] = []
+        valid = True
+        for i in range(len(node_cycle)):
+            src = node_cycle[i]
+            dst = node_cycle[(i + 1) % len(node_cycle)]
+            pool_edges = edge_lookup.get((src, dst), [])
+            if not pool_edges:
+                valid = False
+                break
+            # Pick the edge with the highest rate (best for arbitrage)
+            best = max(pool_edges, key=lambda e: e.rate)
+            cycle_edges.append(best)
+
+        if not valid:
+            continue
+
+        log_profit = sum(math.log(e.rate) if e.rate > 0 else -100 for e in cycle_edges)
+        cycles_scored.append((log_profit, cycle_edges))
+
+    # Sort by profit, deduplicate, take top candidates
+    cycles_scored.sort(key=lambda x: x[0], reverse=True)
+
+    seen: set[frozenset[str]] = set()
+    unique_cycles = []
+    for score, cycle_edges in cycles_scored:
+        key = frozenset(e.pool_address for e in cycle_edges)
+        if key not in seen:
+            seen.add(key)
+            unique_cycles.append(cycle_edges)
+        if len(unique_cycles) >= max_candidates:
+            break
+
+    return unique_cycles
+
+
+def _find_cycles_dfs(
+    tokens: list[str],
+    edges: list[Edge],
+    max_hops: int,
+    max_candidates: int,
+) -> list[list[Edge]]:
+    """Fallback DFS cycle finder (original implementation)."""
     # Build adjacency: token → list of (next_token, edge)
     adj: dict[str, list[tuple[str, Edge]]] = defaultdict(list)
     for e in edges:
@@ -214,32 +303,202 @@ def _encode_cycle_attractor(
 # Module-level reservoir cache for temporal continuity across blocks.
 # Keyed by dimensionality to handle graphs of different sizes.
 _reservoir_cache: dict[int, ReservoirState] = {}
+_kalman_cache: dict[int, KalmanReservoir] = {}
+_multi_scale_cache: dict[int, MultiScaleReservoir] = {}
+
+# Deviation history for S-score computation (per edge dimension)
+_deviation_history: dict[int, list[np.ndarray]] = {}  # keyed by d
+_DEVIATION_HISTORY_MAX = 200  # keep last 200 observations for OU fit
 
 
-def _get_or_create_reservoir(d: int) -> ReservoirState:
-    """Get or create a ReservoirState for the given dimensionality.
+def _get_or_create_reservoir(d: int, use_kalman: bool = False):
+    """Get or create a reservoir for the given dimensionality.
 
-    Reuses the same reservoir across blocks for temporal continuity —
-    the leak_rate decay maintains memory of recent market states.
+    If use_kalman=True, returns a KalmanReservoir (UKF-based).
+    Otherwise returns EMA-based ReservoirState.
     """
-    if d not in _reservoir_cache:
-        _reservoir_cache[d] = ReservoirState(
-            d=d,
-            reservoir_scale=RESERVOIR_SCALE,
-            spectral_radius=SPECTRAL_RADIUS,
-            input_scaling=INPUT_SCALING,
-            leak_rate=RESERVOIR_LEAK_RATE,
-            seed=SEED,
-        )
-    return _reservoir_cache[d]
+    if use_kalman:
+        if d not in _kalman_cache:
+            _kalman_cache[d] = KalmanReservoir(
+                d=d,
+                process_noise=1e-4,
+                measurement_noise=1e-3,
+                seed=SEED,
+            )
+        return _kalman_cache[d]
+    else:
+        if d not in _reservoir_cache:
+            _reservoir_cache[d] = ReservoirState(
+                d=d,
+                reservoir_scale=RESERVOIR_SCALE,
+                spectral_radius=SPECTRAL_RADIUS,
+                input_scaling=INPUT_SCALING,
+                leak_rate=RESERVOIR_LEAK_RATE,
+                seed=SEED,
+            )
+        return _reservoir_cache[d]
 
 
 def reset_reservoir() -> None:
     """Reset the reservoir cache. Call between independent backtests."""
     _reservoir_cache.clear()
+    _kalman_cache.clear()
+    _multi_scale_cache.clear()
+    _deviation_history.clear()
+    _signal_metadata.clear()
+
+
+# ── Signal metadata (enriched info that can't go in ArbOpportunity) ───
+
+@dataclass
+class SignalMeta:
+    """Extra metadata for a Latent Flux signal, keyed by (block_timestamp, path_str)."""
+    s_score: float                # aggregate OU S-score for this cycle
+    mean_reversion_speed: float   # κ (OU mean reversion rate)
+    s_score_valid: bool           # whether S-score passed quality filters
+    scale_agreement: float        # multi-scale agreement [0, 1] (Phase 5)
+    net_profit_usd: float         # gross - execution cost (Phase 4)
+    fee_weighted_threshold: float # min deviation for profitability (Phase 4)
+    regime_change: bool           # changepoint detected this block (Phase 2)
+
+
+# Module-level store: (block_timestamp, path_str) → SignalMeta
+_signal_metadata: dict[tuple[int, str], SignalMeta] = {}
+
+
+def get_signal_metadata() -> dict[tuple[int, str], SignalMeta]:
+    """Return all signal metadata accumulated during this backtest run."""
+    return _signal_metadata
+
+
+def _cycle_s_score(
+    cycle_edges: list,
+    edge_index: dict,
+    s_scores: np.ndarray,
+    kappas: np.ndarray,
+    s_valid: np.ndarray,
+) -> tuple[float, float, bool]:
+    """Compute aggregate S-score for a cycle from per-edge S-scores.
+
+    Returns (s_score, kappa, is_valid).
+    Mean of S-scores across edges in this cycle that are valid.
+    """
+    indices = []
+    for e in cycle_edges:
+        key = (e.src, e.dst, e.pool_address)
+        idx = edge_index.get(key)
+        if idx is not None:
+            indices.append(idx)
+
+    if not indices:
+        return 0.0, 0.0, False
+
+    idx_arr = np.array(indices)
+    valid_mask = s_valid[idx_arr]
+    if not valid_mask.any():
+        return 0.0, 0.0, False
+
+    valid_idx = idx_arr[valid_mask]
+    s = float(np.mean(s_scores[valid_idx]))
+    k = float(np.mean(kappas[valid_idx]))
+    return s, k, True
+
+
+# ── S-score (Ornstein-Uhlenbeck) ──────────────────────────────────
+
+def _compute_s_scores(
+    market_state: np.ndarray,
+    smoothed_state: np.ndarray,
+    d: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Compute OU S-scores from the raw log-rate time series.
+
+    Fits AR(1) model to the raw market_state per dimension:
+        X_{t+1} = a + b * X_t + epsilon
+    Then: κ = -ln(b), m = a/(1-b), σ from residuals, S = (X - m) / σ_eq
+
+    Returns (s_scores, kappas, is_valid) arrays of shape (d,).
+    """
+    # Track raw market state history (not deviation — UKF tracks too closely)
+    if d not in _deviation_history:
+        _deviation_history[d] = []
+    _deviation_history[d].append(market_state.copy())
+    if len(_deviation_history[d]) > _DEVIATION_HISTORY_MAX:
+        _deviation_history[d] = _deviation_history[d][-_DEVIATION_HISTORY_MAX:]
+
+    history = _deviation_history[d]
+    s_scores = np.zeros(d, dtype=np.float32)
+    kappas = np.zeros(d, dtype=np.float32)
+    is_valid = np.zeros(d, dtype=bool)
+
+    if len(history) < 20:
+        return s_scores, kappas, is_valid
+
+    # Stack history into (T, d) array
+    H = np.array(history, dtype=np.float64)  # (T, d)
+    T = H.shape[0]
+
+    # Vectorized AR(1) fit across all dimensions
+    X = H[:-1]    # (T-1, d)
+    Y = H[1:]     # (T-1, d)
+    n = X.shape[0]
+
+    # b = cov(X, Y) / var(X),  a = mean(Y) - b * mean(X)
+    X_mean = X.mean(axis=0)
+    Y_mean = Y.mean(axis=0)
+    X_var = ((X - X_mean) ** 2).sum(axis=0) / n
+    XY_cov = ((X - X_mean) * (Y - Y_mean)).sum(axis=0) / n
+
+    # Avoid division by zero
+    valid_var = X_var > 1e-15
+    b = np.where(valid_var, XY_cov / X_var, 0.0)
+    a = Y_mean - b * X_mean
+
+    # κ = -ln(b) / dt (dt = 1 hour)
+    valid_b = (b > 0.001) & (b < 0.999)
+    kappa = np.where(valid_b, -np.log(np.clip(b, 1e-10, 1.0)), 0.0)
+
+    # m = a / (1 - b)
+    m = np.where(valid_b, a / np.clip(1.0 - b, 1e-10, None), 0.0)
+
+    # Residual σ
+    residuals = Y - (a + b * X)
+    sigma = np.sqrt((residuals ** 2).mean(axis=0))
+
+    # σ_eq = σ / sqrt(2κ)
+    valid_kappa = kappa > 0.01
+    denom_eq = np.where(valid_kappa, np.sqrt(2.0 * np.maximum(kappa, 1e-10)), 1.0)
+    sigma_eq = np.where(valid_kappa, sigma / denom_eq, 0.0)
+
+    # S-score = (X_current - m) / σ_eq
+    X_current = H[-1]
+    valid_sigma = sigma_eq > 1e-10
+    safe_sigma_eq = np.where(valid_sigma, sigma_eq, 1.0)
+    s = np.where(valid_sigma, (X_current - m) / safe_sigma_eq, 0.0)
+
+    s_scores = s.astype(np.float32)
+    kappas = kappa.astype(np.float32)
+    is_valid = (valid_b & valid_kappa & valid_sigma)
+
+    return s_scores, kappas, is_valid
 
 
 # ── Main search pipeline ─────────────────────────────────────────
+
+def _estimate_eth_price(pool_states) -> float:
+    """Estimate ETH price in USD from available pool data.
+
+    Looks for USDC/WETH or WETH/USDT pools to extract price.
+    Returns $2500 as fallback if no ETH pool found.
+    """
+    stables = {"USDC", "USDT", "DAI"}
+    for ps in pool_states:
+        if ps.token0 == "WETH" and ps.token1 in stables and ps.token0_price > 0:
+            return ps.token0_price  # WETH priced in stablecoin
+        if ps.token1 == "WETH" and ps.token0 in stables and ps.token1_price > 0:
+            return ps.token1_price  # WETH priced in stablecoin
+    return 2500.0  # fallback
+
 
 def find_arbitrage_opportunities(
     pool_states: list,
@@ -247,6 +506,7 @@ def find_arbitrage_opportunities(
     input_usd: float = 10000.0,
     max_hops: int = MAX_CYCLE_HOPS,
     use_reservoir: bool = True,
+    use_kalman: bool = False,
 ) -> list[ArbOpportunity]:
     """Find arbitrage opportunities using Latent Flux geometric search.
 
@@ -265,6 +525,7 @@ def find_arbitrage_opportunities(
         input_usd: Trade input size in USD.
         max_hops: Maximum cycle length.
         use_reservoir: If True, feed state through ReservoirState first.
+        use_kalman: If True, use KalmanReservoir instead of EMA.
 
     Returns:
         List of ArbOpportunity objects with gross_profit_usd > 0.
@@ -285,12 +546,28 @@ def find_arbitrage_opportunities(
 
     market_state = encode_market_state(edges, edge_index, d)
 
-    # Step 3: ReservoirState temporal smoothing
+    # Step 3: Reservoir temporal smoothing (EMA or UKF)
     if use_reservoir:
-        reservoir = _get_or_create_reservoir(d)
+        reservoir = _get_or_create_reservoir(d, use_kalman=use_kalman)
         smoothed_state = reservoir.step(market_state)
     else:
         smoothed_state = market_state
+
+    # Step 3a: Multi-scale agreement
+    if d not in _multi_scale_cache:
+        _multi_scale_cache[d] = MultiScaleReservoir(
+            d=d,
+            reservoir_scale=RESERVOIR_SCALE,
+            spectral_radius=SPECTRAL_RADIUS,
+            input_scaling=INPUT_SCALING,
+            seed=SEED,
+        )
+    ms_reservoir = _multi_scale_cache[d]
+    ms_outputs = ms_reservoir.step(market_state)
+    _scale_agreement = ms_reservoir.get_scale_agreement_from_cached(market_state, ms_outputs)
+
+    # Step 3b: Compute S-scores from spot vs smoothed deviation
+    s_scores, kappas, s_valid = _compute_s_scores(market_state, smoothed_state, d)
 
     # Step 4: Generate candidate cycle attractors
     candidate_cycles = _find_candidate_cycles(tokens, edges, max_hops, MAX_CANDIDATE_CYCLES)
@@ -356,6 +633,39 @@ def find_arbitrage_opportunities(
     # report all profitable ones found in the candidate set.
     opportunities = []
 
+    # Check for regime change from KalmanReservoir changepoint detection
+    _regime_change = False
+    if use_kalman and use_reservoir:
+        reservoir = _get_or_create_reservoir(d, use_kalman=True)
+        if hasattr(reservoir, 'regime_change_detected'):
+            _regime_change = reservoir.regime_change_detected
+
+    # Phase 4: Estimate ETH price from pool data for gas cost calculation
+    eth_price_usd = _estimate_eth_price(pool_states)
+
+    # Gas cost: ~280k gas × 0.1 gwei = 0.000028 ETH + $2 Flashbots tip
+    GAS_UNITS = 280_000
+    GAS_PRICE_GWEI = 0.1
+    gas_cost_eth = GAS_UNITS * GAS_PRICE_GWEI * 1e-9
+    gas_cost_usd = gas_cost_eth * eth_price_usd + 2.0  # + Flashbots tip
+
+    def _store_meta(opp: ArbOpportunity, cycle_edges: list[Edge]) -> None:
+        """Compute and store signal metadata for one opportunity."""
+        s, k, valid = _cycle_s_score(cycle_edges, edge_index, s_scores, kappas, s_valid)
+        path_str = "→".join(opp.path)
+        # Fee-weighted threshold: sum of all fee rates in the cycle
+        fee_threshold = sum(e.fee_rate for e in cycle_edges)
+        net_profit = opp.gross_profit_usd - gas_cost_usd
+        _signal_metadata[(opp.block_timestamp, path_str)] = SignalMeta(
+            s_score=s,
+            mean_reversion_speed=k,
+            s_score_valid=valid,
+            scale_agreement=_scale_agreement,
+            net_profit_usd=round(net_profit, 2),
+            fee_weighted_threshold=fee_threshold,
+            regime_change=_regime_change,
+        )
+
     # Primary: winning cycle
     winning_cycle = cycle_map[winning_label]
     profit = _compute_cycle_profit(winning_cycle, input_usd)
@@ -363,7 +673,7 @@ def find_arbitrage_opportunities(
         path = [winning_cycle[0].src]
         for e in winning_cycle:
             path.append(e.dst)
-        opportunities.append(ArbOpportunity(
+        opp = ArbOpportunity(
             method="latent_flux",
             path=path,
             hop_count=len(winning_cycle),
@@ -371,7 +681,9 @@ def find_arbitrage_opportunities(
             input_size_usd=input_usd,
             iterations=iterations,
             block_timestamp=block_timestamp,
-        ))
+        )
+        opportunities.append(opp)
+        _store_meta(opp, winning_cycle)
 
     # Secondary: check other high-certainty candidate cycles
     # (cycles that were close to winning in the competition)
@@ -384,7 +696,7 @@ def find_arbitrage_opportunities(
             path = [cycle_edges[0].src]
             for e in cycle_edges:
                 path.append(e.dst)
-            opportunities.append(ArbOpportunity(
+            opp = ArbOpportunity(
                 method="latent_flux",
                 path=path,
                 hop_count=len(cycle_edges),
@@ -392,7 +704,9 @@ def find_arbitrage_opportunities(
                 input_size_usd=input_usd,
                 iterations=iterations,  # same convergence cost
                 block_timestamp=block_timestamp,
-            ))
+            )
+            opportunities.append(opp)
+            _store_meta(opp, cycle_edges)
 
     # Sort by profit descending
     opportunities.sort(key=lambda o: o.gross_profit_usd, reverse=True)
