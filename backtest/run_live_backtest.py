@@ -298,6 +298,9 @@ def print_extended_report(
     # CEX reference analysis
     _print_cex_analysis(results)
 
+    # Temporal lead/lag analysis
+    _print_temporal_lead_lag(results)
+
 
 def _print_deviation_distribution(results: list[ArbOpportunity]) -> None:
     """Print histogram of signal deviations (gross_profit as % of input)."""
@@ -546,6 +549,169 @@ def _print_cex_analysis(results: list[ArbOpportunity]) -> None:
     print(f"  CEX-confirmed (|dev| > fees):     {cex_confirmed}")
     print(f"  Net-positive AND CEX-confirmed:   {net_pos_cex}")
     print()
+
+
+def _print_temporal_lead_lag(results: list[ArbOpportunity]) -> None:
+    """Temporal lead/lag: does LF fire 1-3 hours before BF real signals?"""
+    meta = get_signal_metadata()
+    if not meta:
+        return
+
+    # BF signals with gross_profit > $0.10 (real signals, not noise)
+    bf_real = [o for o in results if o.method == "bellman_ford" and o.gross_profit_usd > 0.10]
+    if not bf_real:
+        return
+
+    # Build LF signal index: timestamp → list of (opp, SignalMeta)
+    lf_opps = [o for o in results if o.method == "latent_flux"]
+    lf_by_ts: dict[int, list[tuple[ArbOpportunity, SignalMeta]]] = {}
+    for opp in lf_opps:
+        path_str = "→".join(opp.path)
+        key = (opp.block_timestamp, path_str)
+        sm = meta.get(key)
+        if sm is None:
+            continue
+        lf_by_ts.setdefault(opp.block_timestamp, []).append((opp, sm))
+
+    # All timestamps in the dataset
+    all_ts = set(o.block_timestamp for o in results)
+    bf_ts_set = set(o.block_timestamp for o in bf_real)
+
+    lag_hours = [1, 2, 3]
+    lag_seconds = [h * 3600 for h in lag_hours]
+
+    # --- Forward analysis: for each BF signal, look back for qualifying LF ---
+    # A qualifying LF signal has |cex_deviation| > 0.05% OR |s_score| > 0.5
+    def _is_qualifying(sm: SignalMeta) -> bool:
+        if sm.cex_deviation is not None and abs(sm.cex_deviation) > 0.0005:
+            return True
+        if abs(sm.s_score) > 0.5:
+            return True
+        return False
+
+    # Per-lag window stats
+    lag_stats: dict[int, dict] = {}
+    # Collect top examples across all lags
+    examples: list[tuple[int, ArbOpportunity, SignalMeta, ArbOpportunity]] = []  # (lag_h, lf_opp, lf_sm, bf_opp)
+
+    for lag_h, lag_s in zip(lag_hours, lag_seconds):
+        preceded_count = 0  # BF signals with a qualifying LF in this window
+        for bf_opp in bf_real:
+            lookback_ts = bf_opp.block_timestamp - lag_s
+            lf_at_ts = lf_by_ts.get(lookback_ts, [])
+            qualifying = [(o, sm) for o, sm in lf_at_ts if _is_qualifying(sm)]
+            if qualifying:
+                preceded_count += 1
+                # Record the best example (highest |cex_deviation| or |s_score|)
+                best_lf, best_sm = max(qualifying,
+                    key=lambda x: max(abs(x[1].cex_deviation or 0), abs(x[1].s_score)))
+                examples.append((lag_h, best_lf, best_sm, bf_opp))
+
+        lead_rate = preceded_count / len(bf_real) if bf_real else 0
+        lag_stats[lag_h] = {
+            "preceded": preceded_count,
+            "total_bf": len(bf_real),
+            "lead_rate": lead_rate,
+        }
+
+    # --- Cumulative: BF preceded by LF in ANY of the 1-3h windows ---
+    bf_with_any_prior = set()
+    for lag_s in lag_seconds:
+        for bf_opp in bf_real:
+            lookback_ts = bf_opp.block_timestamp - lag_s
+            lf_at_ts = lf_by_ts.get(lookback_ts, [])
+            if any(_is_qualifying(sm) for _, sm in lf_at_ts):
+                bf_with_any_prior.add(bf_opp.block_timestamp)
+    cumulative_rate = len(bf_with_any_prior) / len(bf_real) if bf_real else 0
+
+    # --- False lead rate: qualifying LF signals in 1-3h windows before ---
+    #     timestamps where BF found NOTHING                              ---
+    false_leads = 0
+    total_qualifying_lf = 0
+    for ts, lf_signals in lf_by_ts.items():
+        qualifying = [sm for _, sm in lf_signals if _is_qualifying(sm)]
+        if not qualifying:
+            continue
+        total_qualifying_lf += len(qualifying)
+        # Check if any BF appeared 1-3h AFTER this LF timestamp
+        was_followed = False
+        for lag_s in lag_seconds:
+            future_ts = ts + lag_s
+            if future_ts in bf_ts_set:
+                was_followed = True
+                break
+        if not was_followed:
+            false_leads += len(qualifying)
+
+    false_lead_rate = false_leads / total_qualifying_lf if total_qualifying_lf > 0 else 0
+
+    # --- Print report ---
+    print("=" * 70)
+    print("TEMPORAL LEAD/LAG ANALYSIS")
+    print("=" * 70)
+    print(f"  BF real signals (gross > $0.10):   {len(bf_real)}")
+    print(f"  LF qualifying signals:             {total_qualifying_lf}")
+    print(f"    (|cex_dev| > 0.05% OR |S-score| > 0.5)")
+    print()
+
+    print("  Per-lag window:")
+    best_lag_h = 0
+    best_lead_rate = 0.0
+    for lag_h in lag_hours:
+        s = lag_stats[lag_h]
+        marker = " ←" if s["lead_rate"] > 0.6 else ""
+        print(f"    {lag_h}h lookback: {s['preceded']:>3d}/{s['total_bf']} BF preceded by LF  "
+              f"(lead rate: {s['lead_rate']:.1%}){marker}")
+        if s["lead_rate"] > best_lead_rate:
+            best_lead_rate = s["lead_rate"]
+            best_lag_h = lag_h
+
+    print(f"  Cumulative (any 1-3h):   {len(bf_with_any_prior)}/{len(bf_real)} "
+          f"({cumulative_rate:.1%})")
+    print(f"  False lead rate:         {false_leads}/{total_qualifying_lf} "
+          f"({false_lead_rate:.1%})")
+    print()
+
+    # Top 10 clearest examples
+    if examples:
+        # Sort by BF profit descending
+        examples.sort(key=lambda x: x[3].gross_profit_usd, reverse=True)
+        top = examples[:10]
+        print("  Top 10 examples (LF signal → BF confirmation):")
+        print(f"  {'Lag':>3s}  {'LF ts':>12s}  {'cex_dev':>9s}  {'S-score':>8s}  "
+              f"{'BF ts':>12s}  {'BF profit':>10s}  Path")
+        print("  " + "-" * 80)
+        for lag_h, lf_opp, lf_sm, bf_opp in top:
+            cex_str = f"{lf_sm.cex_deviation:+.4%}" if lf_sm.cex_deviation is not None else "   n/a  "
+            print(f"  {lag_h:>2d}h  {lf_opp.block_timestamp:>12d}  {cex_str:>9s}  "
+                  f"{lf_sm.s_score:>+8.3f}  {bf_opp.block_timestamp:>12d}  "
+                  f"${bf_opp.gross_profit_usd:>8.2f}  {'→'.join(bf_opp.path)}")
+        print()
+
+    # Alpha signal summary
+    if best_lead_rate > 0.6:
+        alpha_line = (f"  ★ LF ALPHA SIGNAL: fires {best_lag_h}h before BF "
+                      f"in {best_lead_rate:.0%} of cases.")
+        print(alpha_line)
+        print()
+
+    # Append to summary file
+    summary_path = RESULTS_DIR / "summary.txt"
+    with open(summary_path, "a", encoding="utf-8") as f:
+        f.write("\n" + "=" * 70 + "\n")
+        f.write("TEMPORAL LEAD/LAG ANALYSIS\n")
+        f.write("=" * 70 + "\n")
+        for lag_h in lag_hours:
+            s = lag_stats[lag_h]
+            f.write(f"  {lag_h}h: {s['preceded']}/{s['total_bf']} "
+                    f"(lead rate: {s['lead_rate']:.1%})\n")
+        f.write(f"  Cumulative: {len(bf_with_any_prior)}/{len(bf_real)} "
+                f"({cumulative_rate:.1%})\n")
+        f.write(f"  False lead rate: {false_lead_rate:.1%}\n")
+        if best_lead_rate > 0.6:
+            f.write(f"  LF ALPHA SIGNAL: fires {best_lag_h}h before BF "
+                    f"in {best_lead_rate:.0%} of cases.\n")
+
 
 def main() -> int:
     # Force UTF-8 output on Windows to handle special chars
