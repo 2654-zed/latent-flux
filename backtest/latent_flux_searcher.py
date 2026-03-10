@@ -39,6 +39,7 @@ from flux_manifold.multi_scale_reservoir import MultiScaleReservoir
 from flux_manifold.recursive_flow import RecursiveFlow
 from flux_manifold.attractor_competition import AttractorCompetition
 from flux_manifold.flows import normalize_flow
+from flux_manifold.cex_feed import CexFeed
 
 from backtest.bellman_ford import ArbOpportunity, build_exchange_graph, Edge
 
@@ -341,11 +342,13 @@ def _get_or_create_reservoir(d: int, use_kalman: bool = False):
 
 def reset_reservoir() -> None:
     """Reset the reservoir cache. Call between independent backtests."""
+    global _cex_feed
     _reservoir_cache.clear()
     _kalman_cache.clear()
     _multi_scale_cache.clear()
     _deviation_history.clear()
     _signal_metadata.clear()
+    _cex_feed = None
 
 
 # ── Signal metadata (enriched info that can't go in ArbOpportunity) ───
@@ -360,10 +363,14 @@ class SignalMeta:
     net_profit_usd: float         # gross - execution cost (Phase 4)
     fee_weighted_threshold: float # min deviation for profitability (Phase 4)
     regime_change: bool           # changepoint detected this block (Phase 2)
+    cex_deviation: float | None = None  # (amm - cex) / cex for primary pair
 
 
 # Module-level store: (block_timestamp, path_str) → SignalMeta
 _signal_metadata: dict[tuple[int, str], SignalMeta] = {}
+
+# Module-level CEX feed for proxy price tracking
+_cex_feed: CexFeed | None = None
 
 
 def get_signal_metadata() -> dict[tuple[int, str], SignalMeta]:
@@ -533,6 +540,12 @@ def find_arbitrage_opportunities(
     if not pool_states:
         return []
 
+    # Step 0: Update CEX reference feed
+    global _cex_feed
+    if _cex_feed is None:
+        _cex_feed = CexFeed(mode="proxy")
+    _cex_feed.update(pool_states, block_timestamp)
+
     # Step 1: Build exchange graph (identical to Bellman-Ford)
     tokens, edges = build_exchange_graph(pool_states)
     if len(tokens) < 2 or not edges:
@@ -649,6 +662,11 @@ def find_arbitrage_opportunities(
     gas_cost_eth = GAS_UNITS * GAS_PRICE_GWEI * 1e-9
     gas_cost_usd = gas_cost_eth * eth_price_usd + 2.0  # + Flashbots tip
 
+    # Build pool lookup for CEX deviation (pool_address → PoolState)
+    _pool_lookup: dict[str, object] = {}
+    for ps in pool_states:
+        _pool_lookup[ps.pool_address] = ps
+
     def _store_meta(opp: ArbOpportunity, cycle_edges: list[Edge]) -> None:
         """Compute and store signal metadata for one opportunity."""
         s, k, valid = _cycle_s_score(cycle_edges, edge_index, s_scores, kappas, s_valid)
@@ -656,6 +674,26 @@ def find_arbitrage_opportunities(
         # Fee-weighted threshold: sum of all fee rates in the cycle
         fee_threshold = sum(e.fee_rate for e in cycle_edges)
         net_profit = opp.gross_profit_usd - gas_cost_usd
+
+        # CEX deviation: find the primary pair (highest volume edge)
+        cex_dev = None
+        if _cex_feed is not None:
+            best_vol = -1.0
+            best_edge = None
+            best_ps = None
+            for e in cycle_edges:
+                ps = _pool_lookup.get(e.pool_address)
+                if ps is not None and ps.volume_usd > best_vol:
+                    best_vol = ps.volume_usd
+                    best_edge = e
+                    best_ps = ps
+            if best_edge is not None and best_ps is not None:
+                cex_dev = _cex_feed.get_deviation(
+                    best_edge.src, best_edge.dst,
+                    best_edge.rate / (1.0 - best_edge.fee_rate),  # gross rate
+                    block_timestamp,
+                )
+
         _signal_metadata[(opp.block_timestamp, path_str)] = SignalMeta(
             s_score=s,
             mean_reversion_speed=k,
@@ -664,6 +702,7 @@ def find_arbitrage_opportunities(
             net_profit_usd=round(net_profit, 2),
             fee_weighted_threshold=fee_threshold,
             regime_change=_regime_change,
+            cex_deviation=cex_dev,
         )
 
     # Primary: winning cycle

@@ -15,37 +15,37 @@ from flux_manifold.superposition import SuperpositionTensor
 
 class TestTokenizer:
     def test_unicode_operators(self):
-        tokens = tokenize("∑_ψ ⟼ ∇↓ ≅ ↓! ⇑ ◉")
+        tokens, _ = tokenize("∑_ψ ⟼ ∇↓ ≅ ↓! ⇑ ◉")
         ops = [t[1] for t in tokens]
         assert ops == ["superpose", "flow", "squeeze", "equiv", "commit", "cascade", "fold"]
 
     def test_ascii_aliases(self):
-        tokens = tokenize("sum_psi -> squeeze ~= commit cascade fold")
+        tokens, _ = tokenize("sum_psi -> squeeze ~= commit cascade fold")
         ops = [t[1] for t in tokens]
         assert ops == ["superpose", "flow", "squeeze", "equiv", "commit", "cascade", "fold"]
 
     def test_word_operators(self):
-        tokens = tokenize("superpose flow squeeze equiv commit cascade fold")
+        tokens, _ = tokenize("superpose flow squeeze equiv commit cascade fold")
         ops = [t[1] for t in tokens]
         assert ops == ["superpose", "flow", "squeeze", "equiv", "commit", "cascade", "fold"]
 
     def test_vector_tokens(self):
-        tokens = tokenize("[1, 2, 3]")
+        tokens, _ = tokenize("[1, 2, 3]")
         types = [t[0] for t in tokens]
         assert "LBRACKET" in types
         assert "RBRACKET" in types
         assert types.count("NUMBER") == 3
 
     def test_pipe_token(self):
-        tokens = tokenize("x | y")
+        tokens, _ = tokenize("x | y")
         assert ("PIPE", "|") in tokens
 
     def test_number_negative(self):
-        tokens = tokenize("-3.14")
+        tokens, _ = tokenize("-3.14")
         assert ("NUMBER", "-3.14") in tokens
 
     def test_func_call_tokens(self):
-        tokens = tokenize("random(10, 32)")
+        tokens, _ = tokenize("random(10, 32)")
         assert ("IDENT", "random") in tokens
         assert ("LPAREN", "(") in tokens
         assert ("RPAREN", ")") in tokens
@@ -277,7 +277,7 @@ class TestREPLCommands:
 class TestTokenizerKeywordBoundary:
     def test_keyword_not_prefix(self):
         """Keywords should not match as prefix of identifiers."""
-        tokens = tokenize("cascade_8d = commit_result")
+        tokens, _ = tokenize("cascade_8d = commit_result")
         idents = [t for t in tokens if t[0] == "IDENT"]
         assert ("IDENT", "cascade_8d") in idents
         assert ("IDENT", "commit_result") in idents
@@ -287,30 +287,30 @@ class TestTokenizerKeywordBoundary:
 
     def test_keyword_standalone(self):
         """Standalone keywords still tokenize as OP."""
-        tokens = tokenize("cascade 3")
+        tokens, _ = tokenize("cascade 3")
         assert ("OP", "cascade") in tokens
 
     def test_comment_skipped(self):
-        tokens = tokenize("# this is a comment\nzeros(2)")
+        tokens, _ = tokenize("# this is a comment\nzeros(2)")
         assert all(t[1] != "this" for t in tokens)
         assert ("IDENT", "zeros") in tokens
 
     def test_string_literal(self):
-        tokens = tokenize('"hello world"')
+        tokens, _ = tokenize('"hello world"')
         assert ("STRING", "hello world") in tokens
 
     def test_import_keyword(self):
-        tokens = tokenize('import "geometry"')
+        tokens, _ = tokenize('import "geometry"')
         assert ("IMPORT", "import") in tokens
         assert ("STRING", "geometry") in tokens
 
     def test_let_keyword(self):
-        tokens = tokenize("let x = 42")
+        tokens, _ = tokenize("let x = 42")
         assert ("LET", "let") in tokens
         assert ("ASSIGN", "=") in tokens
 
     def test_assign_token(self):
-        tokens = tokenize("x = 5")
+        tokens, _ = tokenize("x = 5")
         assert ("IDENT", "x") in tokens
         assert ("ASSIGN", "=") in tokens
 

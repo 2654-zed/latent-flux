@@ -10,6 +10,7 @@ import traceback
 import numpy as np
 
 from flux_manifold.parser import parse, evaluate, run, EvalContext
+from flux_manifold.commitment_sink import CommitmentSink
 
 
 BANNER = r"""
@@ -138,7 +139,7 @@ def _handle_command(line: str, ctx: EvalContext) -> str | None:
 
     if cmd == ":reset":
         ctx.variables.clear()
-        ctx.commitment = __import__("flux_manifold.commitment_sink", fromlist=["CommitmentSink"]).CommitmentSink()
+        ctx.commitment = CommitmentSink()
         ctx.last_trace = None
         ctx.last_superposition = None
         return "  Context reset."

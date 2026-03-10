@@ -295,6 +295,9 @@ def print_extended_report(
     # High-confidence lead rate
     _print_high_confidence_lead_rate(results)
 
+    # CEX reference analysis
+    _print_cex_analysis(results)
+
 
 def _print_deviation_distribution(results: list[ArbOpportunity]) -> None:
     """Print histogram of signal deviations (gross_profit as % of input)."""
@@ -417,9 +420,10 @@ def _print_executable_opportunities(results: list[ArbOpportunity]) -> None:
         net_positive.sort(key=lambda x: x[1].net_profit_usd, reverse=True)
         print(f"  Top opportunities:")
         for opp, sm in net_positive[:5]:
+            cex_str = f" cex_dev={sm.cex_deviation:+.4%}" if sm.cex_deviation is not None else ""
             print(f"    ts={opp.block_timestamp}: gross=${opp.gross_profit_usd:.2f} "
-                  f"net=${sm.net_profit_usd:.2f} fee_thr={sm.fee_weighted_threshold*100:.3f}% "
-                  f"{'->'.join(opp.path)}")
+                  f"net=${sm.net_profit_usd:.2f} fee_thr={sm.fee_weighted_threshold*100:.3f}%"
+                  f"{cex_str} {'->'.join(opp.path)}")
     print()
 
 
@@ -492,6 +496,56 @@ def _print_high_confidence_lead_rate(results: list[ArbOpportunity]) -> None:
 
 
 # ── CLI entry point ───────────────────────────────────────────────
+def _print_cex_analysis(results: list[ArbOpportunity]) -> None:
+    """Print CEX reference price analysis for LF signals."""
+    meta = get_signal_metadata()
+    if not meta:
+        return
+
+    lf_opps = [o for o in results if o.method == "latent_flux"]
+    if not lf_opps:
+        return
+
+    with_cex = []      # (opp, sm) where cex_deviation is not None
+    same_dir = 0       # AMM deviation agrees with CEX deviation direction
+    cex_confirmed = 0  # |cex_deviation| > fee_weighted_threshold
+    net_pos_cex = 0    # net_profit > 0 AND cex_confirmed
+    abs_devs = []      # |cex_deviation| values
+
+    for opp in lf_opps:
+        path_str = "\u2192".join(opp.path)
+        key = (opp.block_timestamp, path_str)
+        sm = meta.get(key)
+        if sm is None or sm.cex_deviation is None:
+            continue
+
+        with_cex.append((opp, sm))
+        abs_devs.append(abs(sm.cex_deviation))
+
+        # Same direction: gross_profit > 0 means AMM has an exploitable gap;
+        # cex_deviation != 0 means AMM differs from CEX
+        profit_pct = opp.gross_profit_usd / opp.input_size_usd
+        if profit_pct > 0 and sm.cex_deviation != 0:
+            same_dir += 1
+
+        # CEX-confirmed: deviation exceeds the fee cost of the cycle
+        if abs(sm.cex_deviation) > sm.fee_weighted_threshold:
+            cex_confirmed += 1
+            if sm.net_profit_usd > 0:
+                net_pos_cex += 1
+
+    print("CEX REFERENCE ANALYSIS")
+    print("-" * 50)
+    print(f"  Signals with cex_deviation:       {len(with_cex)}/{len(lf_opps)}")
+    print(f"  AMM deviates from CEX (same dir): {same_dir}")
+    if abs_devs:
+        import numpy as np
+        arr = np.array(abs_devs)
+        print(f"  Mean |CEX deviation|:             {arr.mean():.4%}")
+        print(f"  Max  |CEX deviation|:             {arr.max():.4%}")
+    print(f"  CEX-confirmed (|dev| > fees):     {cex_confirmed}")
+    print(f"  Net-positive AND CEX-confirmed:   {net_pos_cex}")
+    print()
 
 def main() -> int:
     # Force UTF-8 output on Windows to handle special chars

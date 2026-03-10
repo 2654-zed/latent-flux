@@ -165,14 +165,21 @@ TOKEN_PATTERN = re.compile(
 )
 
 
-def tokenize(source: str) -> list[tuple[str, str]]:
-    """Tokenize a Latent Flux expression. Returns [(type, value), ...]."""
+def tokenize(source: str) -> tuple[list[tuple[str, str]], list[int]]:
+    """Tokenize a Latent Flux expression.
+
+    Returns:
+        (tokens, positions) where tokens is [(type, value), ...]
+        and positions is a parallel list of character offsets into source.
+    """
     tokens: list[tuple[str, str]] = []
+    positions: list[int] = []
     pos = 0
     while pos < len(source):
         m = TOKEN_PATTERN.match(source, pos)
         if not m:
             raise SyntaxError(f"Unexpected character at position {pos}: {source[pos:]!r}")
+        start_pos = pos
         val = m.group()
         pos = m.end()
 
@@ -186,6 +193,7 @@ def tokenize(source: str) -> list[tuple[str, str]]:
         # String literals
         if val.startswith('"'):
             tokens.append(("STRING", val[1:-1]))  # strip quotes
+            positions.append(start_pos)
             continue
 
         # Classify
@@ -215,8 +223,9 @@ def tokenize(source: str) -> list[tuple[str, str]]:
             tokens.append(("NUMBER", val))
         else:
             tokens.append(("IDENT", val))
+        positions.append(start_pos)
 
-    return tokens
+    return tokens, positions
 
 
 # ── Parser ─────────────────────────────────────────────────────────
@@ -224,9 +233,29 @@ def tokenize(source: str) -> list[tuple[str, str]]:
 class Parser:
     """Recursive descent parser for Latent Flux expressions."""
 
-    def __init__(self, tokens: list[tuple[str, str]]):
+    def __init__(self, tokens: list[tuple[str, str]], source: str = "",
+                 token_positions: list[int] | None = None):
         self.tokens = tokens
         self.pos = 0
+        self._source = source
+        self._token_positions = token_positions
+
+    def _parse_error(self, msg: str) -> SyntaxError:
+        """Build a SyntaxError with source context, position, and caret."""
+        if not self._source or not self._token_positions:
+            return SyntaxError(msg)
+        idx = min(self.pos, len(self._token_positions) - 1) if self._token_positions else -1
+        if idx < 0:
+            return SyntaxError(msg)
+        offset = self._token_positions[idx]
+        line_start = self._source.rfind('\n', 0, offset) + 1
+        line_end = self._source.find('\n', offset)
+        if line_end == -1:
+            line_end = len(self._source)
+        line = self._source[line_start:line_end]
+        col = offset - line_start
+        caret = ' ' * col + '^'
+        return SyntaxError(f"{msg}\n  {line}\n  {caret}")
 
     def peek(self) -> tuple[str, str] | None:
         if self.pos < len(self.tokens):
@@ -236,9 +265,9 @@ class Parser:
     def consume(self, expected_type: str | None = None) -> tuple[str, str]:
         tok = self.peek()
         if tok is None:
-            raise SyntaxError("Unexpected end of expression")
+            raise self._parse_error("Unexpected end of expression")
         if expected_type and tok[0] != expected_type:
-            raise SyntaxError(f"Expected {expected_type}, got {tok[0]} ({tok[1]!r})")
+            raise self._parse_error(f"Expected {expected_type}, got {tok[0]} ({tok[1]!r})")
         self.pos += 1
         return tok
 
@@ -319,7 +348,7 @@ class Parser:
         """Parse a single pipeline stage: operator+arg or atom."""
         tok = self.peek()
         if tok is None:
-            raise SyntaxError("Expected stage, got end of expression")
+            raise self._parse_error("Expected stage, got end of expression")
 
         if tok[0] == "OP":
             return self.parse_op()
@@ -351,7 +380,7 @@ class Parser:
         """Parse a literal value, variable, or function call."""
         tok = self.peek()
         if tok is None:
-            raise SyntaxError("Expected atom, got end of expression")
+            raise self._parse_error("Expected atom, got end of expression")
 
         if tok[0] == "NUMBER":
             self.consume()
@@ -377,7 +406,7 @@ class Parser:
             self.consume("RPAREN")
             return expr
 
-        raise SyntaxError(f"Unexpected token: {tok}")
+        raise self._parse_error(f"Unexpected token: {tok}")
 
     def parse_vector(self) -> LFVector:
         """Parse [1, 2, 3] or [1, 2; 3, 4] (matrix/superposition)."""
@@ -388,7 +417,7 @@ class Parser:
         while True:
             tok = self.peek()
             if tok is None:
-                raise SyntaxError("Unclosed bracket")
+                raise self._parse_error("Unclosed bracket")
             if tok[0] == "RBRACKET":
                 self.consume()
                 if current_row:
@@ -404,10 +433,10 @@ class Parser:
                 rows.append(current_row)
                 current_row = []
             else:
-                raise SyntaxError(f"Unexpected in vector: {tok}")
+                raise self._parse_error(f"Unexpected in vector: {tok}")
 
         if not rows:
-            raise SyntaxError("Empty vector")
+            raise self._parse_error("Empty vector")
         return LFVector(values=rows)
 
     def parse_func_call(self) -> LFFuncCall:
@@ -426,16 +455,16 @@ class Parser:
 
 def parse(source: str) -> LFPipeline:
     """Parse a Latent Flux expression string into an AST."""
-    tokens = tokenize(source)
-    parser = Parser(tokens)
+    tokens, positions = tokenize(source)
+    parser = Parser(tokens, source, positions)
     ast = parser.parse()
     return ast
 
 
 def parse_program(source: str) -> LFProgram:
     """Parse a multi-statement Latent Flux program into an AST."""
-    tokens = tokenize(source)
-    parser = Parser(tokens)
+    tokens, positions = tokenize(source)
+    parser = Parser(tokens, source, positions)
     return parser.parse_program()
 
 
@@ -924,7 +953,9 @@ def _eval_op(op: LFOp, current: Any, ctx: EvalContext) -> Any:
 
             return trace["converged_state"]
         else:
-            raise TypeError(f"⟼ expects array or SuperpositionTensor, got {type(current)}")
+            if current is None:
+                raise ValueError("⟼ (flow) requires a prior pipeline stage — did you forget to provide input before ⟼?")
+            raise TypeError(f"⟼ expects array or SuperpositionTensor, got {type(current).__name__}")
 
     elif sym == "squeeze":
         # ∇↓: dimensional squeeze
@@ -938,6 +969,10 @@ def _eval_op(op: LFOp, current: Any, ctx: EvalContext) -> Any:
         elif isinstance(current, np.ndarray):
             if current.ndim == 1:
                 # Single vector — truncate
+                if target_dim >= len(current):
+                    raise ValueError(
+                        f"∇↓ target dim {target_dim} >= input dim {len(current)} — squeeze requires target < input"
+                    )
                 return current[:target_dim].copy()
             ds = DimensionalSqueeze(target_dim=target_dim)
             ds.fit(current, seed=ctx.seed)
@@ -1062,13 +1097,16 @@ def _eval_op(op: LFOp, current: Any, ctx: EvalContext) -> Any:
             max_steps=ctx.max_steps,
         )
         if isinstance(current, np.ndarray):
-            if current.ndim == 1:
-                result = ac.compete(current)
-                return np.asarray(attractors[result["winner_idx"]], dtype=np.float32)
-            results = ac.compete_batch(current)
-            return np.array(
-                [attractors[r["winner_idx"]] for r in results], dtype=np.float32
-            )
+            try:
+                if current.ndim == 1:
+                    result = ac.compete(current)
+                    return np.asarray(attractors[result["winner_idx"]], dtype=np.float32)
+                results = ac.compete_batch(current)
+                return np.array(
+                    [attractors[r["winner_idx"]] for r in results], dtype=np.float32
+                )
+            except ValueError as e:
+                raise ValueError(f"⊗ shape mismatch: {e}") from e
         raise TypeError(f"⊗ expects array, got {type(current)}")
 
     else:

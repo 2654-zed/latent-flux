@@ -68,7 +68,7 @@ class TestKillTests:
 
     def test_run_all(self):
         results = run_all_kill_tests()
-        assert len(results) == 5
+        assert len(results) == 10
         for r in results:
             assert "test" in r
             assert "pass" in r
