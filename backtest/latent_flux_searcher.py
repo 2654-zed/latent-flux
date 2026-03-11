@@ -688,11 +688,18 @@ def find_arbitrage_opportunities(
                     best_edge = e
                     best_ps = ps
             if best_edge is not None and best_ps is not None:
-                cex_dev = _cex_feed.get_deviation(
-                    best_edge.src, best_edge.dst,
-                    best_edge.rate / (1.0 - best_edge.fee_rate),  # gross rate
-                    block_timestamp,
+                amm_price = best_edge.rate / (1.0 - best_edge.fee_rate)
+                cex_price = _cex_feed.get_price(
+                    best_edge.src, best_edge.dst, block_timestamp
                 )
+                if cex_price is not None and cex_price > 0 and amm_price > 0:
+                    # Detect unit mismatch: if AMM and CEX prices differ by
+                    # >3 orders of magnitude, the edge rate is the reciprocal
+                    # of the conventional direction. Flip only the AMM price
+                    # to match the CEX convention.
+                    if abs(math.log10(amm_price) - math.log10(cex_price)) > 3:
+                        amm_price = 1.0 / amm_price
+                    cex_dev = (amm_price - cex_price) / cex_price
 
         _signal_metadata[(opp.block_timestamp, path_str)] = SignalMeta(
             s_score=s,

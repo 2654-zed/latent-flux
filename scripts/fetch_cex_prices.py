@@ -1,11 +1,11 @@
-"""Fetch historical CEX hourly prices from Binance for backtest comparison.
+"""Fetch historical CEX hourly prices from Coinbase for backtest comparison.
 
-Downloads 1-hour OHLCV candles for ETH/USDC, ETH/USDT, BTC/USDC, BTC/USDT
+Downloads 1-hour OHLCV candles for ETH-USDC, ETH-USDT, BTC-USDC, BTC-USDT
 over the same 30-day window as uniswap_v3_30d.json (Feb 8 – Mar 10, 2026).
 Saves to backtest/data/cex_prices.json.
 
-Binance klines endpoint is public — no API key required.
-30 days × 24 hours = 720 candles per pair (under 1000 limit per request).
+Coinbase Advanced Trade candles endpoint is public — no API key required.
+Max 300 candles per request, so 30 days (720h) requires pagination.
 
 Usage:
     python scripts/fetch_cex_prices.py
@@ -22,68 +22,77 @@ import urllib.request
 from pathlib import Path
 
 
-# Binance public REST endpoint
-BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
+# Coinbase Advanced Trade public candles endpoint
+COINBASE_CANDLES_URL = (
+    "https://api.coinbase.com/api/v3/brokerage/market/products/{product_id}/candles"
+)
 
 # Time window (matching uniswap_v3_30d.json)
 START_TS = 1770508800   # 2026-02-08 00:00:00 UTC
 END_TS   = 1773100800   # 2026-03-10 00:00:00 UTC
 
-# Pairs to fetch (Binance symbol, canonical pair name)
+# Pairs to fetch (Coinbase product_id, canonical pair name)
 PAIRS = [
-    ("ETHUSDC", "ETH/USDC"),
-    ("ETHUSDT", "ETH/USDT"),
-    ("BTCUSDC", "BTC/USDC"),
-    ("BTCUSDT", "BTC/USDT"),
+    ("ETH-USDC", "ETH/USDC"),
+    ("ETH-USDT", "ETH/USDT"),
+    ("BTC-USDC", "BTC/USDC"),
+    ("BTC-USDT", "BTC/USDT"),
+]
+
+# Fixed chunk boundaries for the 30-day window (240 hours each)
+_CHUNKS = [
+    (1770508800, 1771372800),   # Chunk 1: Feb 08 → Feb 18
+    (1771372800, 1772236800),   # Chunk 2: Feb 18 → Feb 28
+    (1772236800, 1773100800),   # Chunk 3: Feb 28 → Mar 10
 ]
 
 OUTPUT_PATH = Path(__file__).parent.parent / "backtest" / "data" / "cex_prices.json"
 
 
-def fetch_binance_klines(
-    symbol: str,
-    start_ms: int,
-    end_ms: int,
-    interval: str = "1h",
-    limit: int = 1000,
-) -> list[list]:
-    """Fetch OHLCV klines from Binance REST API.
-
-    Returns raw kline arrays as returned by Binance:
-        [open_time, open, high, low, close, volume, close_time, ...]
-    """
-    params = (
-        f"symbol={symbol}&interval={interval}"
-        f"&startTime={start_ms}&endTime={end_ms}&limit={limit}"
-    )
-    url = f"{BINANCE_KLINES_URL}?{params}"
+def _fetch_chunk(product_id: str, start: int, end: int) -> list[dict]:
+    """Fetch one chunk of candles from Coinbase Advanced Trade API."""
+    url = COINBASE_CANDLES_URL.format(product_id=product_id)
+    url += f"?start={start}&end={end}&granularity=ONE_HOUR"
 
     req = urllib.request.Request(url)
     req.add_header("User-Agent", "latent-flux-backtest/1.0")
 
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        return data
-    except urllib.error.URLError as e:
-        print(f"  ERROR: Could not reach Binance API: {e}", file=sys.stderr)
-        return []
-    except json.JSONDecodeError as e:
-        print(f"  ERROR: Invalid JSON response: {e}", file=sys.stderr)
-        return []
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    return data.get("candles", [])
 
 
-def klines_to_records(klines: list[list], pair_name: str) -> list[dict]:
-    """Convert raw Binance klines to CexFeed-compatible records.
+def fetch_coinbase_candles(product_id: str) -> list[dict]:
+    """Fetch all hourly candles for a product using 3 fixed chunks."""
+    all_candles: list[dict] = []
+
+    for i, (chunk_start, chunk_end) in enumerate(_CHUNKS, 1):
+        try:
+            page = _fetch_chunk(product_id, chunk_start, chunk_end)
+        except (urllib.error.URLError, json.JSONDecodeError) as e:
+            print(f"\n  ERROR on chunk {i}: {e}", file=sys.stderr)
+            return []
+        print(f"chunk{i}={len(page)}", end=" ", flush=True)
+        all_candles.extend(page)
+        time.sleep(0.3)
+
+    return all_candles
+
+
+def candles_to_records(candles: list[dict], pair_name: str) -> list[dict]:
+    """Convert Coinbase candles to CexFeed-compatible records.
 
     Mid-price = (high + low) / 2 for each hourly candle.
     """
+    seen: set[int] = set()
     records = []
-    for k in klines:
-        # k[0] = open_time_ms, k[2] = high, k[3] = low
-        ts = int(k[0]) // 1000  # ms → seconds
-        high = float(k[2])
-        low = float(k[3])
+    for c in candles:
+        ts = int(c["start"])
+        if ts in seen:
+            continue
+        seen.add(ts)
+        high = float(c["high"])
+        low = float(c["low"])
         mid = (high + low) / 2.0
         records.append({
             "timestamp": ts,
@@ -101,28 +110,27 @@ def main() -> int:
         print(f"Pairs:  {', '.join(p[1] for p in PAIRS)}")
         return 0
 
-    start_ms = START_TS * 1000
-    end_ms = END_TS * 1000
-
     all_records: list[dict] = []
     failed: list[str] = []
 
-    for symbol, pair_name in PAIRS:
-        print(f"Fetching {pair_name} ({symbol})...", end=" ", flush=True)
-        klines = fetch_binance_klines(symbol, start_ms, end_ms)
-        if klines:
-            records = klines_to_records(klines, pair_name)
-            all_records.extend(records)
-            print(f"{len(records)} candles")
-        else:
+    for product_id, pair_name in PAIRS:
+        print(f"Fetching {pair_name} ({product_id})... ", end="", flush=True)
+        candles = fetch_coinbase_candles(product_id)
+        if not candles:
             failed.append(pair_name)
             print("FAILED")
-        # Respect Binance rate limits
-        time.sleep(0.5)
+            continue
+        records = candles_to_records(candles, pair_name)
+        count = len(records)
+        print(f"→ {count} candles")
+        if count < 700:
+            print(f"  ABORT: {pair_name} has only {count} candles (need ≥700)",
+                  file=sys.stderr)
+            return 1
+        all_records.extend(records)
 
     if not all_records:
         print("\nNo data fetched. Check network connectivity.", file=sys.stderr)
-        print("Binance API may be unreachable from this environment.")
         return 1
 
     # Sort by timestamp then pair
