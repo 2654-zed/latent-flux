@@ -1,17 +1,14 @@
 """
 Layer 3 -- Daily summary report.
 
-Queries the database for yesterday's activity without stopping
-the running surveillance processes. Safe to run from cron or manually.
+Queries the database and prints a readable report without stopping
+or touching the main surveillance process. No writes. Read-only.
 
 Usage:
-    python3 surveillance/daily_summary.py              # yesterday
-    python3 surveillance/daily_summary.py 2026-03-17   # specific date
-    python3 surveillance/daily_summary.py --save       # write to file
+    python3 -m surveillance.daily_summary
+    python3 -m surveillance.daily_summary --save
 """
 
-import argparse
-import json
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -20,252 +17,231 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from surveillance import db
 
+DB_PATH = Path(__file__).parent / "data" / "surveillance.db"
 
-def generate_daily_summary(conn, target_date: str) -> str:
-    """Generate a summary for a specific UTC date (YYYY-MM-DD)."""
-    day_start = f"{target_date}T00:00:00+00:00"
-    day_end = f"{target_date}T23:59:59+00:00"
-    now = datetime.now(timezone.utc).isoformat()
 
-    # Contracts deployed that day
-    day_contracts = conn.execute(
-        "SELECT * FROM contracts WHERE detection_timestamp >= ? AND detection_timestamp <= ? ORDER BY detection_block",
-        (day_start, day_end),
-    ).fetchall()
-    day_contracts = [dict(r) for r in day_contracts]
+def _ago(iso_ts: str) -> str:
+    """Human-readable time-ago string from an ISO timestamp."""
+    try:
+        ts = datetime.fromisoformat(iso_ts)
+        delta = datetime.now(timezone.utc) - ts
+        secs = int(delta.total_seconds())
+        if secs < 60:
+            return f"{secs}s ago"
+        if secs < 3600:
+            return f"{secs // 60}m ago"
+        if secs < 86400:
+            return f"{secs // 3600}h ago"
+        return f"{secs // 86400}d ago"
+    except Exception:
+        return "unknown"
 
-    # By tier
-    by_tier = {"unknown": 0, "suspected": 0, "confirmed": 0}
-    for c in day_contracts:
-        tier = c["confidence_tier"]
-        by_tier[tier] = by_tier.get(tier, 0) + 1
 
-    # By detection method
-    by_method = {}
-    for c in day_contracts:
-        m = c["detection_method"]
-        by_method[m] = by_method.get(m, 0) + 1
+def generate_summary(conn) -> str:
+    now = datetime.now(timezone.utc)
+    now_str = now.strftime("%Y-%m-%d %H:%M:%S UTC")
+    cutoff = (now - timedelta(hours=24)).isoformat()
 
-    # Deployers active that day
-    deployers_today = set(c["deployer_address"] for c in day_contracts)
-
-    # Top deployers
-    deployer_counts = {}
-    for c in day_contracts:
-        d = c["deployer_address"]
-        deployer_counts[d] = deployer_counts.get(d, 0) + 1
-    top_deployers = sorted(deployer_counts.items(), key=lambda x: -x[1])[:10]
-
-    # Hourly distribution
-    hourly = {}
-    for c in day_contracts:
-        ts = c["detection_timestamp"]
-        try:
-            hour = int(ts[11:13])
-            hourly[hour] = hourly.get(hour, 0) + 1
-        except (ValueError, IndexError):
-            pass
-
-    # Trap events that day
-    day_events = conn.execute(
-        "SELECT * FROM trap_events WHERE timestamp >= ? AND timestamp <= ?",
-        (day_start, day_end),
-    ).fetchall()
-    day_events = [dict(r) for r in day_events]
-
-    # Connection gaps that day
-    gaps = conn.execute(
-        "SELECT * FROM connection_gaps WHERE disconnect >= ? AND disconnect <= ? ORDER BY disconnect",
-        (day_start, day_end),
-    ).fetchall()
-    gaps = [dict(r) for r in gaps]
-
-    # Cache stats
-    cache = db.cache_stats(conn)
-
-    # Cumulative totals
     stats = db.stats(conn)
 
-    # Heartbeat status
+    # --- System health ---
     heartbeats = db.read_all_heartbeats(conn)
-
-    # Priority deployers active today
-    priority_today = []
-    for d in deployers_today:
-        if db.is_priority_deployer(conn, d):
-            priority_today.append(d)
-
-    # Build report
-    lines = []
-    lines.append("=" * 70)
-    lines.append(f"LAYER 3 -- DAILY SUMMARY: {target_date}")
-    lines.append("=" * 70)
-    lines.append(f"Generated: {now}")
-    lines.append("")
-
-    # Process health
-    lines.append("-" * 70)
-    lines.append("PROCESS HEALTH")
-    lines.append("-" * 70)
-    check_time = datetime.now(timezone.utc)
-    for hb in heartbeats:
-        ts = datetime.fromisoformat(hb["timestamp"])
-        age = (check_time - ts).total_seconds()
-        status = "OK" if age < 300 else "STALE (>5min)"
-        lines.append(f"  {hb['component']}: last heartbeat {int(age)}s ago [{status}]")
-    if not heartbeats:
-        lines.append("  No heartbeats -- processes may not be running")
-    if gaps:
-        lines.append(f"  Connection gaps today: {len(gaps)}")
-        total_gap_seconds = 0
-        for g in gaps:
-            if g["reconnect"]:
-                d = datetime.fromisoformat(g["disconnect"])
-                r = datetime.fromisoformat(g["reconnect"])
-                total_gap_seconds += (r - d).total_seconds()
-        if total_gap_seconds > 0:
-            lines.append(f"  Total gap time: {int(total_gap_seconds)}s ({total_gap_seconds/3600:.1f}h)")
+    hb_lines = []
+    if heartbeats:
+        for hb in heartbeats:
+            ts = datetime.fromisoformat(hb["timestamp"])
+            age_s = int((now - ts).total_seconds())
+            status = "LIVE" if age_s < 300 else "STALE"
+            hb_lines.append(
+                f"  {hb['component']:24s} {_ago(hb['timestamp']):12s} "
+                f"({hb['timestamp'][:19]})  [{status}]"
+            )
     else:
-        lines.append("  Connection gaps today: 0")
-    lines.append("")
+        hb_lines.append("  No heartbeats recorded -- processes may not be running")
 
-    # Day's activity
-    lines.append("-" * 70)
-    lines.append("TODAY'S ACTIVITY")
-    lines.append("-" * 70)
-    lines.append(f"New contracts:     {len(day_contracts)}")
-    lines.append(f"  UNKNOWN:         {by_tier.get('unknown', 0)}")
-    lines.append(f"  SUSPECTED:       {by_tier.get('suspected', 0)}")
-    lines.append(f"  CONFIRMED:       {by_tier.get('confirmed', 0)}")
-    lines.append(f"Active deployers:  {len(deployers_today)}")
-    lines.append(f"Trap events:       {len(day_events)}")
-    lines.append("")
+    # --- Last 24h contracts ---
+    recent_contracts = conn.execute(
+        "SELECT * FROM contracts WHERE detection_timestamp >= ? ORDER BY detection_block DESC",
+        (cutoff,),
+    ).fetchall()
+    recent_contracts = [dict(r) for r in recent_contracts]
 
-    # Detection methods
-    if by_method:
-        lines.append("Detection methods:")
-        for method, count in sorted(by_method.items(), key=lambda x: -x[1]):
-            lines.append(f"  {method}: {count}")
-        lines.append("")
+    recent_suspected = [c for c in recent_contracts if c["confidence_tier"] == "suspected"]
+    recent_confirmed = [c for c in recent_contracts if c["confidence_tier"] == "confirmed"]
 
-    # Hourly distribution
-    if hourly:
-        lines.append("-" * 70)
-        lines.append("HOURLY DISTRIBUTION (UTC)")
-        lines.append("-" * 70)
-        max_h = max(hourly.values()) if hourly else 1
-        for hour in range(24):
-            count = hourly.get(hour, 0)
-            bar = "#" * int(count / max_h * 30) if max_h > 0 and count > 0 else ""
-            lines.append(f"  {hour:02d}:00  {bar:30s}  {count}")
-        if hourly:
-            peak = max(hourly, key=hourly.get)
-            lines.append(f"  Peak: {peak:02d}:00 UTC ({hourly[peak]} deployments)")
-        lines.append("")
+    recent_deployers = set(c["deployer_address"] for c in recent_contracts)
+    all_deployers_before = conn.execute(
+        "SELECT DISTINCT deployer_address FROM contracts WHERE detection_timestamp < ?",
+        (cutoff,),
+    ).fetchall()
+    old_deployers = {r[0] for r in all_deployers_before}
+    new_deployers = recent_deployers - old_deployers
 
-    # Priority deployer activity
-    if priority_today:
-        lines.append("-" * 70)
-        lines.append(f"PRIORITY DEPLOYERS ACTIVE TODAY ({len(priority_today)})")
-        lines.append("-" * 70)
-        for d in priority_today:
-            count = deployer_counts.get(d, 0)
-            rec = db.get_deployer(conn, d)
-            notes = (rec["deployment_pattern_notes"] or "")[:80] if rec else ""
-            lines.append(f"  {d}  ({count} new contracts)")
-            if notes:
-                lines.append(f"    {notes}")
-        lines.append("")
+    # --- Priority deployers ---
+    priority_rows = conn.execute(
+        "SELECT * FROM deployers WHERE deployment_pattern_notes IS NOT NULL AND deployment_pattern_notes != ''"
+    ).fetchall()
+    priority_deployers = [dict(r) for r in priority_rows]
 
-    # Top deployers
-    if top_deployers and top_deployers[0][1] > 1:
-        lines.append("-" * 70)
-        lines.append("TOP DEPLOYERS TODAY")
-        lines.append("-" * 70)
-        for addr, count in top_deployers:
-            if count < 2:
-                break
-            flag = " [PRIORITY]" if db.is_priority_deployer(conn, addr) else ""
-            lines.append(f"  {addr}  ({count} contracts){flag}")
-        lines.append("")
+    # --- Top new suspected (last 24h) ---
+    top_suspected = recent_suspected[:10]
 
-    # Trap events detail
-    if day_events:
-        lines.append("-" * 70)
-        lines.append(f"TRAP EVENTS ({len(day_events)})")
-        lines.append("-" * 70)
-        for e in day_events:
-            lines.append(f"  Contract: {e['trap_contract_address']}")
-            lines.append(f"  Bot:      {e['bot_address']}")
-            lines.append(f"  TX:       {e['tx_hash']}")
-            lines.append(f"  Loss:     ${e['loss_estimate_usd'] or 'unknown'}")
-            lines.append(f"  Sig:      {e['failure_signature']}")
-            lines.append("")
+    # --- All confirmed (all time) ---
+    all_confirmed = db.get_contracts_by_tier(conn, "confirmed")
 
-    # Connection gaps detail
+    # --- Connection gaps (last 24h) ---
+    gaps = db.get_connection_gaps(conn, since=cutoff)
+
+    # --- Cache ---
+    cache = db.cache_stats(conn)
+
+    # === Build output ===
+    L = []
+    w = 55
+
+    L.append("")
+    L.append("=" * w)
+    L.append("  SURVEILLANCE DAILY SUMMARY")
+    L.append(f"  Generated: {now_str}")
+    L.append("=" * w)
+    L.append("")
+
+    # System health
+    L.append("SYSTEM HEALTH")
+    for line in hb_lines:
+        L.append(line)
     if gaps:
-        lines.append("-" * 70)
-        lines.append(f"CONNECTION GAPS ({len(gaps)})")
-        lines.append("-" * 70)
-        for g in gaps:
-            status = "CLOSED" if g["reconnect"] else "OPEN"
-            lines.append(f"  [{status}] {g['component']}")
-            lines.append(f"    disconnect: {g['disconnect']}")
-            lines.append(f"    reconnect:  {g['reconnect'] or 'STILL DOWN'}")
-            lines.append(f"    blocks: {g['last_block']} -> {g['first_block'] or '?'}")
-            lines.append(f"    reason: {g['reason']}")
-        lines.append("")
+        open_gaps = [g for g in gaps if g["reconnect"] is None]
+        closed_gaps = [g for g in gaps if g["reconnect"] is not None]
+        L.append(f"  Reconnects (24h):      {len(closed_gaps)}")
+        if open_gaps:
+            L.append(f"  OPEN GAPS:             {len(open_gaps)}")
+            for g in open_gaps:
+                L.append(f"    {g['component']} down since {g['disconnect'][:19]}")
+                L.append(f"    reason: {g['reason']}")
+    L.append("")
 
-    # Cumulative
-    lines.append("-" * 70)
-    lines.append("CUMULATIVE TOTALS")
-    lines.append("-" * 70)
-    lines.append(f"Total contracts:   {stats['contracts_total']}")
-    lines.append(f"  UNKNOWN:         {stats['contracts_by_tier']['unknown']}")
-    lines.append(f"  SUSPECTED:       {stats['contracts_by_tier']['suspected']}")
-    lines.append(f"  CONFIRMED:       {stats['contracts_by_tier']['confirmed']}")
-    lines.append(f"Total deployers:   {stats['deployers_total']}")
-    lines.append(f"Cache entries:     {cache['entries']}")
-    lines.append(f"Cache all-time hits: {cache['total_hits']}")
-    lines.append("")
-    lines.append("=" * 70)
-    lines.append("END OF DAILY SUMMARY")
-    lines.append("=" * 70)
+    # Corpus totals
+    L.append("CORPUS TOTALS")
+    L.append(f"  Total contracts:       {stats['contracts_total']}")
+    L.append(f"  Total deployers:       {stats['deployers_total']}")
+    L.append(f"  UNKNOWN:               {stats['contracts_by_tier']['unknown']}")
+    L.append(f"  SUSPECTED:             {stats['contracts_by_tier']['suspected']}")
+    L.append(f"  CONFIRMED:             {stats['contracts_by_tier']['confirmed']}")
+    L.append(f"  Cache entries:         {cache['entries']}")
+    L.append(f"  Cache hits (all time): {cache['total_hits']}")
+    L.append("")
 
-    return "\n".join(lines)
+    # Last 24 hours
+    L.append("LAST 24 HOURS")
+    L.append(f"  New contracts:         {len(recent_contracts)}")
+    L.append(f"  New deployers:         {len(new_deployers)}")
+    L.append(f"  New SUSPECTED:         {len(recent_suspected)}")
+    conf_line = f"  New CONFIRMED:         {len(recent_confirmed)}"
+    if recent_confirmed:
+        conf_line += "  <<<<<"
+    L.append(conf_line)
+    L.append("")
+
+    # Priority deployers
+    if priority_deployers:
+        L.append(f"PRIORITY DEPLOYERS ({len(priority_deployers)})")
+        for d in priority_deployers:
+            addr = d["deployer_address"]
+            total = d["total_contracts_deployed"]
+            last = _ago(d["last_seen"])
+            # Count recent activity
+            recent_count = sum(
+                1 for c in recent_contracts if c["deployer_address"] == addr
+            )
+            activity = f"{recent_count} new" if recent_count > 0 else "inactive"
+            L.append(
+                f"  {addr[:10]}...   last seen: {last:8s}  "
+                f"total: {total:3d}   24h: {activity}"
+            )
+        L.append("")
+
+    # Top new suspected
+    if top_suspected:
+        L.append(f"TOP NEW SUSPECTED (last 24h, showing {len(top_suspected)})")
+        for c in top_suspected:
+            method = c["detection_method"]
+            deployer = c["deployer_address"]
+            # Extract short pattern name from reason
+            reason = c["confidence_reason"]
+            if "[" in reason and "]" in reason:
+                pattern = reason[reason.index("[") + 1:reason.index("]")]
+            elif "Auto-SUSPECTED" in reason:
+                pattern = "deployer_history"
+            elif "velocity" in reason.lower():
+                pattern = "velocity"
+            else:
+                pattern = method
+            L.append(
+                f"  {c['contract_address'][:10]}...   "
+                f"{pattern:24s} deployer: {deployer[:10]}..."
+            )
+        L.append("")
+
+    # Confirmed events
+    L.append("CONFIRMED EVENTS (all time)")
+    if all_confirmed:
+        for c in all_confirmed:
+            L.append(f"  {c['contract_address']}")
+            L.append(f"    deployer:   {c['deployer_address']}")
+            L.append(f"    confirmed:  {c['confirmation_timestamp']}")
+            L.append(f"    tx:         {c['confirmation_tx_hash']}")
+            reason = c["confidence_reason"]
+            if len(reason) > 80:
+                reason = reason[:80] + "..."
+            L.append(f"    reason:     {reason}")
+            # Trap events
+            events = db.get_trap_events_for_contract(conn, c["contract_address"])
+            for e in events:
+                L.append(
+                    f"    event: bot={e['bot_address'][:10]}... "
+                    f"loss=${e['loss_estimate_usd'] or '?'} "
+                    f"sig={e['failure_signature'][:40]}"
+                )
+    else:
+        L.append("  None yet.")
+    L.append("")
+
+    L.append("-" * w)
+    L.append(f"Read from: {DB_PATH}")
+    L.append("No writes. Safe to run while monitor is live.")
+    L.append("")
+
+    return "\n".join(L)
 
 
 def main():
+    import argparse
+
     parser = argparse.ArgumentParser(
-        description="Layer 3 -- Daily summary (queries DB, does not stop processes)"
-    )
-    parser.add_argument(
-        "date",
-        nargs="?",
-        default=None,
-        help="Date to summarize (YYYY-MM-DD). Defaults to yesterday.",
+        description="Layer 3 -- Daily summary (read-only, safe while monitor runs)"
     )
     parser.add_argument(
         "--save",
         action="store_true",
-        help="Save report to surveillance/data/daily_YYYY-MM-DD.txt",
+        help="Also save to surveillance/data/daily_YYYY-MM-DD.txt",
     )
     args = parser.parse_args()
 
-    if args.date:
-        target_date = args.date
-    else:
-        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
-        target_date = yesterday.strftime("%Y-%m-%d")
+    if not DB_PATH.exists():
+        print(f"Database not found: {DB_PATH}", file=sys.stderr)
+        sys.exit(1)
 
     conn = db.init_db()
-    report = generate_daily_summary(conn, target_date)
+    report = generate_summary(conn)
     print(report)
 
     if args.save:
-        out = Path(__file__).parent / "data" / f"daily_{target_date}.txt"
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        out = Path(__file__).parent / "data" / f"daily_{today}.txt"
+        out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(report, encoding="utf-8")
-        print(f"\nSaved to {out}")
+        print(f"Saved to {out}")
 
     conn.close()
 
