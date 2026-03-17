@@ -8,3 +8,7 @@ logs/
 dist/
 build/
 .env
+*.db
+surveillance/data/
+surveillance/logs/
+surveillance/pids/
