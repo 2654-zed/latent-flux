@@ -101,6 +101,18 @@ class DeploymentMonitor:
         self._rpc_calls_saved = 0
         self._last_block: Optional[int] = None
         self._current_gap_id: Optional[int] = None
+        # Sub-monitors (initialized lazily to avoid circular imports)
+        self._selector_monitor = None
+        self._revert_detector = None
+
+    def _init_sub_monitors(self) -> None:
+        """Initialize selector monitor and revert detector."""
+        if self._selector_monitor is None:
+            from surveillance.selector_monitor import SelectorMonitor
+            from surveillance.revert_cluster_detector import RevertClusterDetector
+            self._selector_monitor = SelectorMonitor(self.conn)
+            self._revert_detector = RevertClusterDetector(self.conn)
+            logger.info("Sub-monitors initialized: selector_monitor, revert_cluster_detector")
 
     async def start(self, max_retries: int = 5) -> None:
         """Connect to WebSocket and begin monitoring blocks.
@@ -338,6 +350,14 @@ class DeploymentMonitor:
         for dep in deployments:
             self._record_deployment(dep)
 
+        # Run sub-monitors on the full block
+        self._init_sub_monitors()
+        try:
+            await self._selector_monitor.process_block(w3, block, timestamp_iso)
+            await self._revert_detector.process_block(w3, block, timestamp_iso)
+        except Exception as e:
+            logger.warning("Sub-monitor error on block %d: %s", block_number, e)
+
         # Periodic heartbeat every 100 blocks
         if self._blocks_processed % 100 == 0:
             logger.info(
@@ -529,6 +549,22 @@ class DeploymentMonitor:
     @property
     def rpc_calls_saved(self) -> int:
         return self._rpc_calls_saved
+
+    @property
+    def selector_events(self) -> int:
+        return self._selector_monitor.events_logged if self._selector_monitor else 0
+
+    @property
+    def bots_tagged(self) -> int:
+        return self._selector_monitor.bots_tagged if self._selector_monitor else 0
+
+    @property
+    def bot_candidates_found(self) -> int:
+        return self._revert_detector.candidates_found if self._revert_detector else 0
+
+    @property
+    def bot_deployer_hits(self) -> int:
+        return self._revert_detector.deployer_hits if self._revert_detector else 0
 
 
 async def run_monitor(rpc_url: str, db_path: Optional[Path] = None,

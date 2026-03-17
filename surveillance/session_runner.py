@@ -138,6 +138,10 @@ def generate_report(conn, duration_seconds: int,
     lines.append(f"Routing poll cycles:    {router.cycles}")
     lines.append(f"Routing registry hits:  {router.routing_hits}")
     lines.append(f"Routing anomalies:      {router.anomalies_found}")
+    lines.append(f"Selector events:        {monitor.selector_events}")
+    lines.append(f"Bots tagged:            {monitor.bots_tagged}")
+    lines.append(f"Bot candidates:         {monitor.bot_candidates_found}")
+    lines.append(f"Bot+deployer hits:      {monitor.bot_deployer_hits}")
     lines.append("")
 
     # Bytecode cache stats

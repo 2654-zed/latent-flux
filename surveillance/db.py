@@ -84,6 +84,52 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
             );
         """)
 
+    # Migration: add transaction_events + bot_candidates tables
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='transaction_events'"
+    )
+    if cursor.fetchone() is None:
+        conn.executescript("""
+            CREATE TABLE transaction_events (
+                id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+                contract_address        TEXT    NOT NULL,
+                interacting_address     TEXT    NOT NULL,
+                function_selector       TEXT,
+                bot_tag                 TEXT,
+                gas_price_gwei          REAL,
+                max_priority_fee_gwei   REAL,
+                gas_pattern             TEXT,
+                block_number            INTEGER NOT NULL,
+                timestamp               TEXT    NOT NULL,
+                is_reverted             INTEGER NOT NULL DEFAULT 0,
+                tx_hash                 TEXT    NOT NULL,
+                FOREIGN KEY (contract_address) REFERENCES contracts(contract_address)
+            );
+            CREATE INDEX idx_txevents_contract ON transaction_events(contract_address);
+            CREATE INDEX idx_txevents_interactor ON transaction_events(interacting_address);
+            CREATE INDEX idx_txevents_selector ON transaction_events(function_selector);
+            CREATE INDEX idx_txevents_bot_tag ON transaction_events(bot_tag);
+            CREATE INDEX idx_txevents_block ON transaction_events(block_number);
+
+            CREATE TABLE bot_candidates (
+                address         TEXT    NOT NULL PRIMARY KEY,
+                first_seen      TEXT    NOT NULL,
+                last_seen       TEXT    NOT NULL,
+                total_revert_count INTEGER NOT NULL DEFAULT 0,
+                is_deployer     INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE bot_candidate_events (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                address         TEXT    NOT NULL,
+                block_number    INTEGER NOT NULL,
+                revert_count    INTEGER NOT NULL,
+                timestamp       TEXT    NOT NULL,
+                FOREIGN KEY (address) REFERENCES bot_candidates(address)
+            );
+            CREATE INDEX idx_botevents_address ON bot_candidate_events(address);
+            CREATE INDEX idx_botevents_block ON bot_candidate_events(block_number);
+        """)
+
     return conn
 
 
@@ -520,6 +566,116 @@ def get_connection_gaps(conn: sqlite3.Connection,
     else:
         rows = conn.execute(
             "SELECT * FROM connection_gaps ORDER BY disconnect"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ------------------------------------------------------------------
+# Transaction event operations (selector monitor)
+# ------------------------------------------------------------------
+
+def insert_transaction_event(conn: sqlite3.Connection, *,
+                             contract_address: str, interacting_address: str,
+                             function_selector: Optional[str], bot_tag: Optional[str],
+                             gas_price_gwei: Optional[float],
+                             max_priority_fee_gwei: Optional[float],
+                             gas_pattern: Optional[str],
+                             block_number: int, timestamp: str,
+                             is_reverted: bool, tx_hash: str) -> None:
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO transaction_events (
+            contract_address, interacting_address, function_selector, bot_tag,
+            gas_price_gwei, max_priority_fee_gwei, gas_pattern,
+            block_number, timestamp, is_reverted, tx_hash
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (contract_address, interacting_address, function_selector, bot_tag,
+         gas_price_gwei, max_priority_fee_gwei, gas_pattern,
+         block_number, timestamp, int(is_reverted), tx_hash),
+    )
+    conn.commit()
+
+
+def get_transaction_events(conn: sqlite3.Connection,
+                           contract_address: str) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM transaction_events WHERE contract_address = ? ORDER BY block_number",
+        (contract_address,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_bot_tagged_events(conn: sqlite3.Connection,
+                          bot_tag: Optional[str] = None) -> list[dict]:
+    if bot_tag:
+        rows = conn.execute(
+            "SELECT * FROM transaction_events WHERE bot_tag = ? ORDER BY block_number",
+            (bot_tag,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM transaction_events WHERE bot_tag IS NOT NULL ORDER BY block_number",
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_watched_addresses(conn: sqlite3.Connection) -> set[str]:
+    """Contract addresses with tier suspected or confirmed — targets for selector monitoring."""
+    rows = conn.execute(
+        "SELECT contract_address FROM contracts WHERE confidence_tier IN ('suspected', 'confirmed')"
+    ).fetchall()
+    return {r[0] for r in rows}
+
+
+# ------------------------------------------------------------------
+# Bot candidate operations (revert cluster detector)
+# ------------------------------------------------------------------
+
+def upsert_bot_candidate(conn: sqlite3.Connection, address: str,
+                         block_number: int, revert_count: int,
+                         timestamp: str) -> None:
+    """Record a revert cluster event and upsert the bot candidate."""
+    # Upsert candidate
+    conn.execute(
+        """
+        INSERT INTO bot_candidates (address, first_seen, last_seen, total_revert_count, is_deployer)
+        VALUES (?, ?, ?, ?, 0)
+        ON CONFLICT(address) DO UPDATE SET
+            last_seen = ?,
+            total_revert_count = total_revert_count + ?
+        """,
+        (address, timestamp, timestamp, revert_count, timestamp, revert_count),
+    )
+    # Log the event
+    conn.execute(
+        """
+        INSERT INTO bot_candidate_events (address, block_number, revert_count, timestamp)
+        VALUES (?, ?, ?, ?)
+        """,
+        (address, block_number, revert_count, timestamp),
+    )
+    # Check if this address is also a deployer
+    deployer = conn.execute(
+        "SELECT 1 FROM deployers WHERE deployer_address = ?", (address,)
+    ).fetchone()
+    if deployer:
+        conn.execute(
+            "UPDATE bot_candidates SET is_deployer = 1 WHERE address = ?",
+            (address,),
+        )
+    conn.commit()
+
+
+def get_bot_candidates(conn: sqlite3.Connection,
+                       deployers_only: bool = False) -> list[dict]:
+    if deployers_only:
+        rows = conn.execute(
+            "SELECT * FROM bot_candidates WHERE is_deployer = 1 ORDER BY total_revert_count DESC"
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM bot_candidates ORDER BY total_revert_count DESC"
         ).fetchall()
     return [dict(r) for r in rows]
 

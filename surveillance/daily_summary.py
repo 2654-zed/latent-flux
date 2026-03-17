@@ -183,6 +183,46 @@ def generate_summary(conn) -> str:
             )
         L.append("")
 
+    # Bot activity (selector monitor + revert detector)
+    tx_events_24h = conn.execute(
+        "SELECT COUNT(*) FROM transaction_events WHERE timestamp >= ?", (cutoff,)
+    ).fetchone()[0]
+    bot_tagged_24h = conn.execute(
+        "SELECT COUNT(*) FROM transaction_events WHERE bot_tag IS NOT NULL AND timestamp >= ?",
+        (cutoff,),
+    ).fetchone()[0]
+    static_gas_24h = conn.execute(
+        "SELECT COUNT(*) FROM transaction_events WHERE gas_pattern = 'static' AND timestamp >= ?",
+        (cutoff,),
+    ).fetchone()[0]
+
+    bot_candidates_all = db.get_bot_candidates(conn)
+    bot_deployers = db.get_bot_candidates(conn, deployers_only=True)
+
+    if tx_events_24h > 0 or bot_candidates_all:
+        L.append("BOT INTELLIGENCE")
+        L.append(f"  Tx events (24h):       {tx_events_24h}")
+        L.append(f"  Bot-tagged (24h):      {bot_tagged_24h}")
+        L.append(f"  Static gas (24h):      {static_gas_24h}")
+        L.append(f"  Bot candidates (all):  {len(bot_candidates_all)}")
+        L.append(f"  Bot+deployer hits:     {len(bot_deployers)}")
+        if bot_deployers:
+            L.append("  *** BOT+DEPLOYER CROSS-REFERENCES ***")
+            for bc in bot_deployers[:5]:
+                L.append(f"    {bc['address']}  reverts: {bc['total_revert_count']}")
+        # Top bot tags
+        tag_rows = conn.execute(
+            """SELECT bot_tag, COUNT(*) as cnt FROM transaction_events
+               WHERE bot_tag IS NOT NULL AND timestamp >= ?
+               GROUP BY bot_tag ORDER BY cnt DESC""",
+            (cutoff,),
+        ).fetchall()
+        if tag_rows:
+            L.append("  Bot tags (24h):")
+            for r in tag_rows:
+                L.append(f"    {r[0]:24s} {r[1]}")
+        L.append("")
+
     # Confirmed events
     L.append("CONFIRMED EVENTS (all time)")
     if all_confirmed:
