@@ -12,7 +12,13 @@ from pathlib import Path
 from typing import Optional
 
 SCHEMA_PATH = Path(__file__).parent / "schema.sql"
-DEFAULT_DB_PATH = Path(__file__).parent / "data" / "surveillance.db"
+
+# Railway Volume mounts to /app/surveillance/data. Use it if it exists,
+# otherwise fall back to the local relative path (dev/local runs).
+_RAILWAY_DATA = Path("/app/surveillance/data")
+_LOCAL_DATA = Path(__file__).parent / "data"
+_DATA_DIR = _RAILWAY_DATA if _RAILWAY_DATA.exists() else _LOCAL_DATA
+DEFAULT_DB_PATH = _DATA_DIR / "surveillance.db"
 
 
 def _now_iso() -> str:

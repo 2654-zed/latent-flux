@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from surveillance import db
 
-DB_PATH = Path(__file__).parent / "data" / "surveillance.db"
+DB_PATH = db.DEFAULT_DB_PATH
 
 
 def _ago(iso_ts: str) -> str:
