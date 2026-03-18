@@ -202,6 +202,27 @@ class StatsHandler(BaseHTTPRequestHandler):
             con.close()
             self._json(200, clusters)
 
+        elif self.path == "/funding":
+            rows = _query(
+                """SELECT deployer_address, total_contracts_deployed,
+                          deployment_pattern_notes, funding_trail
+                   FROM deployers
+                   WHERE funding_trail IS NOT NULL AND funding_trail != ''
+                   ORDER BY total_contracts_deployed DESC"""
+            )
+            results = []
+            for r in rows:
+                trail = r[3]
+                try:
+                    trail = json.loads(trail)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                results.append({
+                    "address": r[0], "contracts": r[1],
+                    "notes": r[2], "funding_trail": trail,
+                })
+            self._json(200, results)
+
         elif self.path == "/cluster-events":
             rows = _query(
                 """SELECT cluster_id, bot_address, event_type, timestamp,
@@ -435,6 +456,21 @@ class StatsHandler(BaseHTTPRequestHandler):
                 results[f"{cid}_total_members"] = members
             con.close()
             self._json(200, results)
+
+        elif self.path == "/admin/funding-trail":
+            addr = data.get("address", "").lower()
+            trail = data.get("trail", "")
+            if not addr or not trail:
+                self._json(400, {"error": "address and trail required"})
+                return
+            con = sqlite3.connect(DB_PATH)
+            con.execute(
+                "UPDATE deployers SET funding_trail = ? WHERE deployer_address = ?",
+                (trail if isinstance(trail, str) else json.dumps(trail), addr),
+            )
+            con.commit()
+            con.close()
+            self._json(200, {"updated": addr})
 
         else:
             self._json(404, {"error": "unknown admin endpoint"})

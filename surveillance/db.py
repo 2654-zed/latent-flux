@@ -164,6 +164,13 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
             );
         """)
 
+    # Migration: add funding_trail to deployers
+    try:
+        conn.execute("SELECT funding_trail FROM deployers LIMIT 1")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE deployers ADD COLUMN funding_trail TEXT")
+        conn.commit()
+
     # Migration: add selector_cluster column to bot_candidates
     try:
         conn.execute("SELECT selector_cluster FROM bot_candidates LIMIT 1")
@@ -249,6 +256,25 @@ def update_deployer_notes(conn: sqlite3.Connection, address: str,
         (notes, address),
     )
     conn.commit()
+
+
+def update_deployer_funding(conn: sqlite3.Connection, address: str,
+                            funding_trail: str) -> None:
+    conn.execute(
+        "UPDATE deployers SET funding_trail = ? WHERE deployer_address = ?",
+        (funding_trail, address),
+    )
+    conn.commit()
+
+
+def get_priority_deployers(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        """SELECT * FROM deployers
+           WHERE deployment_pattern_notes IS NOT NULL
+             AND deployment_pattern_notes != ''
+           ORDER BY total_contracts_deployed DESC"""
+    ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def is_priority_deployer(conn: sqlite3.Connection, address: str) -> bool:
