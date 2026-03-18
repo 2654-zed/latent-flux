@@ -716,6 +716,8 @@ class StatsHandler(BaseHTTPRequestHandler):
                     "0x79a2f71187dc9fd9b173781e6dd4ff9960f6f61b": "TRAP_FIRED",
                     "0x74b9a8351bd725ca3edd654c9728873b8c6f051e": "TRAP_FIRED",
                     "0x3f2cdae910cd13638e38b45881e7a4fc3a9fe320": "VICTIM_ACTIVE",
+                    "0xfdaf1f1714810f8d88a57c9d551d442c68ace2bb": "LAUNDRY_PIPELINE",
+                    "0x27920e8039d2b6e93e36f5d5f53b998e2e631a70": "LAUNDRY_PIPELINE",
                 }
                 alert_type = (
                     ALERT_RULES.get(to_addr) or
