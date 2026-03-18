@@ -171,6 +171,25 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
         conn.execute("ALTER TABLE bot_candidates ADD COLUMN selector_cluster TEXT")
         conn.commit()
 
+    # Migration: cluster_events table
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='cluster_events'"
+    )
+    if cursor.fetchone() is None:
+        conn.executescript("""
+            CREATE TABLE cluster_events (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                cluster_id          TEXT NOT NULL,
+                bot_address         TEXT NOT NULL,
+                event_type          TEXT NOT NULL,
+                timestamp           TEXT NOT NULL,
+                trigger_selector    TEXT,
+                revert_count_at_join INTEGER
+            );
+            CREATE INDEX idx_clevents_cluster ON cluster_events(cluster_id);
+            CREATE INDEX idx_clevents_address ON cluster_events(bot_address);
+        """)
+
     return conn
 
 
@@ -823,6 +842,66 @@ def get_cluster_members(conn: sqlite3.Connection, cluster_id: str) -> list[dict]
         "SELECT * FROM bot_candidates WHERE selector_cluster = ? ORDER BY total_revert_count DESC",
         (cluster_id,),
     ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def auto_assign_clusters(conn: sqlite3.Connection,
+                         cluster_rules: dict[str, list[str]]) -> dict[str, int]:
+    """
+    Auto-assign bot candidates to clusters based on selector usage.
+
+    cluster_rules: {cluster_id: [selector1, selector2, ...]}
+    A bot using ANY of the listed selectors gets assigned to that cluster.
+    Logs a cluster_event for each new assignment.
+    Returns {cluster_id: count_of_new_assignments}.
+    """
+    now = _now_iso()
+    results = {}
+
+    for cluster_id, selectors in cluster_rules.items():
+        placeholders = ",".join("?" for _ in selectors)
+        # Find bots using these selectors that aren't already in this cluster
+        rows = conn.execute(
+            f"""SELECT DISTINCT bs.bot_address, bs.function_selector, bc.total_revert_count
+                FROM bot_candidate_selectors bs
+                JOIN bot_candidates bc ON bs.bot_address = bc.address
+                WHERE bs.function_selector IN ({placeholders})
+                  AND (bc.selector_cluster IS NULL OR bc.selector_cluster != ?)""",
+            (*selectors, cluster_id),
+        ).fetchall()
+
+        count = 0
+        for row in rows:
+            addr, sel, reverts = row[0], row[1], row[2]
+            conn.execute(
+                "UPDATE bot_candidates SET selector_cluster = ? WHERE address = ?",
+                (cluster_id, addr),
+            )
+            conn.execute(
+                """INSERT INTO cluster_events
+                   (cluster_id, bot_address, event_type, timestamp, trigger_selector, revert_count_at_join)
+                   VALUES (?, ?, 'joined', ?, ?, ?)""",
+                (cluster_id, addr, now, sel, reverts),
+            )
+            count += 1
+
+        conn.commit()
+        results[cluster_id] = count
+
+    return results
+
+
+def get_cluster_events(conn: sqlite3.Connection,
+                       cluster_id: Optional[str] = None) -> list[dict]:
+    if cluster_id:
+        rows = conn.execute(
+            "SELECT * FROM cluster_events WHERE cluster_id = ? ORDER BY timestamp DESC",
+            (cluster_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM cluster_events ORDER BY timestamp DESC LIMIT 100"
+        ).fetchall()
     return [dict(r) for r in rows]
 
 

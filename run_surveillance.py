@@ -202,6 +202,18 @@ class StatsHandler(BaseHTTPRequestHandler):
             con.close()
             self._json(200, clusters)
 
+        elif self.path == "/cluster-events":
+            rows = _query(
+                """SELECT cluster_id, bot_address, event_type, timestamp,
+                          trigger_selector, revert_count_at_join
+                   FROM cluster_events ORDER BY timestamp DESC LIMIT 100"""
+            )
+            self._json(200, [
+                {"cluster": r[0], "address": r[1], "event": r[2],
+                 "timestamp": r[3], "selector": r[4], "reverts_at_join": r[5]}
+                for r in rows
+            ])
+
         elif self.path == "/bots":
             rows = _query(
                 """SELECT address, total_revert_count, is_deployer, first_seen, last_seen
@@ -378,6 +390,51 @@ class StatsHandler(BaseHTTPRequestHandler):
             con.commit()
             con.close()
             self._json(200, {"cluster": cluster_id, "updated": updated})
+
+        elif self.path == "/admin/auto-assign-clusters":
+            # Auto-assign bots to clusters based on selector rules
+            # Input: {"rules": {"cluster_001": ["000000e7"], "cluster_002": ["b2460c48", "6bfd6286"]}}
+            rules = data.get("rules", {})
+            if not rules:
+                self._json(400, {"error": "rules dict required"})
+                return
+            con = sqlite3.connect(DB_PATH)
+            now = datetime.now(timezone.utc).isoformat()
+            results = {}
+            for cluster_id, selectors in rules.items():
+                placeholders = ",".join("?" for _ in selectors)
+                rows = con.execute(
+                    f"""SELECT DISTINCT bs.bot_address, bs.function_selector, bc.total_revert_count
+                        FROM bot_candidate_selectors bs
+                        JOIN bot_candidates bc ON bs.bot_address = bc.address
+                        WHERE bs.function_selector IN ({placeholders})
+                          AND (bc.selector_cluster IS NULL OR bc.selector_cluster != ?)""",
+                    (*selectors, cluster_id),
+                ).fetchall()
+                count = 0
+                for row in rows:
+                    addr, sel, reverts = row[0], row[1], row[2]
+                    con.execute(
+                        "UPDATE bot_candidates SET selector_cluster = ? WHERE address = ?",
+                        (cluster_id, addr),
+                    )
+                    con.execute(
+                        """INSERT INTO cluster_events
+                           (cluster_id, bot_address, event_type, timestamp, trigger_selector, revert_count_at_join)
+                           VALUES (?, ?, 'joined', ?, ?, ?)""",
+                        (cluster_id, addr, now, sel, reverts),
+                    )
+                    count += 1
+                con.commit()
+                results[cluster_id] = count
+            # Return final membership counts
+            for cid in rules:
+                members = con.execute(
+                    "SELECT COUNT(*) FROM bot_candidates WHERE selector_cluster = ?", (cid,)
+                ).fetchone()[0]
+                results[f"{cid}_total_members"] = members
+            con.close()
+            self._json(200, results)
 
         else:
             self._json(404, {"error": "unknown admin endpoint"})
