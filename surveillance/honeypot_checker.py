@@ -22,9 +22,13 @@ from surveillance import db
 
 logger = logging.getLogger("surveillance.honeypot_checker")
 
+# NOTE: Honeypot.is does NOT support Arbitrum (returns "Invalid chain" for chainID=42161).
+# GoPlus returns empty results for unlisted contracts (our trap contracts aren't tokens).
+# These APIs are useful for Ethereum mainnet tokens only.
+# For Arbitrum trap detection, our bytecode classifier is the primary tool.
 HONEYPOT_IS_URL = "https://api.honeypot.is/v2/IsHoneypot"
 GOPLUS_URL = "https://api.gopluslabs.io/api/v1/token_security/42161"
-CHAIN_ID = 42161
+CHAIN_ID = 1  # Honeypot.is only supports Ethereum mainnet
 
 
 async def check_honeypot_is(address: str, session: aiohttp.ClientSession) -> Optional[dict]:
