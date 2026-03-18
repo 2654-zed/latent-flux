@@ -68,7 +68,7 @@ class DeploymentMonitor:
 
     def __init__(self, rpc_url: str, conn: sqlite3.Connection,
                  classifier=None, safe_deployers: set[str] | None = None,
-                 velocity_threshold: int = 8):
+                 velocity_threshold: int = 8, chain: str = "arbitrum"):
         """
         Args:
             rpc_url: WebSocket RPC endpoint (wss://...)
@@ -81,12 +81,14 @@ class DeploymentMonitor:
             velocity_threshold: If a deployer deploys more than this many
                                 contracts in a single session, auto-flag
                                 the deployer as priority.
+            chain: Chain identifier stored in DB (arbitrum, base, etc.)
         """
         self.rpc_url = rpc_url
         self.conn = conn
         self.classifier = classifier
         self.safe_deployers = safe_deployers or set()
         self.velocity_threshold = velocity_threshold
+        self.chain = chain
         self._running = False
         self._w3: Optional[AsyncWeb3] = None
         self._blocks_processed = 0
@@ -185,9 +187,11 @@ class DeploymentMonitor:
                 # Reset retry counter on successful reconnect
                 logger.info("Reconnected successfully -- gap closed, resuming")
 
-            if chain_id != 42161:
+            expected_chains = {"arbitrum": 42161, "base": 8453}
+            expected = expected_chains.get(self.chain)
+            if expected and chain_id != expected:
                 logger.warning(
-                    "Expected Arbitrum One (42161), got chain_id=%d", chain_id
+                    "Expected %s (%d), got chain_id=%d", self.chain, expected, chain_id
                 )
 
             await w3.eth.subscribe("newHeads")
@@ -214,7 +218,7 @@ class DeploymentMonitor:
         while self._running:
             try:
                 db.write_heartbeat(
-                    self.conn, "deployment_monitor",
+                    self.conn, f"deployment_monitor_{self.chain}",
                     self._blocks_processed, self._deployments_found,
                 )
             except Exception as e:
@@ -452,6 +456,7 @@ class DeploymentMonitor:
                 detection_block=dep.block_number,
                 confidence_tier=tier,
                 confidence_reason=reason,
+                chain=self.chain,
                 has_asymmetric_transfer=bytecode_signals.get("has_asymmetric_transfer"),
                 has_conditional_revert=bytecode_signals.get("has_conditional_revert"),
                 has_unusual_fee_structure=bytecode_signals.get("has_unusual_fee_structure"),
@@ -568,11 +573,11 @@ class DeploymentMonitor:
 
 
 async def run_monitor(rpc_url: str, db_path: Optional[Path] = None,
-                      classifier=None) -> None:
+                      classifier=None, chain: str = "arbitrum") -> None:
     """Entry point: initialize DB, start monitor, handle shutdown."""
     conn = db.init_db(db_path)
 
-    monitor = DeploymentMonitor(rpc_url, conn, classifier)
+    monitor = DeploymentMonitor(rpc_url, conn, classifier, chain=chain)
 
     # Graceful shutdown on SIGINT/SIGTERM
     loop = asyncio.get_running_loop()
@@ -597,12 +602,17 @@ async def run_monitor(rpc_url: str, db_path: Optional[Path] = None,
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Layer 3 — Contract Deployment Monitor (Arbitrum)"
+        description="Layer 3 — Contract Deployment Monitor"
     )
     parser.add_argument(
         "--rpc",
         default=os.environ.get("ARB_WSS_URL"),
         help="WebSocket RPC URL (or set ARB_WSS_URL env var)",
+    )
+    parser.add_argument(
+        "--chain",
+        default="arbitrum",
+        help="Chain name: arbitrum, base, etc. Stored in DB chain field.",
     )
     parser.add_argument(
         "--db",
@@ -624,7 +634,7 @@ def main():
     if not args.rpc:
         print(
             "ERROR: No RPC URL provided.\n"
-            "  --rpc wss://arb-mainnet.g.alchemy.com/v2/YOUR_KEY\n"
+            "  --rpc wss://...\n"
             "  or set ARB_WSS_URL environment variable.",
             file=sys.stderr,
         )
@@ -632,9 +642,11 @@ def main():
 
     logging.basicConfig(
         level=getattr(logging, args.log_level),
-        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+        format=f"%(asctime)s [{args.chain}:%(name)s] %(levelname)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+
+    logger.info("Starting monitor for chain: %s", args.chain)
 
     db_path = Path(args.db) if args.db else None
 
@@ -646,7 +658,9 @@ def main():
         logger.info("Bytecode classifier enabled")
 
     try:
-        asyncio.run(run_monitor(args.rpc, db_path, classifier=classifier))
+        asyncio.run(run_monitor(
+            args.rpc, db_path, classifier=classifier, chain=args.chain,
+        ))
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
 

@@ -105,6 +105,23 @@ class StatsHandler(BaseHTTPRequestHandler):
                 })
             stats["clusters"] = clusters
 
+            # Cross-chain intelligence
+            chains_monitored = [r[0] for r in c.execute(
+                "SELECT DISTINCT chain FROM contracts"
+            ).fetchall()]
+            shared_deployers = c.execute(
+                """SELECT COUNT(*) FROM (
+                    SELECT deployer_address FROM deployers d
+                    JOIN contracts c ON d.deployer_address = c.deployer_address
+                    GROUP BY d.deployer_address
+                    HAVING COUNT(DISTINCT c.chain) > 1
+                )"""
+            ).fetchone()[0]
+            stats["cross_chain"] = {
+                "chains_monitored": chains_monitored,
+                "shared_deployers": shared_deployers,
+            }
+
             # Recent alerts
             alert_rows = c.execute(
                 "SELECT alert_type, address, tx_hash, timestamp FROM alerts WHERE COALESCE(false_positive, 0) = 0 ORDER BY id DESC LIMIT 5"
@@ -310,6 +327,25 @@ class StatsHandler(BaseHTTPRequestHandler):
             )
             self._json(200, [
                 {"tx": r[0], "from": r[1], "to": r[2], "summary": r[3], "timestamp": r[4]}
+                for r in rows
+            ])
+
+        elif self.path == "/cross-chain":
+            rows = _query(
+                """SELECT d.deployer_address,
+                          GROUP_CONCAT(DISTINCT c.chain) as chains,
+                          COUNT(DISTINCT c.chain) as chain_count,
+                          COUNT(c.contract_address) as total_contracts,
+                          d.deployment_pattern_notes, d.entity_type
+                   FROM deployers d
+                   JOIN contracts c ON d.deployer_address = c.deployer_address
+                   GROUP BY d.deployer_address
+                   HAVING chain_count > 1
+                   ORDER BY total_contracts DESC"""
+            )
+            self._json(200, [
+                {"deployer": r[0], "chains": r[1], "chain_count": r[2],
+                 "contracts": r[3], "notes": r[4], "entity_type": r[5]}
                 for r in rows
             ])
 
@@ -851,18 +887,36 @@ def run_stats_server():
 threading.Thread(target=run_stats_server, daemon=True).start()
 
 # Start surveillance components
-monitor = subprocess.Popen(
+processes = []
+
+# Arbitrum deployment monitor
+monitor_arb = subprocess.Popen(
     [sys.executable, "-m", "surveillance.deployment_monitor"],
     stdout=sys.stdout,
     stderr=sys.stderr,
 )
+processes.append(("arbitrum_monitor", monitor_arb))
 
+# Base deployment monitor (if BASE_WSS_URL is set)
+if os.environ.get("BASE_WSS_URL"):
+    monitor_base = subprocess.Popen(
+        [sys.executable, "-m", "surveillance.deployment_monitor",
+         "--rpc", os.environ["BASE_WSS_URL"], "--chain", "base"],
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+    )
+    processes.append(("base_monitor", monitor_base))
+    print("Base chain monitor started", flush=True)
+
+# Routing monitor (Arbitrum only for now)
 routing = subprocess.Popen(
     [sys.executable, "-m", "surveillance.routing_monitor"],
     stdout=sys.stdout,
     stderr=sys.stderr,
 )
+processes.append(("routing", routing))
 
-# Keep alive — exit only if either process dies
-monitor.wait()
-routing.wait()
+# Keep alive — exit if any process dies
+for name, proc in processes:
+    proc.wait()
+    print(f"Process {name} exited with code {proc.returncode}", flush=True)
