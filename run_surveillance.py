@@ -101,6 +101,34 @@ class StatsHandler(BaseHTTPRequestHandler):
                 for r in rows
             ])
 
+        elif self.path == "/bot-deployers":
+            rows = _query(
+                """SELECT bc.address, bc.total_revert_count, bc.first_seen, bc.last_seen,
+                          d.total_contracts_deployed, d.deployment_pattern_notes
+                   FROM bot_candidates bc
+                   JOIN deployers d ON bc.address = d.deployer_address
+                   WHERE bc.is_deployer = 1
+                   ORDER BY bc.total_revert_count DESC"""
+            )
+            self._json(200, [
+                {"address": r[0], "reverts": r[1], "bot_first_seen": r[2],
+                 "bot_last_seen": r[3], "contracts_deployed": r[4], "deployer_notes": r[5]}
+                for r in rows
+            ])
+
+        elif self.path == "/bot-selectors":
+            rows = _query(
+                """SELECT bs.bot_address, bs.function_selector, bs.call_count,
+                          bs.first_seen, bs.last_seen
+                   FROM bot_candidate_selectors bs
+                   ORDER BY bs.call_count DESC LIMIT 50"""
+            )
+            self._json(200, [
+                {"bot": r[0], "selector": r[1], "calls": r[2],
+                 "first_seen": r[3], "last_seen": r[4]}
+                for r in rows
+            ])
+
         elif self.path == "/bots":
             rows = _query(
                 """SELECT address, total_revert_count, is_deployer, first_seen, last_seen
