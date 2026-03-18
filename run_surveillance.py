@@ -4,6 +4,7 @@ import sqlite3
 import subprocess
 import sys
 import threading
+from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 DB_PATH = "/app/surveillance/data/surveillance.db"
@@ -124,8 +125,115 @@ class StatsHandler(BaseHTTPRequestHandler):
         else:
             self._json(404, {
                 "error": "not found",
-                "endpoints": ["/stats", "/suspected", "/priority", "/bots", "/health"],
+                "endpoints": ["/stats", "/suspected", "/priority", "/bots",
+                              "/health", "/tx-events"],
             })
+
+    def do_POST(self):
+        """Write endpoints for remote database updates."""
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length) if content_length else b"{}"
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            self._json(400, {"error": "invalid JSON"})
+            return
+
+        # Simple auth: require a token from env var
+        token = os.environ.get("ADMIN_TOKEN", "")
+        auth = self.headers.get("Authorization", "")
+        if not token or auth != f"Bearer {token}":
+            self._json(403, {"error": "forbidden"})
+            return
+
+        if self.path == "/admin/deployer-notes":
+            # Update deployment_pattern_notes for a deployer
+            addr = data.get("address", "").lower()
+            notes = data.get("notes", "")
+            if not addr or not notes:
+                self._json(400, {"error": "address and notes required"})
+                return
+            con = sqlite3.connect(DB_PATH)
+            con.execute(
+                "UPDATE deployers SET deployment_pattern_notes = ? WHERE deployer_address = ?",
+                (notes, addr),
+            )
+            con.commit()
+            changed = con.total_changes
+            con.close()
+            self._json(200, {"updated": changed, "address": addr})
+
+        elif self.path == "/admin/bot-candidate":
+            # Upsert a bot candidate manually
+            addr = data.get("address", "").lower()
+            notes = data.get("notes", "")
+            reverts = data.get("reverts", 0)
+            if not addr:
+                self._json(400, {"error": "address required"})
+                return
+            con = sqlite3.connect(DB_PATH)
+            now = datetime.now(timezone.utc).isoformat()
+            con.execute(
+                """INSERT INTO bot_candidates (address, first_seen, last_seen, total_revert_count, is_deployer)
+                   VALUES (?, ?, ?, ?, 0)
+                   ON CONFLICT(address) DO UPDATE SET
+                       last_seen = ?, total_revert_count = total_revert_count + ?""",
+                (addr, now, now, reverts, now, reverts),
+            )
+            # Check deployer cross-ref
+            is_dep = con.execute(
+                "SELECT 1 FROM deployers WHERE deployer_address = ?", (addr,)
+            ).fetchone()
+            if is_dep:
+                con.execute("UPDATE bot_candidates SET is_deployer = 1 WHERE address = ?", (addr,))
+            con.commit()
+            con.close()
+            self._json(200, {"upserted": addr, "notes": notes})
+
+        elif self.path == "/admin/flag-address":
+            # Add an investigation note to a deployer (create if needed)
+            addr = data.get("address", "").lower()
+            notes = data.get("notes", "")
+            if not addr or not notes:
+                self._json(400, {"error": "address and notes required"})
+                return
+            con = sqlite3.connect(DB_PATH)
+            now = datetime.now(timezone.utc).isoformat()
+            # Ensure deployer row exists
+            con.execute(
+                """INSERT INTO deployers (deployer_address, chain, first_seen, last_seen,
+                       total_contracts_deployed, deployment_pattern_notes)
+                   VALUES (?, 'arbitrum', ?, ?, 0, ?)
+                   ON CONFLICT(deployer_address) DO UPDATE SET
+                       deployment_pattern_notes = ?""",
+                (addr, now, now, notes, notes),
+            )
+            con.commit()
+            con.close()
+            self._json(200, {"flagged": addr})
+
+        elif self.path == "/admin/upgrade-contracts":
+            # Upgrade all contracts from a deployer to a new tier
+            deployer = data.get("deployer", "").lower()
+            tier = data.get("tier", "suspected")
+            reason = data.get("reason", "")
+            if not deployer or not reason:
+                self._json(400, {"error": "deployer and reason required"})
+                return
+            con = sqlite3.connect(DB_PATH)
+            now = datetime.now(timezone.utc).isoformat()
+            con.execute(
+                """UPDATE contracts SET confidence_tier = ?, confidence_reason = ?, last_updated = ?
+                   WHERE deployer_address = ? AND confidence_tier != 'confirmed'""",
+                (tier, reason, now, deployer),
+            )
+            changed = con.total_changes
+            con.commit()
+            con.close()
+            self._json(200, {"upgraded": changed, "deployer": deployer, "tier": tier})
+
+        else:
+            self._json(404, {"error": "unknown admin endpoint"})
 
     def _json(self, code, data):
         self.send_response(code)
