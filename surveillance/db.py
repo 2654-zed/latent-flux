@@ -171,6 +171,13 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
         conn.execute("ALTER TABLE deployers ADD COLUMN funding_trail TEXT")
         conn.commit()
 
+    # Migration: add entity_type to deployers
+    try:
+        conn.execute("SELECT entity_type FROM deployers LIMIT 1")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE deployers ADD COLUMN entity_type TEXT DEFAULT 'unknown'")
+        conn.commit()
+
     # Migration: add selector_cluster column to bot_candidates
     try:
         conn.execute("SELECT selector_cluster FROM bot_candidates LIMIT 1")

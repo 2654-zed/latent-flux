@@ -537,6 +537,29 @@ class StatsHandler(BaseHTTPRequestHandler):
             con.close()
             self._json(200, {"updated": addr})
 
+        elif self.path == "/admin/entity-type":
+            # Batch update entity_type for multiple addresses
+            updates = data.get("updates", {})  # {address: entity_type}
+            if not updates:
+                self._json(400, {"error": "updates dict required: {address: entity_type}"})
+                return
+            con = sqlite3.connect(DB_PATH)
+            now = datetime.now(timezone.utc).isoformat()
+            count = 0
+            for addr, etype in updates.items():
+                # Ensure deployer row exists
+                con.execute(
+                    """INSERT INTO deployers (deployer_address, chain, first_seen, last_seen,
+                           total_contracts_deployed, entity_type)
+                       VALUES (?, 'arbitrum', ?, ?, 0, ?)
+                       ON CONFLICT(deployer_address) DO UPDATE SET entity_type = ?""",
+                    (addr.lower(), now, now, etype, etype),
+                )
+                count += 1
+            con.commit()
+            con.close()
+            self._json(200, {"updated": count})
+
         elif self.path == "/admin/check-verification":
             # Check contract verification for suspected contracts
             if not ALCHEMY_HTTP:
