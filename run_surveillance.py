@@ -105,6 +105,15 @@ class StatsHandler(BaseHTTPRequestHandler):
                 })
             stats["clusters"] = clusters
 
+            # Recent alerts
+            alert_rows = c.execute(
+                "SELECT alert_type, address, tx_hash, timestamp FROM alerts ORDER BY id DESC LIMIT 5"
+            ).fetchall()
+            stats["recent_alerts"] = [
+                {"type": r[0], "address": r[1], "tx": r[2], "timestamp": r[3]}
+                for r in alert_rows
+            ]
+
             con.close()
             self._json(200, stats)
 
@@ -636,6 +645,55 @@ class StatsHandler(BaseHTTPRequestHandler):
             result = asyncio.run(_run())
             self._json(200, result)
 
+        elif self.path == "/admin/register-webhook":
+            # Register Alchemy Notify webhooks from inside Railway
+            alchemy_token = os.environ.get("ALCHEMY_AUTH_TOKEN", "")
+            if not alchemy_token:
+                self._json(500, {"error": "ALCHEMY_AUTH_TOKEN not set"})
+                return
+
+            addresses = [a.lower() for a in data.get("addresses", [])]
+            webhook_url = data.get("webhook_url", "https://spypy.up.railway.app/webhook/alchemy")
+            network = data.get("network", "ARB_MAINNET")
+
+            if not addresses:
+                self._json(400, {"error": "addresses list required"})
+                return
+
+            import urllib.request
+            req_data = json.dumps({
+                "network": network,
+                "webhook_type": "ADDRESS_ACTIVITY",
+                "webhook_url": webhook_url,
+                "addresses": addresses,
+            }).encode()
+            req = urllib.request.Request(
+                "https://dashboard.alchemy.com/api/create-webhook",
+                data=req_data,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Alchemy-Token": alchemy_token,
+                },
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    result = json.loads(resp.read())
+                    # Store webhook config
+                    con = sqlite3.connect(DB_PATH)
+                    wh_id = result.get("data", {}).get("id", "")
+                    con.execute(
+                        """INSERT INTO alerts (alert_type, address, tx_hash, block_number, timestamp, payload)
+                           VALUES ('webhook_registered', ?, NULL, NULL, ?, ?)""",
+                        (json.dumps(addresses), datetime.now(timezone.utc).isoformat(),
+                         json.dumps(result)),
+                    )
+                    con.commit()
+                    con.close()
+                    self._json(200, {"webhook_id": wh_id, "addresses": addresses, "result": result})
+            except Exception as e:
+                self._json(500, {"error": str(e)})
+            return
+
         elif self.path == "/webhook/alchemy":
             # Alchemy Notify webhook receiver — no auth (Alchemy signs these)
             con = sqlite3.connect(DB_PATH)
@@ -649,8 +707,21 @@ class StatsHandler(BaseHTTPRequestHandler):
                 tx_hash = act.get("hash", "")
                 block = int(act.get("blockNum", "0x0"), 16) if act.get("blockNum") else None
 
-                # Determine alert type
-                alert_type = "address_activity"
+                # Classify alert type based on which watched address was involved
+                ALERT_RULES = {
+                    "0x326eebfc4bd6c7a799afc9359822eb79056ee681": "TRAP_FIRED",
+                    "0x693523aed717ab3203b6285cdf5d261b6463774e": "TRAP_FIRED",
+                    "0xe93d64f3fbc352131e79fc5578cbe44b66697f86": "OPERATOR_ACTIVE",
+                    "0xc6962004f452be9203591991d15f6b388e09e8d0": "CASHOUT_MOVEMENT",
+                    "0x79a2f71187dc9fd9b173781e6dd4ff9960f6f61b": "TRAP_FIRED",
+                    "0x74b9a8351bd725ca3edd654c9728873b8c6f051e": "TRAP_FIRED",
+                    "0x3f2cdae910cd13638e38b45881e7a4fc3a9fe320": "VICTIM_ACTIVE",
+                }
+                alert_type = (
+                    ALERT_RULES.get(to_addr) or
+                    ALERT_RULES.get(from_addr) or
+                    "address_activity"
+                )
                 address = to_addr or from_addr
 
                 con.execute(
