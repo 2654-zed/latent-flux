@@ -7,8 +7,13 @@ import threading
 from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
+import asyncio
+
 DB_PATH = "/app/surveillance/data/surveillance.db"
 PORT = int(os.environ.get("PORT", 8080))
+# Alchemy HTTP URL derived from WSS URL
+_wss = os.environ.get("ARB_WSS_URL", "")
+ALCHEMY_HTTP = _wss.replace("wss://", "https://") if _wss else ""
 
 
 def _query(sql, fetchone=False):
@@ -264,11 +269,58 @@ class StatsHandler(BaseHTTPRequestHandler):
                 ],
             })
 
+        elif self.path == "/verification":
+            rows = _query(
+                """SELECT cv.contract_address, cv.has_code, cv.code_size, cv.is_proxy,
+                          c.confidence_tier, c.deployer_address
+                   FROM contract_verification cv
+                   JOIN contracts c ON cv.contract_address = c.contract_address
+                   ORDER BY cv.code_size DESC"""
+            )
+            self._json(200, [
+                {"address": r[0], "has_code": bool(r[1]), "code_size": r[2],
+                 "is_proxy": bool(r[3]), "tier": r[4], "deployer": r[5]}
+                for r in rows
+            ])
+
+        elif self.path == "/funding-hops":
+            rows = _query(
+                """SELECT deployer_address, hop_number, source_address,
+                          transfer_type, value_eth, tx_hash, timestamp, is_exchange
+                   FROM funding_hops ORDER BY deployer_address, hop_number"""
+            )
+            self._json(200, [
+                {"deployer": r[0], "hop": r[1], "source": r[2], "type": r[3],
+                 "value_eth": r[4], "tx": r[5], "timestamp": r[6], "exchange": r[7]}
+                for r in rows
+            ])
+
+        elif self.path == "/traces":
+            rows = _query(
+                "SELECT tx_hash, from_address, to_address, summary, timestamp FROM traces ORDER BY timestamp DESC LIMIT 20"
+            )
+            self._json(200, [
+                {"tx": r[0], "from": r[1], "to": r[2], "summary": r[3], "timestamp": r[4]}
+                for r in rows
+            ])
+
+        elif self.path == "/alerts":
+            rows = _query(
+                "SELECT alert_type, address, tx_hash, block_number, timestamp FROM alerts ORDER BY timestamp DESC LIMIT 50"
+            )
+            self._json(200, [
+                {"type": r[0], "address": r[1], "tx": r[2], "block": r[3], "timestamp": r[4]}
+                for r in rows
+            ])
+
         else:
             self._json(404, {
                 "error": "not found",
                 "endpoints": ["/stats", "/suspected", "/priority", "/bots",
-                              "/health", "/tx-events"],
+                              "/health", "/tx-events", "/known-selectors",
+                              "/clusters", "/cluster-events", "/bot-deployers",
+                              "/bot-selectors", "/funding", "/funding-hops",
+                              "/verification", "/traces", "/alerts"],
             })
 
     def do_POST(self):
@@ -281,12 +333,16 @@ class StatsHandler(BaseHTTPRequestHandler):
             self._json(400, {"error": "invalid JSON"})
             return
 
-        # Simple auth: require a token from env var
-        token = os.environ.get("ADMIN_TOKEN", "")
-        auth = self.headers.get("Authorization", "")
-        if not token or auth != f"Bearer {token}":
-            self._json(403, {"error": "forbidden"})
-            return
+        # Webhook endpoint — no auth required (Alchemy pushes directly)
+        if self.path == "/webhook/alchemy":
+            pass  # handled below without auth
+        else:
+            # Admin endpoints require Bearer token
+            token = os.environ.get("ADMIN_TOKEN", "")
+            auth = self.headers.get("Authorization", "")
+            if not token or auth != f"Bearer {token}":
+                self._json(403, {"error": "forbidden"})
+                return
 
         if self.path == "/admin/deployer-notes":
             # Update deployment_pattern_notes for a deployer
@@ -471,6 +527,141 @@ class StatsHandler(BaseHTTPRequestHandler):
             con.commit()
             con.close()
             self._json(200, {"updated": addr})
+
+        elif self.path == "/admin/check-verification":
+            # Check contract verification for suspected contracts
+            if not ALCHEMY_HTTP:
+                self._json(500, {"error": "ALCHEMY_HTTP not configured"})
+                return
+            addr = data.get("address")
+            check_all = data.get("all", False)
+
+            async def _run():
+                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                from surveillance.intelligence import check_contract_verification, check_all_suspected
+                con = sqlite3.connect(DB_PATH)
+                if check_all:
+                    return await check_all_suspected(ALCHEMY_HTTP, con)
+                elif addr:
+                    return await check_contract_verification(ALCHEMY_HTTP, addr.lower(), con)
+                return {"error": "provide address or all=true"}
+
+            result = asyncio.run(_run())
+            self._json(200, result)
+
+        elif self.path == "/admin/trace-funding":
+            # Multi-hop funding trace
+            if not ALCHEMY_HTTP:
+                self._json(500, {"error": "ALCHEMY_HTTP not configured"})
+                return
+            addr = data.get("address")
+            all_priority = data.get("all_priority", False)
+
+            async def _run():
+                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                from surveillance.intelligence import trace_funding_hops
+                con = sqlite3.connect(DB_PATH)
+                if all_priority:
+                    deployers = con.execute(
+                        """SELECT deployer_address FROM deployers
+                           WHERE deployment_pattern_notes IS NOT NULL
+                             AND deployment_pattern_notes != ''"""
+                    ).fetchall()
+                    results = {}
+                    for row in deployers:
+                        hops = await trace_funding_hops(ALCHEMY_HTTP, row[0], con)
+                        results[row[0]] = hops
+                    return results
+                elif addr:
+                    return await trace_funding_hops(ALCHEMY_HTTP, addr.lower(), con)
+                return {"error": "provide address or all_priority=true"}
+
+            result = asyncio.run(_run())
+            self._json(200, result)
+
+        elif self.path == "/admin/trace-usdc":
+            # USDC withdrawal destination trace
+            if not ALCHEMY_HTTP:
+                self._json(500, {"error": "ALCHEMY_HTTP not configured"})
+                return
+            addr = data.get("address", "").lower()
+            if not addr:
+                self._json(400, {"error": "address required"})
+                return
+
+            async def _run():
+                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                from surveillance.intelligence import trace_usdc_withdrawals
+                con = sqlite3.connect(DB_PATH)
+                return await trace_usdc_withdrawals(ALCHEMY_HTTP, addr, con)
+
+            result = asyncio.run(_run())
+            self._json(200, result)
+
+        elif self.path == "/admin/trace-tx":
+            # Execution trace for a specific transaction
+            if not ALCHEMY_HTTP:
+                self._json(500, {"error": "ALCHEMY_HTTP not configured"})
+                return
+            tx_hash = data.get("tx_hash", "")
+            if not tx_hash:
+                self._json(400, {"error": "tx_hash required"})
+                return
+
+            async def _run():
+                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                from surveillance.intelligence import trace_transaction
+                con = sqlite3.connect(DB_PATH)
+                return await trace_transaction(ALCHEMY_HTTP, tx_hash, con)
+
+            result = asyncio.run(_run())
+            self._json(200, result)
+
+        elif self.path == "/admin/scan-bot":
+            # Retroactive bot history scan
+            if not ALCHEMY_HTTP:
+                self._json(500, {"error": "ALCHEMY_HTTP not configured"})
+                return
+            addr = data.get("address", "").lower()
+            if not addr:
+                self._json(400, {"error": "address required"})
+                return
+
+            async def _run():
+                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                from surveillance.intelligence import scan_bot_history
+                con = sqlite3.connect(DB_PATH)
+                return await scan_bot_history(ALCHEMY_HTTP, addr, con)
+
+            result = asyncio.run(_run())
+            self._json(200, result)
+
+        elif self.path == "/webhook/alchemy":
+            # Alchemy Notify webhook receiver — no auth (Alchemy signs these)
+            con = sqlite3.connect(DB_PATH)
+            now = datetime.now(timezone.utc).isoformat()
+            # Parse webhook payload
+            activity = data.get("event", {}).get("activity", [])
+            webhook_id = data.get("webhookId", "")
+            for act in activity:
+                from_addr = act.get("fromAddress", "").lower()
+                to_addr = act.get("toAddress", "").lower()
+                tx_hash = act.get("hash", "")
+                block = int(act.get("blockNum", "0x0"), 16) if act.get("blockNum") else None
+
+                # Determine alert type
+                alert_type = "address_activity"
+                address = to_addr or from_addr
+
+                con.execute(
+                    """INSERT INTO alerts (alert_type, address, tx_hash, block_number, timestamp, payload)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (alert_type, address, tx_hash, block, now, json.dumps(act)),
+                )
+            con.commit()
+            con.close()
+            self._json(200, {"received": len(activity)})
+            return  # webhook doesn't need admin auth
 
         else:
             self._json(404, {"error": "unknown admin endpoint"})

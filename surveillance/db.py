@@ -197,6 +197,67 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
             CREATE INDEX idx_clevents_address ON cluster_events(bot_address);
         """)
 
+    # Phase 2 migrations
+    for table, ddl in [
+        ("alerts", """
+            CREATE TABLE alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                alert_type TEXT NOT NULL,
+                address TEXT NOT NULL,
+                tx_hash TEXT,
+                block_number INTEGER,
+                timestamp TEXT NOT NULL,
+                payload TEXT
+            );
+            CREATE INDEX idx_alerts_address ON alerts(address);
+            CREATE INDEX idx_alerts_type ON alerts(alert_type);
+        """),
+        ("funding_hops", """
+            CREATE TABLE funding_hops (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                deployer_address TEXT NOT NULL,
+                hop_number INTEGER NOT NULL,
+                source_address TEXT NOT NULL,
+                transfer_type TEXT,
+                value_eth REAL,
+                tx_hash TEXT,
+                block_number INTEGER,
+                timestamp TEXT,
+                is_exchange TEXT,
+                notes TEXT,
+                UNIQUE(deployer_address, hop_number, source_address)
+            );
+            CREATE INDEX idx_fhops_deployer ON funding_hops(deployer_address);
+            CREATE INDEX idx_fhops_source ON funding_hops(source_address);
+        """),
+        ("traces", """
+            CREATE TABLE traces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tx_hash TEXT NOT NULL UNIQUE,
+                block_number INTEGER,
+                from_address TEXT,
+                to_address TEXT,
+                trace_json TEXT NOT NULL,
+                summary TEXT,
+                timestamp TEXT NOT NULL
+            );
+        """),
+        ("contract_verification", """
+            CREATE TABLE contract_verification (
+                contract_address TEXT PRIMARY KEY,
+                has_code INTEGER NOT NULL,
+                code_size INTEGER,
+                is_proxy INTEGER DEFAULT 0,
+                checked_at TEXT NOT NULL
+            );
+        """),
+    ]:
+        cursor = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        )
+        if cursor.fetchone() is None:
+            conn.executescript(ddl)
+
     return conn
 
 
