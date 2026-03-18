@@ -1,14 +1,18 @@
 """
-Layer 3 -- Pattern Scanner
+Layer 3 -- Pattern Scanner (v2)
 
-Identifies treasury-pattern addresses on Arbitrum by checking for
-the gas-seed + capital-allocate + profit-return signature.
+Systematic detection of treasury-pattern addresses on Arbitrum.
 
-Cannot scan the entire chain (no enumerate endpoint). Instead:
-1. Seeds from known addresses in our database (deployer funders,
-   counterparties from operator traces)
-2. Validates each candidate against the treasury pattern
-3. Cross-references against our contracts table
+Strategy: We can't enumerate the chain, so we mine seed addresses from:
+1. Our deployment monitor's deployer table — trace each deployer's funder
+2. Our operator's USDC counterparties
+3. Bot candidates that are also deployers
+4. Any address that appears in multiple roles
+
+Three passes:
+  Pass 1: Treasury detection (gas-seed + capital-allocate + profit-return)
+  Pass 2: Operator validation (funded address deployed contracts?)
+  Pass 3: Vanity address check (shared prefixes = same entity)
 
 Run: python3 -m surveillance.pattern_scanner
 """
@@ -18,6 +22,7 @@ import json
 import os
 import sqlite3
 import sys
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -37,11 +42,25 @@ from surveillance import db
 HTTP_URL = os.environ.get("ARB_WSS_URL", "").replace("wss://", "https://")
 USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
 
+RATE_LIMIT = 0.2  # 200ms between Alchemy calls
 
-async def get_transfers(addr, direction, cats, contract_addrs=None, max_count=100):
+
+async def _alchemy(params):
+    """Single alchemy_getAssetTransfers call with rate limiting."""
+    payload = {"jsonrpc": "2.0", "id": 1, "method": "alchemy_getAssetTransfers", "params": [params]}
+    async with aiohttp.ClientSession() as s:
+        async with s.post(HTTP_URL, json=payload, timeout=45) as r:
+            data = (await r.json()).get("result", {})
+            await asyncio.sleep(RATE_LIMIT)
+            return data.get("transfers", []), data.get("pageKey")
+
+
+async def get_transfers(addr, direction, cats, contract_addrs=None, max_results=200):
+    """Paginated transfer fetch."""
+    all_t = []
     params = {
         "fromBlock": "0x0", "toBlock": "latest",
-        "category": cats, "maxCount": hex(max_count),
+        "category": cats, "maxCount": hex(min(max_results, 1000)),
         "order": "desc", "withMetadata": True,
     }
     if direction == "from":
@@ -51,271 +70,250 @@ async def get_transfers(addr, direction, cats, contract_addrs=None, max_count=10
     if contract_addrs:
         params["contractAddresses"] = contract_addrs
 
-    async with aiohttp.ClientSession() as s:
-        async with s.post(HTTP_URL, json={
-            "jsonrpc": "2.0", "id": 1,
-            "method": "alchemy_getAssetTransfers", "params": [params]
-        }, timeout=30) as r:
-            data = (await r.json()).get("result", {})
-            return data.get("transfers", [])
+    transfers, pk = await _alchemy(params)
+    all_t.extend(transfers)
+    while pk and len(all_t) < max_results:
+        params["pageKey"] = pk
+        transfers, pk = await _alchemy(params)
+        all_t.extend(transfers)
+
+    return all_t[:max_results]
 
 
-async def check_treasury_pattern(addr):
-    """
-    Check if an address exhibits the treasury pattern:
-    1. Sent ETH to 3+ addresses (0.005-0.1 each) = gas seeding
-    2. Sent USDC to those same addresses = capital allocation
-    3. Received USDC back from at least one = profit return
+# ---------------------------------------------------------------
+# SEED GENERATION — find addresses worth checking
+# ---------------------------------------------------------------
 
-    Returns (is_match, evidence_dict)
-    """
-    evidence = {
-        "address": addr,
-        "gas_seeds": [],
-        "usdc_allocations": [],
-        "usdc_returns": [],
-        "funded_addresses": set(),
-        "usdc_recipients": set(),
-        "usdc_returners": set(),
-    }
+async def generate_seeds(conn) -> set:
+    """Build the set of candidate addresses to check for treasury pattern."""
+    seeds = set()
 
-    # 1. ETH outbound (recent 200 txs)
-    eth_out = await get_transfers(addr, "from", ["external"], max_count=200)
-    for t in eth_out:
-        val = float(t.get("value") or 0)
-        to = (t.get("to") or "").lower()
-        if 0.005 <= val <= 0.1 and to:
-            evidence["gas_seeds"].append({
-                "to": to, "eth": val,
-                "ts": t.get("metadata", {}).get("blockTimestamp", ""),
-            })
-            evidence["funded_addresses"].add(to)
-
-    if len(evidence["funded_addresses"]) < 3:
-        return False, evidence
-
-    # 2. USDC outbound
-    usdc_out = await get_transfers(addr, "from", ["erc20"], [USDC], max_count=200)
-    for t in usdc_out:
-        val = float(t.get("value") or 0)
-        to = (t.get("to") or "").lower()
-        if val > 0 and to:
-            evidence["usdc_allocations"].append({
-                "to": to, "usdc": val,
-                "ts": t.get("metadata", {}).get("blockTimestamp", ""),
-            })
-            evidence["usdc_recipients"].add(to)
-
-    # Check overlap: gas-seeded addresses that also got USDC
-    overlap = evidence["funded_addresses"] & evidence["usdc_recipients"]
-    if not overlap:
-        return False, evidence
-
-    # 3. USDC inbound — profit returns
-    usdc_in = await get_transfers(addr, "to", ["erc20"], [USDC], max_count=200)
-    for t in usdc_in:
-        val = float(t.get("value") or 0)
-        fr = (t.get("from") or "").lower()
-        if val > 0 and fr:
-            evidence["usdc_returns"].append({
-                "from": fr, "usdc": val,
-                "ts": t.get("metadata", {}).get("blockTimestamp", ""),
-            })
-            evidence["usdc_returners"].add(fr)
-
-    # Check: did any USDC come back from an address we funded?
-    return_overlap = evidence["usdc_recipients"] & evidence["usdc_returners"]
-    if not return_overlap:
-        return False, evidence
-
-    # Check profit: any returner sent back more than they received?
-    sent_to = {}
-    for a in evidence["usdc_allocations"]:
-        to = a["to"]
-        sent_to[to] = sent_to.get(to, 0) + a["usdc"]
-    recv_from = {}
-    for a in evidence["usdc_returns"]:
-        fr = a["from"]
-        recv_from[fr] = recv_from.get(fr, 0) + a["usdc"]
-
-    has_profit = False
-    for addr_funded in return_overlap:
-        sent = sent_to.get(addr_funded, 0)
-        received = recv_from.get(addr_funded, 0)
-        if received > sent:
-            has_profit = True
-            evidence["profit_from"] = {
-                "address": addr_funded,
-                "sent": sent,
-                "received": received,
-                "profit": received - sent,
-            }
-            break
-
-    # Convert sets to lists for JSON
-    evidence["funded_addresses"] = list(evidence["funded_addresses"])
-    evidence["usdc_recipients"] = list(evidence["usdc_recipients"])
-    evidence["usdc_returners"] = list(evidence["usdc_returners"])
-
-    # Determine confidence
-    gas_count = len(evidence["funded_addresses"])
-    usdc_overlap = len(overlap)
-    confidence = "low"
-    if gas_count >= 5 and usdc_overlap >= 3 and has_profit:
-        confidence = "high"
-    elif gas_count >= 3 and usdc_overlap >= 2 and has_profit:
-        confidence = "medium"
-    elif gas_count >= 3 and usdc_overlap >= 1:
-        confidence = "low"
-
-    evidence["confidence"] = confidence
-    evidence["gas_seed_count"] = gas_count
-    evidence["usdc_overlap_count"] = len(overlap)
-    evidence["has_profit_return"] = has_profit
-
-    is_match = gas_count >= 3 and len(overlap) >= 1
-    return is_match, evidence
-
-
-def check_vanity_prefixes(addresses):
-    """Check if 2+ addresses share a 4+ char prefix (after 0x)."""
-    prefixes = {}
-    for addr in addresses:
-        if not addr or len(addr) < 10:
-            continue
-        prefix4 = addr[2:6].lower()  # first 4 hex chars after 0x
-        prefix6 = addr[2:8].lower()  # first 6 hex chars after 0x
-        prefixes.setdefault(prefix4, []).append(addr)
-
-    vanity_groups = {}
-    for prefix, addrs in prefixes.items():
-        if len(addrs) >= 2:
-            vanity_groups[prefix] = addrs
-
-    return vanity_groups
-
-
-async def scan_from_deployer_funders(conn):
-    """
-    Phase 1 seed: check funding sources of our known deployers.
-    Any deployer's funder could be a treasury.
-    """
-    print("=" * 60)
-    print("PHASE 1: Scanning deployer funding sources")
-    print("=" * 60)
-
-    # Get all deployers with funding_trail
+    # Source 1: All deployer funding sources from our DB
     rows = conn.execute(
         "SELECT deployer_address, funding_trail FROM deployers WHERE funding_trail IS NOT NULL"
     ).fetchall()
-
-    funder_addresses = set()
     for row in rows:
         try:
             trail = json.loads(row[1])
             src = trail.get("funding_source", "")
             if src and len(src) == 42:
-                funder_addresses.add(src.lower())
+                seeds.add(src.lower())
         except (json.JSONDecodeError, TypeError):
             pass
 
-    # Also get unique USDC sources from the operator trace
-    # (addresses that sent USDC to the confirmed operator)
-    operator = "0xe93d64f3fbc352131e79fc5578cbe44b66697f86"
-    op_usdc_in = await get_transfers(operator, "to", ["erc20"], [USDC], max_count=50)
-    for t in op_usdc_in:
-        fr = (t.get("from") or "").lower()
-        if fr and len(fr) == 42 and fr != operator:
-            funder_addresses.add(fr)
-
-    # Add the known treasury for validation
-    funder_addresses.add("0xf186cb00e49e18491db5783ff04fae3818102ff7")
-
-    print(f"Candidate addresses to check: {len(funder_addresses)}")
-    print()
-
-    matches = []
-    for i, addr in enumerate(funder_addresses):
-        print(f"[{i+1}/{len(funder_addresses)}] Checking {addr[:18]}...", end=" ", flush=True)
+    # Source 2: For deployers WITHOUT funding_trail, trace their funder live
+    untraced = conn.execute(
+        "SELECT deployer_address FROM deployers WHERE funding_trail IS NULL LIMIT 50"
+    ).fetchall()
+    print(f"Tracing funding for {len(untraced)} untraced deployers...")
+    for i, row in enumerate(untraced):
+        addr = row[0]
         try:
-            is_match, evidence = await check_treasury_pattern(addr)
-            if is_match:
-                conf = evidence.get("confidence", "low")
-                gas = evidence.get("gas_seed_count", 0)
-                profit = evidence.get("has_profit_return", False)
-                print(f"MATCH [{conf}] gas_seeds={gas} profit={profit}")
-
-                # Store in DB
-                conn.execute(
-                    """INSERT OR REPLACE INTO pattern_matches
-                       (address, pattern_type, evidence, first_seen, last_seen, confidence, status)
-                       VALUES (?, 'treasury_pattern', ?, ?, ?, ?, 'candidate')""",
-                    (addr, json.dumps(evidence, default=str),
-                     datetime.now(timezone.utc).isoformat(),
-                     datetime.now(timezone.utc).isoformat(),
-                     conf),
-                )
-                conn.commit()
-                matches.append((addr, evidence))
-            else:
-                gas = len(evidence.get("funded_addresses", []))
-                print(f"no match (gas_seeds={gas})")
+            inbound = await get_transfers(addr, "to", ["external", "internal"], max_results=5)
+            for t in inbound:
+                val = float(t.get("value") or 0)
+                if val > 0:
+                    funder = (t.get("from") or "").lower()
+                    if funder and len(funder) == 42:
+                        seeds.add(funder)
+                        # Store the funding trail
+                        trail = json.dumps({
+                            "funding_source": funder,
+                            "value_eth": val,
+                            "method": "pattern_scanner_trace",
+                        })
+                        db.update_deployer_funding(conn, addr, trail)
+                    break
         except Exception as e:
-            print(f"error: {e}")
-        await asyncio.sleep(0.2)
+            pass
+        if (i + 1) % 10 == 0:
+            print(f"  traced {i+1}/{len(untraced)}")
 
-    return matches
+    # Source 3: USDC counterparties of confirmed operators
+    operators = conn.execute(
+        "SELECT deployer_address FROM deployers WHERE entity_type = 'operator'"
+    ).fetchall()
+    for row in operators:
+        op = row[0]
+        usdc_in = await get_transfers(op, "to", ["erc20"], [USDC], max_results=50)
+        for t in usdc_in:
+            fr = (t.get("from") or "").lower()
+            if fr and len(fr) == 42 and fr != op:
+                seeds.add(fr)
 
+    # Source 4: Bot candidates that are deployers
+    rows = conn.execute(
+        "SELECT address FROM bot_candidates WHERE is_deployer = 1"
+    ).fetchall()
+    for row in rows:
+        seeds.add(row[0].lower())
 
-async def validate_matches(conn, matches):
-    """Phase 2: Check if treasury candidates funded contract deployers."""
-    print()
-    print("=" * 60)
-    print("PHASE 2: Validating treasury candidates")
-    print("=" * 60)
+    # Remove addresses we've already classified
+    known = set()
+    for row in conn.execute("SELECT deployer_address, entity_type FROM deployers WHERE entity_type IS NOT NULL").fetchall():
+        if row[1] in ("treasury", "operator", "cashout", "protocol"):
+            known.add(row[0].lower())
+    seeds -= known
 
-    our_deployers = set()
-    rows = conn.execute("SELECT deployer_address FROM deployers").fetchall()
-    for r in rows:
-        our_deployers.add(r[0].lower())
-
-    our_contracts = set()
-    rows = conn.execute("SELECT contract_address FROM contracts").fetchall()
-    for r in rows:
-        our_contracts.add(r[0].lower())
-
-    for addr, evidence in matches:
-        print(f"\nValidating: {addr[:18]}...")
-        funded = set(evidence.get("funded_addresses", []) + evidence.get("usdc_recipients", []))
-
-        # Check overlap with our deployers
-        deployer_overlap = funded & our_deployers
-        if deployer_overlap:
-            print(f"  DEPLOYER OVERLAP: {len(deployer_overlap)} addresses")
-            for d in deployer_overlap:
-                contracts = conn.execute(
-                    "SELECT COUNT(*) FROM contracts WHERE deployer_address = ?", (d,)
-                ).fetchone()[0]
-                tier = conn.execute(
-                    "SELECT confidence_tier, COUNT(*) FROM contracts WHERE deployer_address = ? GROUP BY confidence_tier",
-                    (d,),
-                ).fetchall()
-                print(f"    {d}: {contracts} contracts, tiers={dict(tier)}")
-
-        # Check vanity prefixes
-        vanity = check_vanity_prefixes(list(funded))
-        if vanity:
-            print(f"  VANITY GROUPS: {len(vanity)}")
-            for prefix, addrs in vanity.items():
-                print(f"    0x{prefix}...: {len(addrs)} addresses")
-                for a in addrs[:5]:
-                    print(f"      {a}")
+    return seeds
 
 
-async def main():
+# ---------------------------------------------------------------
+# PASS 1 — Treasury detection
+# ---------------------------------------------------------------
+
+async def check_treasury_pattern(addr) -> tuple[bool, dict]:
+    """
+    Check if an address exhibits the treasury pattern:
+    1. Sent ETH to 3+ addresses (0.003-0.1 each) = gas seeding
+    2. Sent USDC to any of those same addresses = capital allocation
+    3. Received USDC back from at least one in larger amount = profit return
+    """
+    evidence = {
+        "address": addr,
+        "funded_addresses": [],
+        "usdc_recipients": [],
+        "usdc_returners": [],
+        "gas_seed_count": 0,
+        "usdc_overlap_count": 0,
+        "has_profit_return": False,
+        "confidence": "none",
+    }
+
+    # Step 1: ETH outbound — find gas seeds
+    eth_out = await get_transfers(addr, "from", ["external"], max_results=200)
+    funded = set()
+    for t in eth_out:
+        val = float(t.get("value") or 0)
+        to = (t.get("to") or "").lower()
+        if 0.003 <= val <= 0.1 and to:
+            funded.add(to)
+
+    evidence["funded_addresses"] = list(funded)
+    evidence["gas_seed_count"] = len(funded)
+
+    if len(funded) < 3:
+        return False, evidence
+
+    # Step 2: USDC outbound — capital allocation
+    usdc_out = await get_transfers(addr, "from", ["erc20"], [USDC], max_results=200)
+    usdc_recip = set()
+    sent_to = defaultdict(float)
+    for t in usdc_out:
+        val = float(t.get("value") or 0)
+        to = (t.get("to") or "").lower()
+        if val > 0 and to:
+            usdc_recip.add(to)
+            sent_to[to] += val
+
+    evidence["usdc_recipients"] = list(usdc_recip)
+    overlap = funded & usdc_recip
+    evidence["usdc_overlap_count"] = len(overlap)
+
+    if not overlap:
+        return False, evidence
+
+    # Step 3: USDC inbound — profit returns
+    usdc_in = await get_transfers(addr, "to", ["erc20"], [USDC], max_results=200)
+    returners = set()
+    recv_from = defaultdict(float)
+    for t in usdc_in:
+        val = float(t.get("value") or 0)
+        fr = (t.get("from") or "").lower()
+        if val > 0 and fr:
+            returners.add(fr)
+            recv_from[fr] += val
+
+    evidence["usdc_returners"] = list(returners)
+    return_overlap = usdc_recip & returners
+
+    # Check for profit (received > sent from any funded address)
+    for addr_funded in return_overlap:
+        sent = sent_to.get(addr_funded, 0)
+        received = recv_from.get(addr_funded, 0)
+        if received > sent:
+            evidence["has_profit_return"] = True
+            evidence["profit_example"] = {
+                "address": addr_funded,
+                "sent": round(sent, 2),
+                "received": round(received, 2),
+                "profit": round(received - sent, 2),
+            }
+            break
+
+    # Confidence scoring
+    gc = evidence["gas_seed_count"]
+    oc = evidence["usdc_overlap_count"]
+    profit = evidence["has_profit_return"]
+    if gc >= 5 and oc >= 3 and profit:
+        evidence["confidence"] = "high"
+    elif gc >= 3 and oc >= 2 and profit:
+        evidence["confidence"] = "medium"
+    elif gc >= 3 and oc >= 1:
+        evidence["confidence"] = "low"
+
+    is_match = gc >= 3 and oc >= 1
+    return is_match, evidence
+
+
+# ---------------------------------------------------------------
+# PASS 2 — Operator validation
+# ---------------------------------------------------------------
+
+async def validate_operators(conn, treasury_addr, funded_addresses):
+    """Check if any funded address deployed contracts in our DB."""
+    our_deployers = {r[0].lower() for r in conn.execute("SELECT deployer_address FROM deployers").fetchall()}
+    our_contracts = {r[0].lower() for r in conn.execute("SELECT contract_address FROM contracts").fetchall()}
+
+    results = {
+        "deployer_matches": [],
+        "contract_matches": [],
+    }
+
+    funded_set = set(a.lower() for a in funded_addresses)
+    deployer_overlap = funded_set & our_deployers
+
+    for dep in deployer_overlap:
+        contracts = conn.execute(
+            "SELECT contract_address, confidence_tier FROM contracts WHERE deployer_address = ?",
+            (dep,),
+        ).fetchall()
+        tiers = defaultdict(int)
+        for c in contracts:
+            tiers[c[1]] += 1
+        results["deployer_matches"].append({
+            "deployer": dep,
+            "contracts": len(contracts),
+            "tiers": dict(tiers),
+        })
+
+    return results
+
+
+# ---------------------------------------------------------------
+# PASS 3 — Vanity address check
+# ---------------------------------------------------------------
+
+def check_vanity(addresses):
+    """Find addresses sharing 4+ char prefixes."""
+    by_prefix = defaultdict(list)
+    for addr in addresses:
+        if not addr or len(addr) < 10:
+            continue
+        p = addr[2:6].lower()
+        by_prefix[p].append(addr)
+
+    return {k: v for k, v in by_prefix.items() if len(v) >= 2}
+
+
+# ---------------------------------------------------------------
+# MAIN ORCHESTRATOR
+# ---------------------------------------------------------------
+
+async def run_scan():
     conn = db.init_db()
 
-    # Ensure pattern_matches table exists
+    # Ensure table exists
     conn.execute("""
         CREATE TABLE IF NOT EXISTS pattern_matches (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -330,27 +328,141 @@ async def main():
     """)
     conn.commit()
 
-    matches = await scan_from_deployer_funders(conn)
+    # Generate seeds
+    print("=" * 60)
+    print("GENERATING SEED ADDRESSES")
+    print("=" * 60)
+    seeds = await generate_seeds(conn)
+    print(f"\nTotal seed addresses: {len(seeds)}")
 
+    # PASS 1: Treasury detection
+    print()
+    print("=" * 60)
+    print("PASS 1: TREASURY DETECTION")
+    print("=" * 60)
+
+    matches = []
+    batch_size = 10
+    seed_list = list(seeds)
+
+    for batch_start in range(0, len(seed_list), batch_size):
+        batch = seed_list[batch_start:batch_start + batch_size]
+        for addr in batch:
+            short = addr[:18] + "..."
+            try:
+                is_match, evidence = await check_treasury_pattern(addr)
+                gc = evidence["gas_seed_count"]
+                if is_match:
+                    conf = evidence["confidence"]
+                    print(f"  MATCH [{conf}]: {short} gas={gc} overlap={evidence['usdc_overlap_count']} profit={evidence['has_profit_return']}")
+                    now = datetime.now(timezone.utc).isoformat()
+                    conn.execute(
+                        """INSERT OR REPLACE INTO pattern_matches
+                           (address, pattern_type, evidence, first_seen, last_seen, confidence, status)
+                           VALUES (?, 'treasury_candidate', ?, ?, ?, ?, 'candidate')""",
+                        (addr, json.dumps(evidence, default=str), now, now, conf),
+                    )
+                    conn.commit()
+                    matches.append((addr, evidence))
+                elif gc > 0:
+                    print(f"  partial: {short} gas={gc} (need 3+)")
+                # else: silent skip
+            except Exception as e:
+                print(f"  error: {short} {e}")
+
+        processed = min(batch_start + batch_size, len(seed_list))
+        print(f"  [{processed}/{len(seed_list)}] processed")
+
+    print(f"\nPass 1 complete: {len(matches)} treasury candidates found")
+
+    # PASS 2: Operator validation
     if matches:
-        await validate_matches(conn, matches)
-    else:
-        print("\nNo treasury-pattern matches found in seed addresses.")
+        print()
+        print("=" * 60)
+        print("PASS 2: OPERATOR VALIDATION")
+        print("=" * 60)
 
-    # Summary
+        for addr, evidence in matches:
+            funded = evidence.get("funded_addresses", []) + evidence.get("usdc_recipients", [])
+            results = await validate_operators(conn, addr, funded)
+
+            if results["deployer_matches"]:
+                print(f"\n  {addr[:18]}... -> DEPLOYER OVERLAP")
+                for dm in results["deployer_matches"]:
+                    print(f"    {dm['deployer']}: {dm['contracts']} contracts {dm['tiers']}")
+
+                # Upgrade to confirmed
+                conn.execute(
+                    "UPDATE pattern_matches SET status = 'treasury_confirmed' WHERE address = ?",
+                    (addr,),
+                )
+                conn.commit()
+
+                # Add operators to deployers table
+                for dm in results["deployer_matches"]:
+                    dep = dm["deployer"]
+                    existing = conn.execute(
+                        "SELECT entity_type FROM deployers WHERE deployer_address = ?", (dep,)
+                    ).fetchone()
+                    if existing and existing[0] in (None, "unknown"):
+                        conn.execute(
+                            "UPDATE deployers SET entity_type = 'operator_candidate' WHERE deployer_address = ?",
+                            (dep,),
+                        )
+                conn.commit()
+            else:
+                print(f"  {addr[:18]}... -> no deployer overlap")
+
+    # PASS 3: Vanity check
+    if matches:
+        print()
+        print("=" * 60)
+        print("PASS 3: VANITY ADDRESS CHECK")
+        print("=" * 60)
+
+        for addr, evidence in matches:
+            funded = list(set(
+                evidence.get("funded_addresses", []) + evidence.get("usdc_recipients", [])
+            ))
+            vanity = check_vanity(funded)
+            if vanity:
+                print(f"\n  {addr[:18]}... -> VANITY GROUPS DETECTED")
+                for prefix, addrs in vanity.items():
+                    print(f"    0x{prefix}...: {len(addrs)} addresses")
+                    for a in addrs[:5]:
+                        print(f"      {a}")
+
+                # Update evidence
+                evidence["vanity_groups"] = {k: v for k, v in vanity.items()}
+                conn.execute(
+                    "UPDATE pattern_matches SET evidence = ? WHERE address = ?",
+                    (json.dumps(evidence, default=str), addr),
+                )
+                conn.commit()
+            else:
+                print(f"  {addr[:18]}... -> no vanity groups")
+
+    # SUMMARY
     print()
     print("=" * 60)
     print("SCAN COMPLETE")
     print("=" * 60)
     total = conn.execute("SELECT COUNT(*) FROM pattern_matches").fetchone()[0]
-    high = conn.execute("SELECT COUNT(*) FROM pattern_matches WHERE confidence = 'high'").fetchone()[0]
-    med = conn.execute("SELECT COUNT(*) FROM pattern_matches WHERE confidence = 'medium'").fetchone()[0]
-    print(f"Total pattern matches: {total}")
-    print(f"  High confidence: {high}")
-    print(f"  Medium confidence: {med}")
+    confirmed = conn.execute("SELECT COUNT(*) FROM pattern_matches WHERE status = 'treasury_confirmed'").fetchone()[0]
+    candidates = conn.execute("SELECT COUNT(*) FROM pattern_matches WHERE status = 'candidate'").fetchone()[0]
+    print(f"Total matches:     {total}")
+    print(f"  Confirmed:       {confirmed}")
+    print(f"  Candidates:      {candidates}")
+
+    # Show all matches
+    rows = conn.execute(
+        "SELECT address, confidence, status FROM pattern_matches ORDER BY confidence DESC"
+    ).fetchall()
+    for r in rows:
+        print(f"  {r[0]}: [{r[1]}] {r[2]}")
 
     conn.close()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run_scan())
