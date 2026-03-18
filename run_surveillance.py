@@ -77,6 +77,21 @@ class StatsHandler(BaseHTTPRequestHandler):
                 for r in rows
             ])
 
+        elif self.path == "/tx-events":
+            rows = _query(
+                """SELECT contract_address, interacting_address, function_selector,
+                          bot_tag, gas_price_gwei, max_priority_fee_gwei, gas_pattern,
+                          block_number, timestamp, is_reverted, tx_hash
+                   FROM transaction_events ORDER BY block_number DESC LIMIT 100"""
+            )
+            self._json(200, [
+                {"contract": r[0], "interactor": r[1], "selector": r[2],
+                 "bot_tag": r[3], "gas_gwei": r[4], "priority_fee_gwei": r[5],
+                 "gas_pattern": r[6], "block": r[7], "timestamp": r[8],
+                 "reverted": bool(r[9]), "tx_hash": r[10]}
+                for r in rows
+            ])
+
         elif self.path == "/bots":
             rows = _query(
                 """SELECT address, total_revert_count, is_deployer, first_seen, last_seen
