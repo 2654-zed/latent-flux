@@ -30,6 +30,8 @@ logger = logging.getLogger("surveillance.classifier")
 OP_STOP = "00"
 OP_CALLER = "33"          # msg.sender
 OP_ORIGIN = "32"          # tx.origin
+OP_TIMESTAMP = "42"       # block.timestamp
+OP_NUMBER = "43"          # block.number
 OP_SLOAD = "54"           # storage read
 OP_SSTORE = "55"          # storage write
 OP_JUMPI = "57"           # conditional jump
@@ -40,6 +42,12 @@ OP_CALL = "f1"            # external call
 OP_CALLVALUE = "34"       # msg.value
 OP_EQ = "14"              # equality comparison
 OP_ISZERO = "15"          # zero check
+OP_GT = "11"              # greater than
+OP_LT = "10"              # less than
+OP_MUL = "02"             # multiply
+OP_DIV = "04"             # divide
+OP_SHA3 = "20"            # keccak256
+OP_MSTORE = "52"          # memory store
 
 # ERC-20 function selectors (first 4 bytes of keccak256)
 SEL_TRANSFER = "a9059cbb"          # transfer(address,uint256)
@@ -322,6 +330,96 @@ def detect_delegatecall_in_token(bytecode_hex: str) -> tuple[bool, str]:
     return False, ""
 
 
+def detect_timestamp_activation(bytecode_hex: str) -> tuple[bool, str]:
+    """
+    Time-lock delayed activation. TIMESTAMP/NUMBER -> GT/LT -> ISZERO -> JUMPI -> REVERT.
+    Contract allows transfers freely until a specific block/timestamp, then restricts.
+    """
+    has_transfer = SEL_TRANSFER in bytecode_hex or SEL_TRANSFER_FROM in bytecode_hex
+    if not has_transfer:
+        return False, ""
+
+    for time_op, time_name in [(OP_TIMESTAMP, "TIMESTAMP"), (OP_NUMBER, "NUMBER")]:
+        for cmp_op, cmp_name in [(OP_GT, "GT"), (OP_LT, "LT")]:
+            pairs = _opcodes_near(bytecode_hex, time_op, cmp_op, window_bytes=20)
+            for time_off, cmp_off in pairs:
+                jumpi_offsets = _find_all_offsets(bytecode_hex, OP_JUMPI)
+                for j in jumpi_offsets:
+                    if 0 < j - cmp_off <= 15:
+                        revert_offsets = _find_all_offsets(bytecode_hex, OP_REVERT)
+                        for r in revert_offsets:
+                            if 0 < r - j <= 50:
+                                return True, (
+                                    f"{time_name} at 0x{time_off:x} -> {cmp_name} at 0x{cmp_off:x} -> "
+                                    f"JUMPI at 0x{j:x} -> REVERT at 0x{r:x}: "
+                                    f"time-locked activation trap in transfer context"
+                                )
+    return False, ""
+
+
+def detect_origin_eoa_gate(bytecode_hex: str) -> tuple[bool, str]:
+    """
+    tx.origin == msg.sender check blocks smart contract callers (bots, routers)
+    while allowing retail EOA victims through. ORIGIN -> CALLER -> EQ pattern.
+    """
+    has_transfer = SEL_TRANSFER in bytecode_hex or SEL_TRANSFER_FROM in bytecode_hex
+    if not has_transfer:
+        return False, ""
+
+    # Pattern: ORIGIN followed by CALLER within 5 bytes, then EQ
+    origin_caller = _opcodes_near(bytecode_hex, OP_ORIGIN, OP_CALLER, window_bytes=5)
+    if not origin_caller:
+        return False, ""
+
+    for origin_off, caller_off in origin_caller:
+        eq_offsets = _find_all_offsets(bytecode_hex, OP_EQ)
+        for eq in eq_offsets:
+            if 0 < eq - caller_off <= 5:
+                jumpi_offsets = _find_all_offsets(bytecode_hex, OP_JUMPI)
+                for j in jumpi_offsets:
+                    if 0 < j - eq <= 10:
+                        return True, (
+                            f"ORIGIN at 0x{origin_off:x} -> CALLER at 0x{caller_off:x} -> "
+                            f"EQ at 0x{eq:x} -> JUMPI at 0x{j:x}: "
+                            f"tx.origin == msg.sender EOA gate - blocks bots/routers, "
+                            f"allows retail EOA victims"
+                        )
+    return False, ""
+
+
+def detect_obfuscated_fee(bytecode_hex: str) -> tuple[bool, str]:
+    """
+    Hidden tax via KECCAK256-keyed storage. MSTORE -> SHA3 -> SLOAD -> JUMPI -> MUL/DIV.
+    The KECCAK256 output is used as a storage pointer for a blacklist/fee mapping.
+    If the result gates arithmetic on the transfer amount, a concealed fee is present.
+    """
+    has_transfer = SEL_TRANSFER in bytecode_hex or SEL_TRANSFER_FROM in bytecode_hex
+    if not has_transfer:
+        return False, ""
+
+    # Look for SHA3 -> SLOAD -> JUMPI -> MUL or DIV chain
+    sha3_sload = _opcodes_near(bytecode_hex, OP_SHA3, OP_SLOAD, window_bytes=15)
+    if not sha3_sload:
+        return False, ""
+
+    for sha3_off, sload_off in sha3_sload:
+        jumpi_offsets = _find_all_offsets(bytecode_hex, OP_JUMPI)
+        for j in jumpi_offsets:
+            if 0 < j - sload_off <= 20:
+                # Check for MUL or DIV after the JUMPI (fee calculation)
+                for arith_op, arith_name in [(OP_MUL, "MUL"), (OP_DIV, "DIV")]:
+                    arith_offsets = _find_all_offsets(bytecode_hex, arith_op)
+                    for a in arith_offsets:
+                        if 0 < a - j <= 40:
+                            return True, (
+                                f"SHA3 at 0x{sha3_off:x} -> SLOAD at 0x{sload_off:x} -> "
+                                f"JUMPI at 0x{j:x} -> {arith_name} at 0x{a:x}: "
+                                f"KECCAK256-keyed storage lookup gates arithmetic on "
+                                f"transfer amount - obfuscated fee-on-transfer"
+                            )
+    return False, ""
+
+
 # =====================================================================
 # Pattern registry
 # =====================================================================
@@ -342,6 +440,9 @@ PATTERN_REGISTRY: list[tuple[str, callable, str | None]] = [
     ("hidden_fee", detect_hidden_fee, "has_unusual_fee_structure"),
     ("selfdestruct", detect_selfdestruct, None),
     ("delegatecall_in_token", detect_delegatecall_in_token, None),
+    ("timestamp_activation", detect_timestamp_activation, None),
+    ("origin_eoa_gate", detect_origin_eoa_gate, "has_asymmetric_transfer"),
+    ("obfuscated_fee", detect_obfuscated_fee, "has_unusual_fee_structure"),
 ]
 
 # Minimum number of patterns that must fire to upgrade to SUSPECTED.
