@@ -107,7 +107,7 @@ class StatsHandler(BaseHTTPRequestHandler):
 
             # Recent alerts
             alert_rows = c.execute(
-                "SELECT alert_type, address, tx_hash, timestamp FROM alerts ORDER BY id DESC LIMIT 5"
+                "SELECT alert_type, address, tx_hash, timestamp FROM alerts WHERE COALESCE(false_positive, 0) = 0 ORDER BY id DESC LIMIT 5"
             ).fetchall()
             stats["recent_alerts"] = [
                 {"type": r[0], "address": r[1], "tx": r[2], "timestamp": r[3]}
@@ -314,8 +314,11 @@ class StatsHandler(BaseHTTPRequestHandler):
             ])
 
         elif self.path == "/alerts":
+            # Exclude false positives by default
             rows = _query(
-                "SELECT alert_type, address, tx_hash, block_number, timestamp FROM alerts ORDER BY timestamp DESC LIMIT 50"
+                """SELECT alert_type, address, tx_hash, block_number, timestamp
+                   FROM alerts WHERE COALESCE(false_positive, 0) = 0
+                   ORDER BY id DESC LIMIT 50"""
             )
             self._json(200, [
                 {"type": r[0], "address": r[1], "tx": r[2], "block": r[3], "timestamp": r[4]}
@@ -537,6 +540,24 @@ class StatsHandler(BaseHTTPRequestHandler):
             con.close()
             self._json(200, {"updated": addr})
 
+        elif self.path == "/admin/mark-false-positive":
+            # Mark alerts as false positive by address
+            addresses = [a.lower() for a in data.get("addresses", [])]
+            if not addresses:
+                self._json(400, {"error": "addresses list required"})
+                return
+            con = sqlite3.connect(DB_PATH)
+            total = 0
+            for addr in addresses:
+                con.execute(
+                    "UPDATE alerts SET false_positive = 1 WHERE LOWER(address) = ?",
+                    (addr,),
+                )
+                total += con.total_changes
+            con.commit()
+            con.close()
+            self._json(200, {"marked": total, "addresses": addresses})
+
         elif self.path == "/admin/entity-type":
             # Batch update entity_type for multiple addresses
             updates = data.get("updates", {})  # {address: entity_type}
@@ -719,44 +740,54 @@ class StatsHandler(BaseHTTPRequestHandler):
 
         elif self.path == "/webhook/alchemy":
             # Alchemy Notify webhook receiver — no auth (Alchemy signs these)
+            # FILTERED: only log when a watched address is the direct from/to
+            ALERT_RULES = {
+                "0x326eebfc4bd6c7a799afc9359822eb79056ee681": "TRAP_FIRED",
+                "0x693523aed717ab3203b6285cdf5d261b6463774e": "TRAP_FIRED",
+                "0xe93d64f3fbc352131e79fc5578cbe44b66697f86": "OPERATOR_ACTIVE",
+                "0xc6962004f452be9203591991d15f6b388e09e8d0": "CASHOUT_MOVEMENT",
+                "0x79a2f71187dc9fd9b173781e6dd4ff9960f6f61b": "TRAP_FIRED",
+                "0x74b9a8351bd725ca3edd654c9728873b8c6f051e": "TRAP_FIRED",
+                "0x3f2cdae910cd13638e38b45881e7a4fc3a9fe320": "VICTIM_ACTIVE",
+                "0xfdaf1f1714810f8d88a57c9d551d442c68ace2bb": "LAUNDRY_PIPELINE",
+                "0x27920e8039d2b6e93e36f5d5f53b998e2e631a70": "LAUNDRY_PIPELINE",
+            }
+
             con = sqlite3.connect(DB_PATH)
             now = datetime.now(timezone.utc).isoformat()
-            # Parse webhook payload
             activity = data.get("event", {}).get("activity", [])
-            webhook_id = data.get("webhookId", "")
+            logged = 0
+            skipped = 0
+
             for act in activity:
                 from_addr = act.get("fromAddress", "").lower()
                 to_addr = act.get("toAddress", "").lower()
                 tx_hash = act.get("hash", "")
                 block = int(act.get("blockNum", "0x0"), 16) if act.get("blockNum") else None
 
-                # Classify alert type based on which watched address was involved
-                ALERT_RULES = {
-                    "0x326eebfc4bd6c7a799afc9359822eb79056ee681": "TRAP_FIRED",
-                    "0x693523aed717ab3203b6285cdf5d261b6463774e": "TRAP_FIRED",
-                    "0xe93d64f3fbc352131e79fc5578cbe44b66697f86": "OPERATOR_ACTIVE",
-                    "0xc6962004f452be9203591991d15f6b388e09e8d0": "CASHOUT_MOVEMENT",
-                    "0x79a2f71187dc9fd9b173781e6dd4ff9960f6f61b": "TRAP_FIRED",
-                    "0x74b9a8351bd725ca3edd654c9728873b8c6f051e": "TRAP_FIRED",
-                    "0x3f2cdae910cd13638e38b45881e7a4fc3a9fe320": "VICTIM_ACTIVE",
-                    "0xfdaf1f1714810f8d88a57c9d551d442c68ace2bb": "LAUNDRY_PIPELINE",
-                    "0x27920e8039d2b6e93e36f5d5f53b998e2e631a70": "LAUNDRY_PIPELINE",
-                }
-                alert_type = (
-                    ALERT_RULES.get(to_addr) or
-                    ALERT_RULES.get(from_addr) or
-                    "address_activity"
-                )
-                address = to_addr or from_addr
+                # Only fire if a watched address is the DIRECT from or to
+                triggered = None
+                alert_type = None
+                for watched, atype in ALERT_RULES.items():
+                    if from_addr == watched or to_addr == watched:
+                        triggered = watched
+                        alert_type = atype
+                        break
+
+                if not triggered:
+                    skipped += 1
+                    continue
 
                 con.execute(
                     """INSERT INTO alerts (alert_type, address, tx_hash, block_number, timestamp, payload)
                        VALUES (?, ?, ?, ?, ?, ?)""",
-                    (alert_type, address, tx_hash, block, now, json.dumps(act)),
+                    (alert_type, triggered, tx_hash, block, now, json.dumps(act)),
                 )
+                logged += 1
+
             con.commit()
             con.close()
-            self._json(200, {"received": len(activity)})
+            self._json(200, {"logged": logged, "skipped": skipped})
             return  # webhook doesn't need admin auth
 
         else:

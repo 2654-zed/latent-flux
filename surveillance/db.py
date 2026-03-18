@@ -265,6 +265,13 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
         if cursor.fetchone() is None:
             conn.executescript(ddl)
 
+    # Migration: add false_positive column to alerts
+    try:
+        conn.execute("SELECT false_positive FROM alerts LIMIT 1")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE alerts ADD COLUMN false_positive INTEGER DEFAULT 0")
+        conn.commit()
+
     return conn
 
 
