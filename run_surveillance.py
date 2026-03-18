@@ -139,28 +139,23 @@ class StatsHandler(BaseHTTPRequestHandler):
             ])
 
         elif self.path == "/clusters":
-            rows = _query(
+            con = sqlite3.connect(DB_PATH)
+            rows = con.execute(
                 """SELECT selector_cluster, COUNT(*) as members, SUM(total_revert_count) as reverts
                    FROM bot_candidates WHERE selector_cluster IS NOT NULL
                    GROUP BY selector_cluster ORDER BY members DESC"""
-            )
+            ).fetchall()
             clusters = []
             for r in rows:
-                members = _query(
-                    "SELECT address, total_revert_count FROM bot_candidates WHERE selector_cluster = ? ORDER BY total_revert_count DESC",
-                    args=(r[0],) if False else None,
-                )
-                # Can't pass args through _query easily, use inline
-                con = sqlite3.connect(DB_PATH)
                 member_rows = con.execute(
-                    "SELECT address, total_revert_count FROM bot_candidates WHERE selector_cluster = ?",
+                    "SELECT address, total_revert_count FROM bot_candidates WHERE selector_cluster = ? ORDER BY total_revert_count DESC",
                     (r[0],),
                 ).fetchall()
-                con.close()
                 clusters.append({
                     "cluster": r[0], "members": r[1], "total_reverts": r[2],
                     "addresses": [{"address": m[0], "reverts": m[1]} for m in member_rows],
                 })
+            con.close()
             self._json(200, clusters)
 
         elif self.path == "/bots":
