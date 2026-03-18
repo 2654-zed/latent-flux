@@ -129,6 +129,40 @@ class StatsHandler(BaseHTTPRequestHandler):
                 for r in rows
             ])
 
+        elif self.path == "/known-selectors":
+            rows = _query(
+                "SELECT function_selector, tag, decoded_name, notes FROM known_selectors ORDER BY tag"
+            )
+            self._json(200, [
+                {"selector": r[0], "tag": r[1], "decoded": r[2], "notes": r[3]}
+                for r in rows
+            ])
+
+        elif self.path == "/clusters":
+            rows = _query(
+                """SELECT selector_cluster, COUNT(*) as members, SUM(total_revert_count) as reverts
+                   FROM bot_candidates WHERE selector_cluster IS NOT NULL
+                   GROUP BY selector_cluster ORDER BY members DESC"""
+            )
+            clusters = []
+            for r in rows:
+                members = _query(
+                    "SELECT address, total_revert_count FROM bot_candidates WHERE selector_cluster = ? ORDER BY total_revert_count DESC",
+                    args=(r[0],) if False else None,
+                )
+                # Can't pass args through _query easily, use inline
+                con = sqlite3.connect(DB_PATH)
+                member_rows = con.execute(
+                    "SELECT address, total_revert_count FROM bot_candidates WHERE selector_cluster = ?",
+                    (r[0],),
+                ).fetchall()
+                con.close()
+                clusters.append({
+                    "cluster": r[0], "members": r[1], "total_reverts": r[2],
+                    "addresses": [{"address": m[0], "reverts": m[1]} for m in member_rows],
+                })
+            self._json(200, clusters)
+
         elif self.path == "/bots":
             rows = _query(
                 """SELECT address, total_revert_count, is_deployer, first_seen, last_seen
@@ -267,6 +301,44 @@ class StatsHandler(BaseHTTPRequestHandler):
             con.commit()
             con.close()
             self._json(200, {"upgraded": changed, "deployer": deployer, "tier": tier})
+
+        elif self.path == "/admin/known-selector":
+            selector = data.get("selector", "").lower()
+            tag = data.get("tag", "")
+            decoded = data.get("decoded_name")
+            notes = data.get("notes", "")
+            if not selector or not tag:
+                self._json(400, {"error": "selector and tag required"})
+                return
+            con = sqlite3.connect(DB_PATH)
+            now = datetime.now(timezone.utc).isoformat()
+            con.execute(
+                """INSERT INTO known_selectors (function_selector, tag, decoded_name, notes, created)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(function_selector) DO UPDATE SET tag = ?, decoded_name = ?, notes = ?""",
+                (selector, tag, decoded, notes, now, tag, decoded, notes),
+            )
+            con.commit()
+            con.close()
+            self._json(200, {"stored": selector, "tag": tag})
+
+        elif self.path == "/admin/bot-cluster":
+            cluster_id = data.get("cluster_id", "")
+            addresses = [a.lower() for a in data.get("addresses", [])]
+            if not cluster_id or not addresses:
+                self._json(400, {"error": "cluster_id and addresses required"})
+                return
+            con = sqlite3.connect(DB_PATH)
+            updated = 0
+            for addr in addresses:
+                con.execute(
+                    "UPDATE bot_candidates SET selector_cluster = ? WHERE address = ?",
+                    (cluster_id, addr),
+                )
+                updated += con.total_changes
+            con.commit()
+            con.close()
+            self._json(200, {"cluster": cluster_id, "updated": updated})
 
         else:
             self._json(404, {"error": "unknown admin endpoint"})

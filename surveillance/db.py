@@ -149,6 +149,28 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
             CREATE INDEX idx_botsel_address ON bot_candidate_selectors(bot_address);
         """)
 
+    # Migration: known_selectors reference table + bot cluster field
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='known_selectors'"
+    )
+    if cursor.fetchone() is None:
+        conn.executescript("""
+            CREATE TABLE known_selectors (
+                function_selector   TEXT NOT NULL PRIMARY KEY,
+                tag                 TEXT NOT NULL,
+                decoded_name        TEXT,
+                notes               TEXT,
+                created             TEXT NOT NULL
+            );
+        """)
+
+    # Migration: add selector_cluster column to bot_candidates
+    try:
+        conn.execute("SELECT selector_cluster FROM bot_candidates LIMIT 1")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE bot_candidates ADD COLUMN selector_cluster TEXT")
+        conn.commit()
+
     return conn
 
 
@@ -729,6 +751,79 @@ def top_bot_selectors(conn: sqlite3.Connection, limit: int = 10) -> list[dict]:
         (limit,),
     ).fetchall()
     return [{"selector": r[0], "bots": r[1], "total_calls": r[2]} for r in rows]
+
+
+# ------------------------------------------------------------------
+# Known selectors reference
+# ------------------------------------------------------------------
+
+def upsert_known_selector(conn: sqlite3.Connection, selector: str,
+                          tag: str, decoded_name: Optional[str],
+                          notes: str) -> None:
+    conn.execute(
+        """
+        INSERT INTO known_selectors (function_selector, tag, decoded_name, notes, created)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(function_selector) DO UPDATE SET
+            tag = ?, decoded_name = ?, notes = ?
+        """,
+        (selector, tag, decoded_name, notes, _now_iso(),
+         tag, decoded_name, notes),
+    )
+    conn.commit()
+
+
+def get_known_selector(conn: sqlite3.Connection, selector: str) -> Optional[dict]:
+    row = conn.execute(
+        "SELECT * FROM known_selectors WHERE function_selector = ?", (selector,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_all_known_selectors(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM known_selectors ORDER BY tag"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ------------------------------------------------------------------
+# Bot cluster operations
+# ------------------------------------------------------------------
+
+def assign_bot_cluster(conn: sqlite3.Connection, addresses: list[str],
+                       cluster_id: str) -> int:
+    """Assign a cluster ID to a list of bot candidates. Returns count updated."""
+    updated = 0
+    for addr in addresses:
+        conn.execute(
+            "UPDATE bot_candidates SET selector_cluster = ? WHERE address = ?",
+            (cluster_id, addr),
+        )
+        updated += conn.total_changes
+    conn.commit()
+    return updated
+
+
+def get_bot_clusters(conn: sqlite3.Connection) -> list[dict]:
+    """Get all clusters with member counts."""
+    rows = conn.execute(
+        """SELECT selector_cluster, COUNT(*) as members,
+                  SUM(total_revert_count) as total_reverts
+           FROM bot_candidates
+           WHERE selector_cluster IS NOT NULL
+           GROUP BY selector_cluster
+           ORDER BY members DESC"""
+    ).fetchall()
+    return [{"cluster": r[0], "members": r[1], "total_reverts": r[2]} for r in rows]
+
+
+def get_cluster_members(conn: sqlite3.Connection, cluster_id: str) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM bot_candidates WHERE selector_cluster = ? ORDER BY total_revert_count DESC",
+        (cluster_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
 
 
 # ------------------------------------------------------------------
