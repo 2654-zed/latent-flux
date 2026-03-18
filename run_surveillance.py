@@ -24,39 +24,83 @@ def _query(sql, fetchone=False):
 class StatsHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/stats":
+            # Single connection, all fresh queries, no caching
+            con = sqlite3.connect(DB_PATH)
+            c = con.cursor()
+
             stats = {
-                "contracts": dict(
-                    _query("SELECT confidence_tier, COUNT(*) FROM contracts GROUP BY confidence_tier")
-                ),
-                "deployers": _query("SELECT COUNT(*) FROM deployers", fetchone=True)[0],
-                "trap_events": _query("SELECT COUNT(*) FROM trap_events", fetchone=True)[0],
-                "tx_events": _query("SELECT COUNT(*) FROM transaction_events", fetchone=True)[0],
-                "bot_candidates": _query("SELECT COUNT(*) FROM bot_candidates", fetchone=True)[0],
-                "bot_deployer_hits": _query(
-                    "SELECT COUNT(*) FROM bot_candidates WHERE is_deployer = 1", fetchone=True
-                )[0],
-                "last_heartbeat": _query(
-                    "SELECT component, timestamp FROM heartbeat ORDER BY timestamp DESC LIMIT 1",
-                    fetchone=True,
-                ),
-                "cache": dict(
-                    zip(
-                        ["entries", "total_hits"],
-                        _query(
-                            "SELECT COUNT(*), COALESCE(SUM(hit_count), 0) FROM bytecode_cache",
-                            fetchone=True,
-                        ),
-                    )
-                ),
+                "contracts": dict(c.execute(
+                    "SELECT confidence_tier, COUNT(*) FROM contracts GROUP BY confidence_tier"
+                ).fetchall()),
+                "deployers": c.execute("SELECT COUNT(*) FROM deployers").fetchone()[0],
+                "trap_events": c.execute("SELECT COUNT(*) FROM trap_events").fetchone()[0],
+                "tx_events": c.execute("SELECT COUNT(*) FROM transaction_events").fetchone()[0],
+                "bot_candidates": c.execute("SELECT COUNT(*) FROM bot_candidates").fetchone()[0],
+                "bot_deployer_hits": c.execute(
+                    "SELECT COUNT(*) FROM bot_candidates WHERE is_deployer = 1"
+                ).fetchone()[0],
+                "last_heartbeat": c.execute(
+                    "SELECT component, timestamp FROM heartbeat ORDER BY timestamp DESC LIMIT 1"
+                ).fetchone(),
+                "cache": dict(zip(
+                    ["entries", "total_hits"],
+                    c.execute(
+                        "SELECT COUNT(*), COALESCE(SUM(hit_count), 0) FROM bytecode_cache"
+                    ).fetchone(),
+                )),
                 "top_bot_selectors": [
                     {"selector": r[0], "bots": r[1], "total_calls": r[2]}
-                    for r in _query(
+                    for r in c.execute(
                         """SELECT function_selector, COUNT(DISTINCT bot_address), SUM(call_count)
                            FROM bot_candidate_selectors
                            GROUP BY function_selector ORDER BY SUM(call_count) DESC LIMIT 10"""
-                    )
+                    ).fetchall()
                 ],
             }
+
+            # Build cluster summary with shared selectors and last_active
+            cluster_rows = c.execute(
+                """SELECT selector_cluster, COUNT(*) as members,
+                          SUM(total_revert_count) as reverts,
+                          MAX(last_seen) as last_active
+                   FROM bot_candidates
+                   WHERE selector_cluster IS NOT NULL
+                   GROUP BY selector_cluster ORDER BY reverts DESC"""
+            ).fetchall()
+            clusters = []
+            for cr in cluster_rows:
+                cid = cr[0]
+                # Find shared selectors: selectors used by 2+ members of this cluster
+                sel_rows = c.execute(
+                    """SELECT bs.function_selector, COUNT(DISTINCT bs.bot_address) as users
+                       FROM bot_candidate_selectors bs
+                       JOIN bot_candidates bc ON bs.bot_address = bc.address
+                       WHERE bc.selector_cluster = ?
+                       GROUP BY bs.function_selector
+                       HAVING users >= 2
+                       ORDER BY users DESC""",
+                    (cid,),
+                ).fetchall()
+                shared_sels = [r[0] for r in sel_rows]
+                # Look up tag from known_selectors for the first shared selector
+                tag = None
+                if shared_sels:
+                    tag_row = c.execute(
+                        "SELECT tag FROM known_selectors WHERE function_selector = ?",
+                        (shared_sels[0],),
+                    ).fetchone()
+                    tag = tag_row[0] if tag_row else None
+                clusters.append({
+                    "id": cid,
+                    "tag": tag,
+                    "members": cr[1],
+                    "total_reverts": cr[2],
+                    "shared_selectors": shared_sels,
+                    "last_active": cr[3],
+                })
+            stats["clusters"] = clusters
+
+            con.close()
             self._json(200, stats)
 
         elif self.path == "/suspected":
