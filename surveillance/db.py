@@ -130,6 +130,25 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
             CREATE INDEX idx_botevents_block ON bot_candidate_events(block_number);
         """)
 
+    # Migration: bot_candidate_selectors
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='bot_candidate_selectors'"
+    )
+    if cursor.fetchone() is None:
+        conn.executescript("""
+            CREATE TABLE bot_candidate_selectors (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                bot_address         TEXT NOT NULL,
+                function_selector   TEXT NOT NULL,
+                call_count          INTEGER DEFAULT 1,
+                first_seen          TEXT NOT NULL,
+                last_seen           TEXT NOT NULL,
+                UNIQUE(bot_address, function_selector)
+            );
+            CREATE INDEX idx_botsel_selector ON bot_candidate_selectors(function_selector);
+            CREATE INDEX idx_botsel_address ON bot_candidate_selectors(bot_address);
+        """)
+
     return conn
 
 
@@ -678,6 +697,38 @@ def get_bot_candidates(conn: sqlite3.Connection,
             "SELECT * FROM bot_candidates ORDER BY total_revert_count DESC"
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def upsert_bot_selector(conn: sqlite3.Connection, bot_address: str,
+                        function_selector: str, timestamp: str) -> None:
+    """Record a function selector used by a bot candidate in a reverted tx."""
+    conn.execute(
+        """
+        INSERT INTO bot_candidate_selectors (bot_address, function_selector, call_count, first_seen, last_seen)
+        VALUES (?, ?, 1, ?, ?)
+        ON CONFLICT(bot_address, function_selector) DO UPDATE SET
+            call_count = call_count + 1,
+            last_seen = ?
+        """,
+        (bot_address, function_selector, timestamp, timestamp, timestamp),
+    )
+
+
+def top_bot_selectors(conn: sqlite3.Connection, limit: int = 10) -> list[dict]:
+    """Top selectors by total call count across all bot candidates."""
+    rows = conn.execute(
+        """
+        SELECT function_selector,
+               COUNT(DISTINCT bot_address) as bots,
+               SUM(call_count) as total_calls
+        FROM bot_candidate_selectors
+        GROUP BY function_selector
+        ORDER BY total_calls DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    return [{"selector": r[0], "bots": r[1], "total_calls": r[2]} for r in rows]
 
 
 # ------------------------------------------------------------------

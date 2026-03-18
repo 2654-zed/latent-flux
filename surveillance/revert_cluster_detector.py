@@ -82,7 +82,10 @@ class RevertClusterDetector:
         if not heavy_senders:
             return
 
-        revert_counts = defaultdict(int)
+        revert_counts: dict[str, int] = defaultdict(int)
+        # Collect selectors per sender for reverted txs
+        revert_selectors: dict[str, list[str]] = defaultdict(list)
+
         for tx in block["transactions"]:
             from_addr = tx["from"]
             from_lower = from_addr.lower() if isinstance(from_addr, str) else from_addr
@@ -93,21 +96,38 @@ class RevertClusterDetector:
                 receipt = await w3.eth.get_transaction_receipt(tx["hash"])
                 if receipt["status"] == 0:
                     revert_counts[from_lower] += 1
+                    # Extract function selector from calldata
+                    input_data = tx.get("input", b"")
+                    if isinstance(input_data, bytes):
+                        calldata_hex = input_data.hex()
+                    else:
+                        calldata_hex = str(input_data).replace("0x", "")
+                    selector = calldata_hex[:8] if len(calldata_hex) >= 8 else "00000000"
+                    revert_selectors[from_lower].append(selector)
             except Exception:
                 continue
 
         # Flag addresses exceeding threshold
         for addr, count in revert_counts.items():
             if count >= self.threshold:
-                self._flag_candidate(addr, block_number, count, timestamp_iso)
+                self._flag_candidate(
+                    addr, block_number, count, timestamp_iso,
+                    revert_selectors.get(addr, []),
+                )
 
     def _flag_candidate(self, address: str, block_number: int,
-                        revert_count: int, timestamp_iso: str) -> None:
-        """Record a bot candidate and check deployer cross-reference."""
+                        revert_count: int, timestamp_iso: str,
+                        selectors: list[str] | None = None) -> None:
+        """Record a bot candidate, store selectors, check deployer cross-reference."""
         try:
             db.upsert_bot_candidate(
                 self.conn, address, block_number, revert_count, timestamp_iso
             )
+
+            # Store each reverted selector
+            for sel in (selectors or []):
+                db.upsert_bot_selector(self.conn, address, sel, timestamp_iso)
+            self.conn.commit()
             self._candidates_found += 1
 
             # Check deployer cross-reference

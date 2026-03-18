@@ -48,6 +48,14 @@ class StatsHandler(BaseHTTPRequestHandler):
                         ),
                     )
                 ),
+                "top_bot_selectors": [
+                    {"selector": r[0], "bots": r[1], "total_calls": r[2]}
+                    for r in _query(
+                        """SELECT function_selector, COUNT(DISTINCT bot_address), SUM(call_count)
+                           FROM bot_candidate_selectors
+                           GROUP BY function_selector ORDER BY SUM(call_count) DESC LIMIT 10"""
+                    )
+                ],
             }
             self._json(200, stats)
 
