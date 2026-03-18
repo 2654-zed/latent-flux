@@ -13,6 +13,7 @@ Read-only -- never sends transactions.
 """
 
 import asyncio
+import json
 import logging
 import sqlite3
 from datetime import datetime, timezone
@@ -34,6 +35,9 @@ BOT_SELECTORS = {
 
 # max uint256 for lazy approval detection
 MAX_UINT256 = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+
+# transferFrom selector for drain detection
+SEL_TRANSFER_FROM = "23b872dd"
 
 # Static gas thresholds (exact round gwei values)
 STATIC_GAS_VALUES = {0.0, 0.01, 0.1, 1.0, 2.0, 5.0, 10.0}
@@ -78,13 +82,18 @@ class SelectorMonitor:
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
         self._watched: set[str] = set()
+        self._exposure_contracts: set[str] = set()
+        self._exposed_addresses: set[str] = set()
         self._events_logged = 0
         self._bots_tagged = 0
+        self._drains_detected = 0
         self._last_refresh = 0.0
 
     def refresh_watched(self) -> None:
-        """Reload the set of watched contract addresses from DB."""
+        """Reload watched sets from DB."""
         self._watched = db.get_watched_addresses(self.conn)
+        self._exposure_contracts = db.get_exposure_contracts(self.conn)
+        self._exposed_addresses = db.get_exposed_addresses(self.conn)
 
     @property
     def watched_count(self) -> int:
@@ -201,6 +210,40 @@ class SelectorMonitor:
                     from_lower[:18] + "...", contract_address[:18] + "...",
                     selector, tx_hash[:18] + "...",
                 )
+
+            # DRAIN DETECTION: transferFrom where spender is a watched contract
+            # and the 'from' in calldata is an exposed address
+            if selector == SEL_TRANSFER_FROM and not is_reverted:
+                # transferFrom(address from, address to, uint256 amount)
+                # calldata: selector + 32b from + 32b to + 32b amount
+                if len(calldata_hex) >= 136:  # 8 + 64 + 64
+                    victim_addr = "0x" + calldata_hex[32:72]
+                    victim_lower = victim_addr.lower()
+                    if (contract_address in self._exposure_contracts and
+                            victim_lower in self._exposed_addresses):
+                        self._drains_detected += 1
+                        logger.warning(
+                            "APPROVAL DRAIN DETECTED: contract %s draining %s via transferFrom tx=%s",
+                            contract_address[:18] + "...", victim_lower[:18] + "...",
+                            tx_hash[:18] + "...",
+                        )
+                        # Update exposure status
+                        db.mark_exposure_drained(
+                            self.conn, victim_lower, contract_address,
+                            tx_hash, timestamp_iso, 0.0,
+                        )
+                        # Log alert
+                        self.conn.execute(
+                            """INSERT INTO alerts (alert_type, address, tx_hash, block_number, timestamp, payload)
+                               VALUES ('APPROVAL_DRAIN', ?, ?, ?, ?, ?)""",
+                            ("APPROVAL_DRAIN", victim_lower, tx_hash, block_number,
+                             timestamp_iso, json.dumps({
+                                 "victim": victim_lower,
+                                 "contract": contract_address,
+                                 "caller": from_lower,
+                             })),
+                        )
+                        self.conn.commit()
 
         except Exception as e:
             logger.error("Failed to log tx event: %s", e)

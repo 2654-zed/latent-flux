@@ -313,6 +313,21 @@ class StatsHandler(BaseHTTPRequestHandler):
                 for r in rows
             ])
 
+        elif self.path == "/exposures":
+            rows = _query(
+                """SELECT exposed_address, approved_contract, approval_timestamp,
+                          approval_amount, status, drain_tx_hash, drain_amount_usd, notes
+                   FROM live_exposures ORDER BY
+                   CASE status WHEN 'open' THEN 0 WHEN 'drained' THEN 1 ELSE 2 END,
+                   approval_timestamp DESC"""
+            )
+            self._json(200, [
+                {"exposed": r[0], "contract": r[1], "approved_at": r[2],
+                 "amount": r[3], "status": r[4], "drain_tx": r[5],
+                 "drain_usd": r[6], "notes": r[7]}
+                for r in rows
+            ])
+
         elif self.path == "/alerts":
             # Exclude false positives by default
             rows = _query(
@@ -539,6 +554,29 @@ class StatsHandler(BaseHTTPRequestHandler):
             con.commit()
             con.close()
             self._json(200, {"updated": addr})
+
+        elif self.path == "/admin/add-exposure":
+            exposed = data.get("exposed_address", "").lower()
+            contract = data.get("approved_contract", "").lower()
+            tx_hash = data.get("approval_tx_hash", "")
+            timestamp = data.get("approval_timestamp", "")
+            amount = data.get("approval_amount", "unlimited")
+            token = data.get("token_address")
+            notes = data.get("notes", "")
+            if not exposed or not contract:
+                self._json(400, {"error": "exposed_address and approved_contract required"})
+                return
+            con = sqlite3.connect(DB_PATH)
+            con.execute(
+                """INSERT OR IGNORE INTO live_exposures
+                   (exposed_address, approved_contract, approval_tx_hash,
+                    approval_timestamp, approval_amount, token_address, status, notes)
+                   VALUES (?, ?, ?, ?, ?, ?, 'open', ?)""",
+                (exposed, contract, tx_hash, timestamp, amount, token, notes),
+            )
+            con.commit()
+            con.close()
+            self._json(200, {"added": exposed, "contract": contract})
 
         elif self.path == "/admin/mark-false-positive":
             # Mark alerts as false positive by address

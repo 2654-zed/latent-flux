@@ -265,6 +265,32 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
         if cursor.fetchone() is None:
             conn.executescript(ddl)
 
+    # Migration: live_exposures table
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='live_exposures'"
+    )
+    if cursor.fetchone() is None:
+        conn.executescript("""
+            CREATE TABLE live_exposures (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exposed_address TEXT NOT NULL,
+                approved_contract TEXT NOT NULL,
+                approval_tx_hash TEXT NOT NULL,
+                approval_timestamp TEXT NOT NULL,
+                approval_amount TEXT NOT NULL,
+                token_address TEXT,
+                status TEXT NOT NULL DEFAULT 'open',
+                drain_tx_hash TEXT,
+                drain_timestamp TEXT,
+                drain_amount_usd REAL,
+                last_checked TEXT,
+                notes TEXT
+            );
+            CREATE INDEX idx_exposures_exposed ON live_exposures(exposed_address);
+            CREATE INDEX idx_exposures_contract ON live_exposures(approved_contract);
+            CREATE INDEX idx_exposures_status ON live_exposures(status);
+        """)
+
     # Migration: add false_positive column to alerts
     try:
         conn.execute("SELECT false_positive FROM alerts LIMIT 1")
@@ -1004,6 +1030,61 @@ def get_cluster_events(conn: sqlite3.Connection,
             "SELECT * FROM cluster_events ORDER BY timestamp DESC LIMIT 100"
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ------------------------------------------------------------------
+# Live exposures (approval risk tracking)
+# ------------------------------------------------------------------
+
+def insert_exposure(conn: sqlite3.Connection, *,
+                    exposed_address: str, approved_contract: str,
+                    approval_tx_hash: str, approval_timestamp: str,
+                    approval_amount: str, token_address: Optional[str] = None,
+                    notes: Optional[str] = None) -> None:
+    conn.execute(
+        """INSERT OR IGNORE INTO live_exposures
+           (exposed_address, approved_contract, approval_tx_hash,
+            approval_timestamp, approval_amount, token_address, status, notes)
+           VALUES (?, ?, ?, ?, ?, ?, 'open', ?)""",
+        (exposed_address, approved_contract, approval_tx_hash,
+         approval_timestamp, approval_amount, token_address, notes),
+    )
+    conn.commit()
+
+
+def get_open_exposures(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM live_exposures WHERE status = 'open' ORDER BY approval_timestamp DESC"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_exposure_contracts(conn: sqlite3.Connection) -> set[str]:
+    """All contracts with open exposures — for drain monitoring."""
+    rows = conn.execute(
+        "SELECT DISTINCT approved_contract FROM live_exposures WHERE status = 'open'"
+    ).fetchall()
+    return {r[0] for r in rows}
+
+
+def get_exposed_addresses(conn: sqlite3.Connection) -> set[str]:
+    """All addresses with open exposures — for drain monitoring."""
+    rows = conn.execute(
+        "SELECT DISTINCT exposed_address FROM live_exposures WHERE status = 'open'"
+    ).fetchall()
+    return {r[0] for r in rows}
+
+
+def mark_exposure_drained(conn: sqlite3.Connection, exposed_address: str,
+                          approved_contract: str, drain_tx: str,
+                          drain_timestamp: str, drain_amount_usd: float) -> None:
+    conn.execute(
+        """UPDATE live_exposures SET status = 'drained',
+              drain_tx_hash = ?, drain_timestamp = ?, drain_amount_usd = ?
+           WHERE exposed_address = ? AND approved_contract = ? AND status = 'open'""",
+        (drain_tx, drain_timestamp, drain_amount_usd, exposed_address, approved_contract),
+    )
+    conn.commit()
 
 
 # ------------------------------------------------------------------
