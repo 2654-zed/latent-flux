@@ -144,6 +144,22 @@ class StatsHandler(BaseHTTPRequestHandler):
                 for r in alert_rows
             ]
 
+            # Longitudinal behavioral scoring summary
+            try:
+                scored = c.execute("SELECT COUNT(*) FROM deployers WHERE behavioral_score IS NOT NULL AND behavioral_score > 0").fetchone()[0]
+                high_conf = c.execute("SELECT COUNT(*) FROM deployers WHERE behavioral_score > 0.5").fetchone()[0]
+                critical = c.execute("SELECT COUNT(*) FROM deployers WHERE behavioral_score > 0.7").fetchone()[0]
+                top = c.execute("SELECT deployer_address, behavioral_score FROM deployers ORDER BY behavioral_score DESC LIMIT 1").fetchone()
+                stats["longitudinal"] = {
+                    "scored_deployers": scored,
+                    "high_confidence": high_conf,
+                    "critical": critical,
+                    "top_scorer": top[0] if top else None,
+                    "top_score": round(top[1], 3) if top and top[1] else 0,
+                }
+            except Exception:
+                stats["longitudinal"] = {"error": "scoring not yet run"}
+
             con.close()
             self._json(200, stats)
 

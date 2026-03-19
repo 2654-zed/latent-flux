@@ -298,6 +298,18 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
         conn.execute("ALTER TABLE alerts ADD COLUMN false_positive INTEGER DEFAULT 0")
         conn.commit()
 
+    # Migration: add longitudinal scoring columns to deployers
+    try:
+        conn.execute("SELECT behavioral_score FROM deployers LIMIT 1")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE deployers ADD COLUMN behavioral_score REAL DEFAULT 0.0")
+        conn.commit()
+    try:
+        conn.execute("SELECT score_breakdown FROM deployers LIMIT 1")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE deployers ADD COLUMN score_breakdown TEXT")
+        conn.commit()
+
     return conn
 
 
