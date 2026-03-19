@@ -5,7 +5,7 @@ import subprocess
 import sys
 import threading
 from datetime import datetime, timezone
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import asyncio
 
@@ -17,7 +17,7 @@ ALCHEMY_HTTP = _wss.replace("wss://", "https://") if _wss else ""
 
 
 def _query(sql, fetchone=False):
-    con = sqlite3.connect(DB_PATH)
+    con = sqlite3.connect(DB_PATH, timeout=10)
     cur = con.cursor()
     try:
         result = cur.execute(sql).fetchone() if fetchone else cur.execute(sql).fetchall()
@@ -30,7 +30,7 @@ class StatsHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/stats":
             # Single connection, all fresh queries, no caching
-            con = sqlite3.connect(DB_PATH)
+            con = sqlite3.connect(DB_PATH, timeout=10)
             c = con.cursor()
 
             stats = {
@@ -878,7 +878,7 @@ class StatsHandler(BaseHTTPRequestHandler):
 
 
 def run_stats_server():
-    server = HTTPServer(("0.0.0.0", PORT), StatsHandler)
+    server = ThreadingHTTPServer(("0.0.0.0", PORT), StatsHandler)
     print(f"Stats API listening on :{PORT}", flush=True)
     server.serve_forever()
 
