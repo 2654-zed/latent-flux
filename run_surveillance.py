@@ -63,58 +63,71 @@ class StatsHandler(BaseHTTPRequestHandler):
                 ],
             }
 
-            # Build cluster summary with shared selectors and last_active
+            # Build cluster summary in a single query (no N+1 loop)
             cluster_rows = c.execute(
                 """SELECT selector_cluster, COUNT(*) as members,
                           SUM(total_revert_count) as reverts,
                           MAX(last_seen) as last_active
                    FROM bot_candidates
                    WHERE selector_cluster IS NOT NULL
-                   GROUP BY selector_cluster ORDER BY reverts DESC"""
+                   GROUP BY selector_cluster ORDER BY reverts DESC
+                   LIMIT 20"""
             ).fetchall()
             clusters = []
-            for cr in cluster_rows:
-                cid = cr[0]
-                # Find shared selectors: selectors used by 2+ members of this cluster
-                sel_rows = c.execute(
-                    """SELECT bs.function_selector, COUNT(DISTINCT bs.bot_address) as users
-                       FROM bot_candidate_selectors bs
-                       JOIN bot_candidates bc ON bs.bot_address = bc.address
-                       WHERE bc.selector_cluster = ?
-                       GROUP BY bs.function_selector
-                       HAVING users >= 2
-                       ORDER BY users DESC""",
-                    (cid,),
+            if cluster_rows:
+                # Batch: get all shared selectors for all clusters in one query
+                cluster_ids = [cr[0] for cr in cluster_rows]
+                placeholders = ",".join("?" * len(cluster_ids))
+                shared_sel_rows = c.execute(
+                    f"""SELECT bc.selector_cluster, bs.function_selector,
+                               COUNT(DISTINCT bs.bot_address) as users
+                        FROM bot_candidate_selectors bs
+                        JOIN bot_candidates bc ON bs.bot_address = bc.address
+                        WHERE bc.selector_cluster IN ({placeholders})
+                        GROUP BY bc.selector_cluster, bs.function_selector
+                        HAVING users >= 2
+                        ORDER BY bc.selector_cluster, users DESC""",
+                    cluster_ids,
                 ).fetchall()
-                shared_sels = [r[0] for r in sel_rows]
-                # Look up tag from known_selectors for the first shared selector
-                tag = None
-                if shared_sels:
-                    tag_row = c.execute(
-                        "SELECT tag FROM known_selectors WHERE function_selector = ?",
-                        (shared_sels[0],),
-                    ).fetchone()
-                    tag = tag_row[0] if tag_row else None
-                clusters.append({
-                    "id": cid,
-                    "tag": tag,
-                    "members": cr[1],
-                    "total_reverts": cr[2],
-                    "shared_selectors": shared_sels,
-                    "last_active": cr[3],
-                })
+                # Group shared selectors by cluster
+                cluster_sels = {}
+                for row in shared_sel_rows:
+                    cluster_sels.setdefault(row[0], []).append(row[1])
+
+                # Batch: get all known_selector tags in one query
+                all_sels = list({s for sels in cluster_sels.values() for s in sels[:1]})
+                tag_map = {}
+                if all_sels:
+                    sel_ph = ",".join("?" * len(all_sels))
+                    tag_rows = c.execute(
+                        f"SELECT function_selector, tag FROM known_selectors WHERE function_selector IN ({sel_ph})",
+                        all_sels,
+                    ).fetchall()
+                    tag_map = {r[0]: r[1] for r in tag_rows}
+
+                for cr in cluster_rows:
+                    cid = cr[0]
+                    shared = cluster_sels.get(cid, [])
+                    clusters.append({
+                        "id": cid,
+                        "tag": tag_map.get(shared[0]) if shared else None,
+                        "members": cr[1],
+                        "total_reverts": cr[2],
+                        "shared_selectors": shared,
+                        "last_active": cr[3],
+                    })
             stats["clusters"] = clusters
 
-            # Cross-chain intelligence
+            # Cross-chain intelligence (lightweight)
             chains_monitored = [r[0] for r in c.execute(
                 "SELECT DISTINCT chain FROM contracts"
             ).fetchall()]
             shared_deployers = c.execute(
                 """SELECT COUNT(*) FROM (
-                    SELECT deployer_address FROM deployers d
-                    JOIN contracts c ON d.deployer_address = c.deployer_address
-                    GROUP BY d.deployer_address
-                    HAVING COUNT(DISTINCT c.chain) > 1
+                    SELECT deployer_address
+                    FROM contracts
+                    GROUP BY deployer_address
+                    HAVING COUNT(DISTINCT chain) > 1
                 )"""
             ).fetchone()[0]
             stats["cross_chain"] = {
@@ -376,6 +389,42 @@ class StatsHandler(BaseHTTPRequestHandler):
                 for r in rows
             ])
 
+        elif self.path.startswith("/dump"):
+            # Full table dump for local DB sync. Requires admin auth via query param.
+            import urllib.parse
+            parsed = urllib.parse.urlparse(self.path)
+            params = urllib.parse.parse_qs(parsed.query)
+            token = os.environ.get("ADMIN_TOKEN", "")
+            req_token = params.get("token", [""])[0]
+            if not token or req_token != token:
+                self._json(403, {"error": "forbidden"})
+                return
+            # Which table?
+            table = params.get("table", [""])[0]
+            valid_tables = [
+                "contracts", "deployers", "trap_events", "transaction_events",
+                "bot_candidates", "bot_candidate_selectors", "bot_candidate_events",
+                "known_selectors", "alerts", "live_exposures", "pattern_matches",
+                "cluster_events", "funding_hops", "contract_verification", "traces",
+                "bytecode_cache", "heartbeat", "connection_gaps",
+            ]
+            if table not in valid_tables:
+                self._json(400, {"error": f"table required, valid: {valid_tables}"})
+                return
+            offset = int(params.get("offset", ["0"])[0])
+            limit = int(params.get("limit", ["5000"])[0])
+            limit = min(limit, 10000)
+            con = sqlite3.connect(DB_PATH, timeout=10)
+            con.row_factory = sqlite3.Row
+            rows = con.execute(
+                f"SELECT * FROM [{table}] LIMIT ? OFFSET ?", (limit, offset)
+            ).fetchall()
+            data = [dict(r) for r in rows]
+            total = con.execute(f"SELECT COUNT(*) FROM [{table}]").fetchone()[0]
+            con.close()
+            self._json(200, {"table": table, "total": total, "offset": offset,
+                             "limit": limit, "count": len(data), "rows": data})
+
         else:
             self._json(404, {
                 "error": "not found",
@@ -383,7 +432,7 @@ class StatsHandler(BaseHTTPRequestHandler):
                               "/health", "/tx-events", "/known-selectors",
                               "/clusters", "/cluster-events", "/bot-deployers",
                               "/bot-selectors", "/funding", "/funding-hops",
-                              "/verification", "/traces", "/alerts"],
+                              "/verification", "/traces", "/alerts", "/dump"],
             })
 
     def do_POST(self):
