@@ -981,7 +981,38 @@ routing = subprocess.Popen(
 )
 processes.append(("routing", routing))
 
-# Keep alive — exit if any process dies
-for name, proc in processes:
-    proc.wait()
-    print(f"Process {name} exited with code {proc.returncode}", flush=True)
+# Keep alive — restart any process that dies
+import time as _time
+
+def _make_proc(name):
+    """Recreate a subprocess by name."""
+    if name == "arbitrum_monitor":
+        return subprocess.Popen(
+            [sys.executable, "-m", "surveillance.deployment_monitor"],
+            stdout=sys.stdout, stderr=sys.stderr,
+        )
+    elif name == "base_monitor":
+        return subprocess.Popen(
+            [sys.executable, "-m", "surveillance.deployment_monitor",
+             "--rpc", os.environ["BASE_WSS_URL"], "--chain", "base"],
+            stdout=sys.stdout, stderr=sys.stderr,
+        )
+    elif name == "routing":
+        return subprocess.Popen(
+            [sys.executable, "-m", "surveillance.routing_monitor"],
+            stdout=sys.stdout, stderr=sys.stderr,
+        )
+    return None
+
+while True:
+    for i, (name, proc) in enumerate(processes):
+        ret = proc.poll()
+        if ret is not None:
+            print(f"Process {name} exited with code {ret} — restarting...", flush=True)
+            new_proc = _make_proc(name)
+            if new_proc:
+                processes[i] = (name, new_proc)
+                print(f"Process {name} restarted (pid={new_proc.pid})", flush=True)
+            else:
+                print(f"Cannot restart {name}", flush=True)
+    _time.sleep(5)

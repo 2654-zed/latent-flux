@@ -116,17 +116,19 @@ class DeploymentMonitor:
             self._revert_detector = RevertClusterDetector(self.conn)
             logger.info("Sub-monitors initialized: selector_monitor, revert_cluster_detector")
 
-    async def start(self, max_retries: int = 5) -> None:
+    async def start(self, max_retries: int = 0) -> None:
         """Connect to WebSocket and begin monitoring blocks.
 
         Auto-reconnects on connection loss with exponential backoff.
         Logs gaps to the database so missed blocks are auditable.
         Writes a heartbeat every 60 seconds.
+
+        max_retries=0 means infinite retries (persistent service mode).
         """
         self._running = True
         attempt = 0
 
-        while self._running and attempt <= max_retries:
+        while self._running and (max_retries == 0 or attempt <= max_retries):
             if attempt > 0:
                 delay = min(2 ** attempt, 60)
                 logger.warning(
@@ -155,7 +157,7 @@ class DeploymentMonitor:
                 self._current_gap_id = gap_id
                 attempt += 1
 
-        if attempt > max_retries:
+        if max_retries > 0 and attempt > max_retries:
             logger.error(
                 "Max retries (%d) exhausted -- monitor stopping", max_retries
             )
