@@ -12,3 +12,7 @@ build/
 surveillance/data/
 surveillance/logs/
 surveillance/pids/
+rib_dataset/address_map.json
+rib_dataset/edges.csv
+rib_dataset/metadata.json
+rib_dataset/ground_truth.json

@@ -405,6 +405,26 @@ class StatsHandler(BaseHTTPRequestHandler):
                 for r in rows
             ])
 
+        elif self.path == "/rib/scores":
+            try:
+                from surveillance.rib_scorer import run_self_evaluation
+                results = run_self_evaluation(DB_PATH)
+                self._json(200, results)
+            except Exception as e:
+                self._json(500, {"error": str(e)})
+
+        elif self.path.startswith("/rib/export"):
+            import urllib.parse
+            parsed = urllib.parse.urlparse(self.path)
+            params = urllib.parse.parse_qs(parsed.query)
+            seed = int(params.get("seed", ["42"])[0])
+            try:
+                from surveillance.rib_export import export_anonymized_dataset
+                paths = export_anonymized_dataset(DB_PATH, seed=seed)
+                self._json(200, {"status": "exported", "files": paths})
+            except Exception as e:
+                self._json(500, {"error": str(e)})
+
         elif self.path.startswith("/dump"):
             # Full table dump for local DB sync. Requires admin auth via query param.
             import urllib.parse
