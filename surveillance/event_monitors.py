@@ -153,8 +153,25 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
             flagged         INTEGER NOT NULL DEFAULT 0
         );
 
+        CREATE TABLE IF NOT EXISTS org_transfer_events (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            tx_hash         TEXT NOT NULL,
+            block_number    INTEGER NOT NULL,
+            timestamp       TEXT NOT NULL,
+            chain           TEXT NOT NULL,
+            from_address    TEXT NOT NULL,
+            to_address      TEXT NOT NULL,
+            value_eth       REAL,
+            token           TEXT,
+            org_id          TEXT,
+            from_role       TEXT,
+            selector        TEXT
+        );
+
         CREATE INDEX IF NOT EXISTS idx_liq_events_caller ON liquidity_events(caller_address);
         CREATE INDEX IF NOT EXISTS idx_liq_events_ts ON liquidity_events(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_org_transfer_from ON org_transfer_events(from_address);
+        CREATE INDEX IF NOT EXISTS idx_org_transfer_ts ON org_transfer_events(timestamp);
         CREATE INDEX IF NOT EXISTS idx_approval_token ON approval_events(token_contract);
         CREATE INDEX IF NOT EXISTS idx_bridge_sender ON bridge_events(sender);
         CREATE INDEX IF NOT EXISTS idx_pair_creation_ts ON pair_creation_events(timestamp);
@@ -240,6 +257,23 @@ class EventMonitors:
             # 5. CEX Deposit Pattern — track inflow/outflow ratios
             if value and int(value) > 0:
                 self._update_cex_candidate(to_addr, from_addr, timestamp_iso)
+
+            # 6. Org wallet outbound transfers — capture where exit ramp money goes
+            if from_addr in self._org_wallets and to_addr and to_addr != from_addr:
+                value_eth = int(value) / 1e18 if value else 0
+                org_role = None
+                try:
+                    r = self.conn.execute(
+                        "SELECT entity_type FROM deployers WHERE deployer_address = ?",
+                        (from_addr,),
+                    ).fetchone()
+                    org_role = r[0] if r else None
+                except Exception:
+                    pass
+                self._handle_org_transfer(
+                    tx_hash, block_number, timestamp_iso,
+                    from_addr, to_addr, value_eth, selector, org_role,
+                )
 
         # 4. Check logs for PairCreated events (requires receipt — sample only)
         # We check logs from the block for factory events
@@ -362,6 +396,45 @@ class EventMonitors:
             self.events_logged += 1
         except Exception as e:
             logger.debug("Bridge event insert failed: %s", e)
+
+    def _handle_org_transfer(self, tx_hash: str, block: int, ts: str,
+                             from_addr: str, to_addr: str, value_eth: float,
+                             selector: str, from_role: Optional[str]) -> None:
+        """Record an outbound transfer from a known org wallet."""
+        # Determine org_id from role
+        org_id = None
+        if from_role:
+            if "org_002" in from_role:
+                org_id = "org_002"
+            elif from_role not in ("unknown", "mev_bot_factory", "protocol"):
+                org_id = "org_001"
+
+        # Determine token from selector
+        token = "ETH"
+        if selector in ("a9059cbb", "23b872dd"):  # transfer, transferFrom
+            token = "ERC20"
+        elif selector == "095ea7b3":
+            token = "APPROVE"
+
+        try:
+            self.conn.execute(
+                """INSERT INTO org_transfer_events
+                   (tx_hash, block_number, timestamp, chain, from_address, to_address,
+                    value_eth, token, org_id, from_role, selector)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (tx_hash, block, ts, self.chain, from_addr, to_addr,
+                 value_eth, token, org_id, from_role, selector),
+            )
+            self.conn.commit()
+            self.events_logged += 1
+
+            if value_eth > 0.1:
+                logger.info(
+                    "ORG_TRANSFER: %s (%s) -> %s %.4f %s",
+                    from_addr[:14], from_role or "?", to_addr[:14], value_eth, token,
+                )
+        except Exception as e:
+            logger.debug("Org transfer insert failed: %s", e)
 
     def _update_cex_candidate(self, to_addr: str, from_addr: str, ts: str) -> None:
         """Track inflow/outflow ratio for CEX deposit pattern detection."""
