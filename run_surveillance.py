@@ -181,6 +181,23 @@ class StatsHandler(BaseHTTPRequestHandler):
             except Exception:
                 stats["event_monitors"] = {"status": "tables not yet created"}
 
+            # Funder tracing coverage
+            try:
+                total_dep = c.execute("SELECT COUNT(*) FROM deployers").fetchone()[0]
+                has_trail = c.execute("SELECT COUNT(*) FROM deployers WHERE funding_trail IS NOT NULL AND funding_trail != ''").fetchone()[0]
+                has_org = c.execute("SELECT COUNT(*) FROM deployers WHERE funding_trail LIKE '%org_link%'").fetchone()[0]
+                gas_stations = c.execute("SELECT COUNT(*) FROM deployers WHERE entity_type = 'gas_station'").fetchone()[0]
+                hop_traced = c.execute("SELECT COUNT(*) FROM deployers WHERE funding_trail LIKE '%hop_traced%'").fetchone()[0]
+                stats["funder_tracing"] = {
+                    "deployers_traced": has_trail,
+                    "coverage_pct": round(has_trail / total_dep * 100, 1) if total_dep > 0 else 0,
+                    "org_links_found": has_org,
+                    "gas_stations": gas_stations,
+                    "hop_traced": hop_traced,
+                }
+            except Exception:
+                stats["funder_tracing"] = {"status": "not available"}
+
             con.close()
             self._json(200, stats)
 

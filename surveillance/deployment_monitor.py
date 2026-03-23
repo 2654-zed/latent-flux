@@ -107,17 +107,20 @@ class DeploymentMonitor:
         self._selector_monitor = None
         self._revert_detector = None
         self._event_monitors = None
+        self._funder_tracer = None
 
     def _init_sub_monitors(self) -> None:
-        """Initialize selector monitor, revert detector, and event monitors."""
+        """Initialize selector monitor, revert detector, event monitors, and funder tracer."""
         if self._selector_monitor is None:
             from surveillance.selector_monitor import SelectorMonitor
             from surveillance.revert_cluster_detector import RevertClusterDetector
             from surveillance.event_monitors import EventMonitors
+            from surveillance.auto_funder_tracer import AutoFunderTracer
             self._selector_monitor = SelectorMonitor(self.conn)
             self._revert_detector = RevertClusterDetector(self.conn)
             self._event_monitors = EventMonitors(self.conn, self.chain)
-            logger.info("Sub-monitors initialized: selector_monitor, revert_cluster_detector, event_monitors")
+            self._funder_tracer = AutoFunderTracer(self.conn, self.chain)
+            logger.info("Sub-monitors initialized: selector_monitor, revert_cluster_detector, event_monitors, auto_funder_tracer")
 
     async def start(self, max_retries: int = 0) -> None:
         """Connect to WebSocket and begin monitoring blocks.
@@ -381,6 +384,17 @@ class DeploymentMonitor:
                 self._event_monitors.flag_cex_candidates()
         except Exception as e:
             logger.warning("Sub-monitor error on block %d: %s", block_number, e)
+
+        # Queue new deployers for funder tracing
+        try:
+            for dep in deployments:
+                self._funder_tracer.queue_deployer(dep.deployer_address)
+            await self._funder_tracer.process_pending(w3)
+            # Hop-trace high-score deployers every 1000 blocks
+            if block_number % 1000 == 0:
+                await self._funder_tracer.batch_hop_trace(w3)
+        except Exception as e:
+            logger.debug("Funder tracer error on block %d: %s", block_number, e)
 
         # Periodic heartbeat every 100 blocks
         if self._blocks_processed % 100 == 0:
