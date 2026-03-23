@@ -58,6 +58,14 @@ MIXERS = {
     "0xfa7093cdd9ee6932b4eb2c9e1cde7ce00b1fa4b9": "Railgun",
 }
 
+DEX_POOLS = {
+    "0x0e4831319a50228b9e450861297ab92dee15b44f": "WBTC/USDC Pool (org_001 exit swap)",
+    "0x5969efdde3cf5c0d9a88ae51e47d721096a97203": "WBTC/USDT Pool (org_001 exit swap)",
+    "0x5a17cbf5f866bde11c28861a2742764fac0eba4b": "USDC/WBTC Pool (org_001 laundry swap)",
+    "0x6985cb98ce393fce8d6272127f39013f61e36166": "WBTC/USDC Pool (org_001 exit swap)",
+    "0x7fcdc35463e3770c2fb992716cd070b63540b947": "USDC/WETH Pool (org_001 defi router swap)",
+}
+
 BRIDGE_CONTRACTS = {
     "0x0000000000000000000000000000000000000064": "Arbitrum ArbSys",
     "0x4200000000000000000000000000000000000010": "Base L2StandardBridge",
@@ -102,6 +110,8 @@ def classify_destination(address):
         return {"type": "BRIDGE", "label": BRIDGE_CONTRACTS[addr]}
     if addr in MIXERS:
         return {"type": "MIXER", "label": MIXERS[addr]}
+    if addr in DEX_POOLS:
+        return {"type": "DEX_POOL", "label": DEX_POOLS[addr]}
     return {"type": "UNKNOWN", "label": addr[:18] + "..."}
 
 
@@ -123,12 +133,21 @@ def extract_flows_from_extraction_events(conn):
             for tx in transfers:
                 if not isinstance(tx, dict):
                     continue
-                to_addr = tx.get("to", "").lower()
-                # Normalize short addresses
-                for known_addr in ORG_WALLETS:
-                    if to_addr and known_addr.startswith(to_addr.replace("...", "")):
-                        to_addr = known_addr
-                        break
+                to_addr = tx.get("to", "").lower().rstrip(".")
+                # Handle label references
+                label_map = {"cashout": "0xc6962004f452be9203591991d15f6b388e09e8d0"}
+                if to_addr in label_map:
+                    to_addr = label_map[to_addr]
+                # Normalize short/truncated addresses against all known registries
+                if len(to_addr) < 42:
+                    prefix = to_addr.replace("...", "").replace(" ", "")
+                    for registry in [ORG_WALLETS, CEX_HOT_WALLETS, DEX_ROUTERS, DEX_POOLS, MIXERS, BRIDGE_CONTRACTS]:
+                        for full_addr in registry:
+                            if full_addr.startswith(prefix):
+                                to_addr = full_addr
+                                break
+                        if len(to_addr) == 42:
+                            break
 
                 amount = tx.get("amount") or tx.get("weth") or tx.get("wbtc") or tx.get("amount_weth") or tx.get("amount_wbtc") or 0
                 token = "USDC" if "usdc" in flow_type.lower() or tx.get("asset") == "USDC" else \
@@ -226,7 +245,8 @@ def generate_flow_report(org_id=None):
 
     type_implications = {
         "CEX_DEPOSIT": "Cashout to fiat — identifiable with exchange cooperation",
-        "DEX_SWAP": "Token conversion — laundering through legitimate DeFi",
+        "DEX_SWAP": "Token conversion via router — laundering through legitimate DeFi",
+        "DEX_POOL": "Direct LP pool swap — WBTC/USDC/USDT conversion, fully traceable",
         "BRIDGE": "Cross-chain movement — expanding the trace surface",
         "MIXER": "Deliberate obfuscation — trail goes cold here",
         "INTERNAL": "Org-internal transfer — funds still in the operation",
@@ -246,7 +266,7 @@ def generate_flow_report(org_id=None):
 | Destination Type | Count | % | Implication |
 |---|---|---|---|
 """
-    for dtype in ["CEX_DEPOSIT", "MIXER", "DEX_SWAP", "BRIDGE", "INTERNAL", "UNKNOWN"]:
+    for dtype in ["CEX_DEPOSIT", "MIXER", "DEX_SWAP", "DEX_POOL", "BRIDGE", "INTERNAL", "UNKNOWN"]:
         type_flows = by_type.get(dtype, [])
         if not type_flows:
             continue
