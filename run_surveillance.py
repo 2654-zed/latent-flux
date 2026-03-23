@@ -771,6 +771,30 @@ class StatsHandler(BaseHTTPRequestHandler):
             con.close()
             self._json(200, {"added": exposed, "contract": contract})
 
+        elif self.path == "/admin/compact-db":
+            # Deduplicate alerts + WAL checkpoint
+            con = sqlite3.connect(DB_PATH, timeout=30)
+            # Count before
+            before = con.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+            # Keep one alert per unique (alert_type, address, tx_hash), delete duplicates
+            con.execute("""
+                DELETE FROM alerts WHERE rowid NOT IN (
+                    SELECT MIN(rowid) FROM alerts GROUP BY alert_type, address, tx_hash
+                )
+            """)
+            after = con.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+            deleted = before - after
+            con.commit()
+            # WAL checkpoint
+            con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            con.close()
+            self._json(200, {
+                "alerts_before": before,
+                "alerts_after": after,
+                "duplicates_removed": deleted,
+                "wal_checkpoint": "completed",
+            })
+
         elif self.path == "/admin/mark-false-positive":
             # Mark alerts as false positive by address
             addresses = [a.lower() for a in data.get("addresses", [])]

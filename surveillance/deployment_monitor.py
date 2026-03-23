@@ -219,7 +219,8 @@ class DeploymentMonitor:
                     pass
 
     async def _heartbeat_loop(self) -> None:
-        """Write heartbeat to DB every 60 seconds."""
+        """Write heartbeat to DB every 60 seconds. Checkpoint WAL hourly."""
+        heartbeat_count = 0
         while self._running:
             try:
                 db.write_heartbeat(
@@ -228,6 +229,16 @@ class DeploymentMonitor:
                 )
             except Exception as e:
                 logger.warning("Heartbeat write failed: %s", e)
+
+            # WAL checkpoint every 60 heartbeats (~1 hour)
+            heartbeat_count += 1
+            if heartbeat_count % 60 == 0:
+                try:
+                    self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                    logger.info("WAL checkpoint completed")
+                except Exception as e:
+                    logger.warning("WAL checkpoint failed: %s", e)
+
             await asyncio.sleep(60)
 
     def stop(self) -> None:
