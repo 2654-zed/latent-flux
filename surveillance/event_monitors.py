@@ -244,7 +244,7 @@ class EventMonitors:
         # 4. Check logs for PairCreated events (requires receipt — sample only)
         # We check logs from the block for factory events
         try:
-            if block_number % 10 == 0:  # Sample every 10th block to reduce RPC load
+            if block_number % 100 == 0:  # Sample every 100th block (~3-4 min on Arb, ~3 min on Base)
                 await self._check_pair_created(w3, block_number, timestamp_iso)
         except Exception as e:
             logger.debug("PairCreated check skipped: %s", e)
