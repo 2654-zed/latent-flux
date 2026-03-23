@@ -44,13 +44,31 @@ CEX_HOT_WALLETS = {
 }
 
 DEX_ROUTERS = {
+    # Uniswap
     "0xe592427a0aece92de3edee1f18e0157c05861564": "Uniswap V3",
     "0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45": "Uniswap V3 Router2",
     "0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad": "Uniswap Universal",
+    "0x7a250d5630b4cf539739df2c5dacb4c659f2488d": "Uniswap V2",
+    # PancakeSwap
     "0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24": "PancakeSwap V3",
-    "0x1111111254eeb25477b68fb85ed929f73a960582": "1inch V5",
+    "0x02a84c1b3bbd7401a5f7fa98a384ebc70bb5749e": "PancakeSwap V2 (Base)",
+    # SushiSwap
     "0x1b02da8cb0d097eb8d57a175b88c7d8b47997506": "SushiSwap V2",
     "0xd9e1ce17f2641f24ae83637ab66a2cca9c378b9f": "SushiSwap",
+    # Arbitrum-native
+    "0x1f721e2e82f6951c7b59a09dc21c1a9f4c882d1c": "Camelot V3 (Arb)",
+    "0xc873fecbd354f5a56e00e710b90ef4201db2448d": "Camelot V2 (Arb)",
+    "0xb4315e873dbcf96ffd0acd8ea43f689d8c20fb30": "Trader Joe V2.1 (Arb)",
+    # Base-native
+    "0xcf77a3ba9a5ca399b7c97c74d54e5b1beb874e43": "Aerodrome (Base)",
+    "0x6cb442acf35158d5eda88fe602221b67b400be3e": "Aerodrome V2 (Base)",
+    "0x327df1e6de05895d2ab08513aadd9313fe505d86": "BaseSwap (Base)",
+    "0xa062ae8a9c5e11aaa026fc2670b0d65ccc8b2858": "Velodrome (Base)",
+    # Aggregators
+    "0x1111111254eeb25477b68fb85ed929f73a960582": "1inch V5",
+    "0xa669e7a0d4b3e4fa48af2de86bd4cd7126be4e13": "Odos V2",
+    "0x6a000f20005980200259b80c5102003040001068": "Paraswap V6.2",
+    "0xdef1c0ded9bec7f1a1670819833240f027b25eff": "0x Exchange Proxy",
 }
 
 MIXERS = {
