@@ -37,6 +37,11 @@ TABLES = [
     "bytecode_cache",
     "heartbeat",
     "connection_gaps",
+    "liquidity_events",
+    "approval_events",
+    "bridge_events",
+    "pair_creation_events",
+    "cex_deposit_candidates",
 ]
 
 BATCH_SIZE = 5000

@@ -160,6 +160,27 @@ class StatsHandler(BaseHTTPRequestHandler):
             except Exception:
                 stats["longitudinal"] = {"error": "scoring not yet run"}
 
+            # Event monitors summary
+            try:
+                liq = c.execute("SELECT COUNT(*) FROM liquidity_events").fetchone()[0]
+                liq_crit = c.execute("SELECT COUNT(*) FROM liquidity_events WHERE alert_level = 'critical'").fetchone()[0]
+                approvals = c.execute("SELECT COUNT(*) FROM approval_events").fetchone()[0]
+                bridges = c.execute("SELECT COUNT(*) FROM bridge_events").fetchone()[0]
+                pairs = c.execute("SELECT COUNT(*) FROM pair_creation_events").fetchone()[0]
+                pairs_crit = c.execute("SELECT COUNT(*) FROM pair_creation_events WHERE alert_level = 'critical'").fetchone()[0]
+                cex = c.execute("SELECT COUNT(*) FROM cex_deposit_candidates WHERE flagged = 1").fetchone()[0]
+                stats["event_monitors"] = {
+                    "liquidity_events": liq,
+                    "liquidity_critical": liq_crit,
+                    "approval_events": approvals,
+                    "bridge_events": bridges,
+                    "pair_creations": pairs,
+                    "pair_creations_critical": pairs_crit,
+                    "cex_deposit_candidates": cex,
+                }
+            except Exception:
+                stats["event_monitors"] = {"status": "tables not yet created"}
+
             con.close()
             self._json(200, stats)
 
@@ -390,6 +411,57 @@ class StatsHandler(BaseHTTPRequestHandler):
                 {"exposed": r[0], "contract": r[1], "approved_at": r[2],
                  "amount": r[3], "status": r[4], "drain_tx": r[5],
                  "drain_usd": r[6], "notes": r[7]}
+                for r in rows
+            ])
+
+        elif self.path == "/liquidity-events":
+            rows = _query(
+                """SELECT tx_hash, block_number, timestamp, chain, router_address,
+                          caller_address, event_type, token_address, linked_deployer, alert_level
+                   FROM liquidity_events ORDER BY block_number DESC LIMIT 50"""
+            )
+            self._json(200, [
+                {"tx": r[0], "block": r[1], "timestamp": r[2], "chain": r[3],
+                 "router": r[4], "caller": r[5], "type": r[6], "token": r[7],
+                 "linked_deployer": r[8], "alert": r[9]}
+                for r in rows
+            ])
+
+        elif self.path == "/pair-creations":
+            rows = _query(
+                """SELECT tx_hash, block_number, timestamp, chain, factory_address,
+                          token0, token1, pair_address, linked_deployer, alert_level
+                   FROM pair_creation_events ORDER BY block_number DESC LIMIT 50"""
+            )
+            self._json(200, [
+                {"tx": r[0], "block": r[1], "timestamp": r[2], "chain": r[3],
+                 "factory": r[4], "token0": r[5], "token1": r[6], "pair": r[7],
+                 "linked_deployer": r[8], "alert": r[9]}
+                for r in rows
+            ])
+
+        elif self.path == "/cex-candidates":
+            rows = _query(
+                """SELECT address, chain, unique_senders, total_inflows, total_outflows,
+                          first_seen, last_seen
+                   FROM cex_deposit_candidates WHERE flagged = 1
+                   ORDER BY unique_senders DESC LIMIT 50"""
+            )
+            self._json(200, [
+                {"address": r[0], "chain": r[1], "senders": r[2], "inflows": r[3],
+                 "outflows": r[4], "first_seen": r[5], "last_seen": r[6]}
+                for r in rows
+            ])
+
+        elif self.path == "/bridge-events":
+            rows = _query(
+                """SELECT tx_hash, block_number, timestamp, chain, bridge_contract,
+                          sender, value_wei, org_link, alert_level
+                   FROM bridge_events ORDER BY block_number DESC LIMIT 50"""
+            )
+            self._json(200, [
+                {"tx": r[0], "block": r[1], "timestamp": r[2], "chain": r[3],
+                 "bridge": r[4], "sender": r[5], "value": r[6], "org": r[7], "alert": r[8]}
                 for r in rows
             ])
 
