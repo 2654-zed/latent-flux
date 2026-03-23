@@ -298,6 +298,37 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
         conn.execute("ALTER TABLE alerts ADD COLUMN false_positive INTEGER DEFAULT 0")
         conn.commit()
 
+    # Migration: create org_transfer_events if missing
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='org_transfer_events'"
+    )
+    if cursor.fetchone() is None:
+        conn.executescript("""
+            CREATE TABLE org_transfer_events (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                tx_hash         TEXT NOT NULL,
+                block_number    INTEGER NOT NULL,
+                timestamp       TEXT NOT NULL,
+                chain           TEXT NOT NULL,
+                from_address    TEXT NOT NULL,
+                to_address      TEXT NOT NULL,
+                value_eth       REAL,
+                token           TEXT,
+                org_id          TEXT,
+                from_role       TEXT,
+                selector        TEXT
+            );
+            CREATE INDEX idx_org_transfer_from ON org_transfer_events(from_address);
+            CREATE INDEX idx_org_transfer_ts ON org_transfer_events(timestamp);
+        """)
+
+    # Migration: add value_wei column to transaction_events
+    try:
+        conn.execute("SELECT value_wei FROM transaction_events LIMIT 1")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE transaction_events ADD COLUMN value_wei TEXT")
+        conn.commit()
+
     # Migration: add longitudinal scoring columns to deployers
     try:
         conn.execute("SELECT behavioral_score FROM deployers LIMIT 1")
@@ -780,18 +811,19 @@ def insert_transaction_event(conn: sqlite3.Connection, *,
                              max_priority_fee_gwei: Optional[float],
                              gas_pattern: Optional[str],
                              block_number: int, timestamp: str,
-                             is_reverted: bool, tx_hash: str) -> None:
+                             is_reverted: bool, tx_hash: str,
+                             value_wei: Optional[str] = None) -> None:
     conn.execute(
         """
         INSERT OR IGNORE INTO transaction_events (
             contract_address, interacting_address, function_selector, bot_tag,
             gas_price_gwei, max_priority_fee_gwei, gas_pattern,
-            block_number, timestamp, is_reverted, tx_hash
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            block_number, timestamp, is_reverted, tx_hash, value_wei
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (contract_address, interacting_address, function_selector, bot_tag,
          gas_price_gwei, max_priority_fee_gwei, gas_pattern,
-         block_number, timestamp, int(is_reverted), tx_hash),
+         block_number, timestamp, int(is_reverted), tx_hash, value_wei),
     )
     conn.commit()
 

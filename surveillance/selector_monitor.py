@@ -178,6 +178,10 @@ class SelectorMonitor:
 
         tx_hash = tx["hash"].hex() if isinstance(tx["hash"], bytes) else str(tx["hash"])
 
+        # Capture transaction value
+        raw_value = tx.get("value")
+        value_wei = str(raw_value) if raw_value and int(raw_value) > 0 else None
+
         try:
             db.insert_transaction_event(
                 self.conn,
@@ -192,6 +196,7 @@ class SelectorMonitor:
                 timestamp=timestamp_iso,
                 is_reverted=is_reverted,
                 tx_hash=tx_hash,
+                value_wei=value_wei,
             )
             self._events_logged += 1
 
