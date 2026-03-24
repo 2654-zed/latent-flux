@@ -4,7 +4,7 @@ import sqlite3
 import subprocess
 import sys
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import asyncio
@@ -1113,6 +1113,29 @@ routing = subprocess.Popen(
     stderr=sys.stderr,
 )
 processes.append(("routing", routing))
+
+# Daily report scheduler — runs at 06:00 UTC every day
+def _daily_report_scheduler():
+    """Background thread that generates the daily report at 06:00 UTC."""
+    import time as _t
+    while True:
+        now = datetime.now(timezone.utc)
+        # Calculate seconds until next 06:00 UTC
+        target = now.replace(hour=6, minute=3, second=0, microsecond=0)
+        if now >= target:
+            target += timedelta(days=1)
+        wait = (target - now).total_seconds()
+        print(f"Daily report scheduled in {wait/3600:.1f}h ({target.isoformat()[:16]})", flush=True)
+        _t.sleep(wait)
+        try:
+            print("Generating daily report...", flush=True)
+            from surveillance.daily_report import generate_report
+            path = generate_report()
+            print(f"Daily report generated: {path}", flush=True)
+        except Exception as e:
+            print(f"Daily report failed: {e}", flush=True)
+
+threading.Thread(target=_daily_report_scheduler, daemon=True).start()
 
 # Keep alive — restart any process that dies
 import time as _time
