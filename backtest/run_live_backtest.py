@@ -6,6 +6,7 @@ objects, groups by timestamp, and runs both arbitrage detectors side-by-side.
 Usage:
     python backtest/run_live_backtest.py                # EMA reservoir (baseline)
     python backtest/run_live_backtest.py --use-kalman   # UKF reservoir (Phase 1)
+    python backtest/run_live_backtest.py --data backtest/data/arbitrum_v3_30d.json
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backtest.bellman_ford import ArbOpportunity, find_arbitrage_opportunities as bf_find
 from backtest.latent_flux_searcher import (
+    SignalMeta,
     find_arbitrage_opportunities as lf_find,
     get_signal_metadata,
     reset_reservoir,
@@ -301,6 +303,9 @@ def print_extended_report(
     # Temporal lead/lag analysis
     _print_temporal_lead_lag(results)
 
+    # Gas economics comparison (when running on alternate data)
+    _print_gas_economics(results)
+
 
 def _print_deviation_distribution(results: list[ArbOpportunity]) -> None:
     """Print histogram of signal deviations (gross_profit as % of input)."""
@@ -551,6 +556,53 @@ def _print_cex_analysis(results: list[ArbOpportunity]) -> None:
     print()
 
 
+def _print_gas_economics(results: list[ArbOpportunity]) -> None:
+    """Print gas economics comparison: L1 ($25) vs L2 ($0.15) per trade."""
+    L1_GAS = 25.00
+    L2_GAS = 0.15
+
+    all_opps = [o for o in results if o.gross_profit_usd > 0]
+    if not all_opps:
+        return
+
+    l1_profitable = [o for o in all_opps if o.gross_profit_usd > L1_GAS]
+    l2_profitable = [o for o in all_opps if o.gross_profit_usd > L2_GAS]
+
+    l1_net_total = sum(o.gross_profit_usd - L1_GAS for o in l1_profitable)
+    l2_net_total = sum(o.gross_profit_usd - L2_GAS for o in l2_profitable)
+
+    l1_pct = len(l1_profitable) / len(all_opps) * 100 if all_opps else 0
+    l2_pct = len(l2_profitable) / len(all_opps) * 100 if all_opps else 0
+
+    improvement = (len(l2_profitable) / len(l1_profitable)
+                   if l1_profitable else float('inf'))
+
+    print("=" * 70)
+    print("GAS ECONOMICS COMPARISON")
+    print("=" * 70)
+    print("  Assumptions:")
+    print(f"    Arbitrum avg gas per trade:    ${L2_GAS:.2f}  (vs ${L1_GAS:.2f} on L1)")
+    print(f"    Trades analyzed:               {len(all_opps)}")
+    print()
+    print("  L1 (Ethereum mainnet):")
+    print(f"    Gross profitable signals:      {len(all_opps)}")
+    print(f"    Signals profitable AFTER ${L1_GAS:.0f} gas: "
+          f"{len(l1_profitable)}  ({l1_pct:.1f}% of gross)")
+    print(f"    Total net profit after gas:    ${l1_net_total:,.2f}")
+    print()
+    print("  L2 (Arbitrum — estimated):")
+    print(f"    Signals profitable AFTER ${L2_GAS:.2f} gas: "
+          f"{len(l2_profitable)}  ({l2_pct:.1f}% of gross)")
+    print(f"    Total net profit after gas:    ${l2_net_total:,.2f}")
+    if l1_profitable:
+        print(f"    Improvement vs L1:             "
+              f"{improvement:.1f}x more profitable signals")
+    else:
+        print("    Improvement vs L1:             "
+              "∞ (no L1 signals survive gas)")
+    print()
+
+
 def _print_temporal_lead_lag(results: list[ArbOpportunity]) -> None:
     """Temporal lead/lag: does LF fire 1-3 hours before BF real signals?"""
     meta = get_signal_metadata()
@@ -722,12 +774,20 @@ def main() -> int:
 
     use_kalman = "--use-kalman" in sys.argv
 
-    print("ETH Arbitrage Backtest — Live Data")
+    # Resolve data file path from --data flag
+    data_path = DATA_FILE
+    for i, arg in enumerate(sys.argv[1:], 1):
+        if arg == "--data" and i < len(sys.argv) - 1:
+            data_path = Path(sys.argv[i + 1])
+            break
+
+    chain_label = "Arbitrum" if "arbitrum" in str(data_path).lower() else "L1"
+    print(f"ETH Arbitrage Backtest — {chain_label} Data")
     print("=" * 70)
 
     # Load data
     try:
-        meta, hour_data = load_json_data()
+        meta, hour_data = load_json_data(data_path)
     except FileNotFoundError as e:
         print(f"FATAL: {e}", file=sys.stderr)
         return 1
@@ -735,6 +795,10 @@ def main() -> int:
     print(f"Loaded: {meta['total_records']} records, "
           f"{len(meta['pools'])} pools, "
           f"{meta['start']} -> {meta['end']}")
+    if meta.get("chain"):
+        print(f"Chain: {meta['chain']}")
+    if meta.get("source"):
+        print(f"Source: {meta['source']}")
 
     # Parse and group
     all_states = parse_hour_data(meta, hour_data)
