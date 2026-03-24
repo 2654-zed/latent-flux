@@ -43,7 +43,7 @@ Forensic analysis of individual transactions (see Appendix B: PoC Script) reveal
 
 **Sell-side (user sells SXAI token for WETH):**
 1. User sends SXAI tokens to the contract
-2. Contract forwards SXAI to the LP pool (`0x7609153350cd...`)
+2. Contract forwards SXAI to the LP pool (`0x7609153350cd0184c5df525d58490edf3bacef3b`)
 3. LP pool sends WETH **to the contract** (not to the user)
 4. **Contract retains 100% of the WETH — it never reaches the user**
 5. Transaction shows as "successful" — no revert, no error
@@ -54,7 +54,7 @@ This is implemented via a KECCAK256-keyed storage lookup that gates transfer log
 
 From forensic analysis of 5 real transactions (full script in Appendix B):
 
-**Sell-side transaction `0xca11c6cc...` (block 43794701):**
+**Sell-side transaction `0xca11c6cc3187a41bec97efc9bcc4a08481349d9fcf0b69797ed28b20a2918e30` (block 43794701):**
 ```
 Skimmer inflows:
   <- User sends 1,799,958,270 SXAI tokens
@@ -67,7 +67,7 @@ WETH retained by skimmer: 0.0502 WETH (100% of WETH output)
 WETH received by user: 0
 ```
 
-**Sell-side transaction `0xd6ef7ae2...` (block 43794700):**
+**Sell-side transaction `0xd6ef7ae26eda027c3950334c682ee48b45462d33bec4bf3e9b30d252c3489ba5` (block 43794700):**
 ```
 Skimmer inflows:
   <- User sends 17,999,582,700 SXAI tokens
@@ -150,8 +150,8 @@ BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/YOUR_KEY python3 fee_extracti
 **Malicious Contract:** `0xd4624228cce5baa0814c9e7f666a8a2c83b6f159`
 **Chain:** Base
 **Deployer:** `0xe8e0c4883d7196a7de87a6489f6da58212dbe813`
-**LP Pool:** `0x7609153350cd...`
-**Token:** SXAI (`0xea6b6bc260ed...`)
+**LP Pool:** `0x7609153350cd0184c5df525d58490edf3bacef3b`
+**Token:** SXAI (`0xea6b6bC260ED8241190C277d2fe7718Ea6CbF667`)
 **Deployed:** Block 43579539 (2026-03-19T19:27:05 UTC)
 **First victim interaction:** 2026-03-22T19:29:49 UTC
 **Last victim interaction:** 2026-03-24T18:59:11 UTC (ongoing)
@@ -159,11 +159,11 @@ BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/YOUR_KEY python3 fee_extracti
 **Analyzed Transaction Hashes:**
 | TX Hash | Block | Direction | WETH Retained |
 |---|---|---|---|
-| `0xca11c6cc3187a41bec97efc9bcc4a08481349d9f...` | 43794701 | Sell | 0.0502 WETH |
-| `0xd6ef7ae26eda027c3950334c682ee48b45462d33...` | 43794700 | Sell | 0.5235 WETH |
-| `0x0870a02fbac0b92dbb0e4111fb87d30399c7463a...` | 43794702 | Buy | 0 (no extraction) |
-| `0x615bc56dd5037344f6d2a895e3aead0e133a3377...` | 43794700 | Buy | 0 (no extraction) |
-| `0xcefb1332a0d960a8b07b487aa94dc45b159b81bb...` | 43794695 | Buy | 0 (no extraction) |
+| `0xca11c6cc3187a41bec97efc9bcc4a08481349d9fcf0b69797ed28b20a2918e30` | 43794701 | Sell | 0.0502 WETH |
+| `0xd6ef7ae26eda027c3950334c682ee48b45462d33bec4bf3e9b30d252c3489ba5` | 43794700 | Sell | 0.5235 WETH |
+| `0x0870a02fbac0b92dbb0e4111fb87d30399c7463aef4f231705eddb2e73668111` | 43794702 | Buy | 0 (no extraction) |
+| `0x615bc56dd5037344f6d2a895e3aead0e133a33770a07e7cd7e82d435d94f80a1` | 43794700 | Buy | 0 (no extraction) |
+| `0xcefb1332a0d960a8b07b487aa94dc45b159b81bbbd7f1250ed8257f22fd2c705` | 43794695 | Buy | 0 (no extraction) |
 
 ### Evidence Item 1: Selector Analysis Proves Router Delivery
 
@@ -193,9 +193,9 @@ The deployer (`0xe8e0c4883d7196a7de87a6489f6da58212dbe813`) withdrew:
 
 | Destination | Amount | Asset |
 |---|---|---|
-| `0xd462be33c46d84a0...` | 47.31 + 38.26 | WETH |
-| `0xe502b1568aba0704...` | 8.0 | WETH |
-| `0x07bd23d6ae11e614...` | 7.0 | WETH |
+| `0xd462be33c46d84a0ce702103336f2fc290dcf159` | 47.31 + 38.26 | WETH |
+| `0xe502b1568aba07040a4580717e3399297067c50e` | 8.0 | WETH |
+| `0x07bd23d6ae11e61450ea74c4d96e21f3946eacb6` | 7.0 | WETH |
 | **Total** | **~100.56** | **WETH (~$211,176)** |
 
 The deployer also distributed Unicode impersonation tokens (WETH with Cyrillic characters: `WEТH`, `ℰꓔℋ`, `ƐТꓧ`) to obfuscate on-chain trail analysis. The deployer wallet is now empty (balance: 0, nonce: 10).

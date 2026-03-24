@@ -26,16 +26,8 @@ from web3 import Web3
 
 BASE_RPC = os.environ.get("BASE_RPC_URL", "")
 if not BASE_RPC:
-    # Try to load from .env
-    env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
-    if os.path.exists(env_path):
-        for line in open(env_path):
-            line = line.strip()
-            if line.startswith("BASE_WSS_URL="):
-                BASE_RPC = line.split("=", 1)[1].replace("wss://", "https://")
-
-if not BASE_RPC:
     print("ERROR: Set BASE_RPC_URL environment variable")
+    print("Example: BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/YOUR_KEY python3 fee_extraction_poc.py")
     sys.exit(1)
 
 # The fee-skimming contract
