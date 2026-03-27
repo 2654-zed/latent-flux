@@ -114,6 +114,42 @@ def generate_brief(target_date: str = None) -> Path:
         md += "No camouflage data.\n"
     md += "\n"
 
+    # Callback trap watch — mine existing data for V3/V2 callback abuse
+    md += "## Callback Trap Watch\n\n"
+    cb_traps = conn.execute("""
+        SELECT c.contract_address, c.chain, c.deployer_address, c.bytecode_pattern_notes,
+               COUNT(te.tx_hash) as hits,
+               COUNT(DISTINCT te.interacting_address) as victims,
+               SUM(CASE WHEN te.is_reverted=1 THEN 1 ELSE 0 END) as reverts,
+               ROUND(SUM(CASE WHEN te.is_reverted=1 THEN 1.0 ELSE 0 END)/NULLIF(COUNT(*),0)*100, 1) as rev_pct,
+               d.funding_trail
+        FROM contracts c
+        LEFT JOIN transaction_events te ON te.contract_address = c.contract_address
+            AND te.timestamp >= ? AND te.timestamp < ?
+        LEFT JOIN deployers d ON d.deployer_address = c.deployer_address
+        WHERE c.bytecode_pattern_notes LIKE '%callback%'
+        GROUP BY c.contract_address
+        HAVING hits > 0
+        ORDER BY hits DESC LIMIT 10
+    """, (f"{day}T00:00:00", f"{day}T23:59:59")).fetchall()
+    if cb_traps:
+        md += "| Contract | Chain | Hits | Victims | Rev% | Deployer | Org Link |\n|---|---|---|---|---|---|---|\n"
+        for t in cb_traps:
+            org = ""
+            if t['funding_trail']:
+                import json as _json
+                try:
+                    trail = _json.loads(t['funding_trail'])
+                    org = trail.get('org_link', '')
+                except Exception:
+                    pass
+            md += f"| `{t['contract_address'][:16]}...` | {t['chain']} | {t['hits']:,} | {t['victims']:,} | {t['rev_pct']:.0f}% | `{t['deployer_address'][:12]}...` | {org} |\n"
+        total_victims = sum(t['victims'] for t in cb_traps)
+        md += f"\nCallback traps active today: {len(cb_traps)} | Total victims: {total_victims:,}\n"
+    else:
+        md += "No callback trap activity today.\n"
+    md += "\n"
+
     # Top bytecode families
     md += "## Bytecode Family Watch\n\n"
     fams = conn.execute("SELECT * FROM bytecode_families WHERE is_cross_deployer=1 ORDER BY member_count DESC LIMIT 5").fetchall()
@@ -148,6 +184,59 @@ def generate_brief(target_date: str = None) -> Path:
 
     gaps = conn.execute("SELECT COUNT(*) FROM connection_gaps WHERE disconnect > ?", (f"{day}T00:00:00",)).fetchone()[0]
     md += f"- Connection gaps today: {gaps}\n"
+
+    # Strategy lifecycle monitor
+    md += "## Strategy Lifecycle Monitor\n\n"
+    try:
+        lifecycle = conn.execute("SELECT * FROM strategy_lifecycle ORDER BY saturation_index DESC").fetchall()
+        if lifecycle:
+            md += "| Strategy | Bots | Traps | Saturation | Stage | Profit | Avg Rev |\n|---|---|---|---|---|---|---|\n"
+            for sl in lifecycle:
+                md += f"| {sl['strategy_type']} | {sl['active_bots']} | {sl['trap_count']} | {sl['saturation_index']:.3f} | {sl['lifecycle_stage']} | {sl['avg_bot_profitability']} | {sl['avg_bot_revert_rate']:.1f}% |\n"
+        else:
+            md += "No strategy lifecycle data. Run `strategy_fingerprint --lifecycle`.\n"
+    except Exception:
+        md += "Strategy lifecycle table not yet created.\n"
+    md += "\n"
+
+    # Bait detection summary
+    md += "## Bait Detection Summary\n\n"
+    try:
+        bait = conn.execute("""
+            SELECT bait_type, target_strategy, COUNT(*) as traps,
+                SUM(bot_victims) as bot_victims,
+                ROUND(AVG(bot_revert_rate), 1) as avg_bot_rev
+            FROM bait_profiles GROUP BY bait_type, target_strategy ORDER BY traps DESC
+        """).fetchall()
+        if bait:
+            md += "| Bait Type | Target Strategy | Traps | Bot Victims | Bot Rev% |\n|---|---|---|---|---|\n"
+            for b in bait:
+                md += f"| {b['bait_type']} | {b['target_strategy']} | {b['traps']} | {b['bot_victims']} | {b['avg_bot_rev']:.1f}% |\n"
+        else:
+            md += "No bait profiles. Run `strategy_fingerprint --profile-baits`.\n"
+    except Exception:
+        md += "Bait profiles table not yet created.\n"
+    md += "\n"
+
+    # Vanity address activity
+    md += "## Vanity Address Watch\n\n"
+    try:
+        vanity = conn.execute("""
+            SELECT vt.label, vt.pattern_type, COUNT(DISTINCT vt.address) as addresses,
+                vt.address_type
+            FROM vanity_tags vt
+            GROUP BY vt.label, vt.address_type
+            ORDER BY addresses DESC LIMIT 15
+        """).fetchall()
+        if vanity:
+            md += "| Label | Type | Addresses | Role |\n|---|---|---|---|\n"
+            for v in vanity:
+                md += f"| {v['label']} | {v['pattern_type']} | {v['addresses']} | {v['address_type']} |\n"
+        else:
+            md += "No vanity addresses tagged. Run `vanity_detector --scan`.\n"
+    except Exception:
+        md += "Vanity tags table not yet created.\n"
+    md += "\n"
 
     md += "\n---\n*Generated by surveillance/daily_brief.py*\n"
 

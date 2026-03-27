@@ -222,7 +222,8 @@ class DeploymentMonitor:
                     pass
 
     async def _heartbeat_loop(self) -> None:
-        """Write heartbeat to DB every 60 seconds. Checkpoint WAL hourly."""
+        """Write heartbeat to DB every 60 seconds. Checkpoint WAL every 15 min.
+        Also prunes bytecode cache for clean/unknown contracts every 6 hours."""
         heartbeat_count = 0
         while self._running:
             try:
@@ -233,14 +234,44 @@ class DeploymentMonitor:
             except Exception as e:
                 logger.warning("Heartbeat write failed: %s", e)
 
-            # WAL checkpoint every 60 heartbeats (~1 hour)
             heartbeat_count += 1
-            if heartbeat_count % 60 == 0:
+
+            # WAL checkpoint every 15 heartbeats (~15 min) using PASSIVE mode
+            # PASSIVE doesn't require exclusive lock — safe with concurrent writers
+            if heartbeat_count % 15 == 0:
                 try:
-                    self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                    logger.info("WAL checkpoint completed")
+                    result = self.conn.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
+                    logger.info("WAL checkpoint (PASSIVE): busy=%s, log=%s, checkpointed=%s",
+                                result[0], result[1], result[2])
+                    # If WAL is large (log > 5000 pages), try TRUNCATE
+                    if result and result[1] and result[1] > 5000:
+                        try:
+                            self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                            logger.info("WAL checkpoint (TRUNCATE) succeeded - WAL was large")
+                        except Exception:
+                            logger.info("WAL TRUNCATE failed (concurrent access) - PASSIVE was enough")
                 except Exception as e:
                     logger.warning("WAL checkpoint failed: %s", e)
+
+            # Prune bytecode cache every 360 heartbeats (~6 hours)
+            # Remove cached bytecode for contracts with no trap patterns
+            if heartbeat_count % 360 == 0:
+                try:
+                    cursor = self.conn.execute("""
+                        DELETE FROM bytecode_cache WHERE source_contract IN (
+                            SELECT bc.source_contract FROM bytecode_cache bc
+                            LEFT JOIN contracts c ON c.contract_address = bc.source_contract
+                            WHERE (c.confidence_tier = 'unknown' OR c.confidence_tier IS NULL)
+                            AND bc.confidence_tier = 'unknown'
+                            AND bc.hit_count = 0
+                        )
+                    """)
+                    deleted = cursor.rowcount
+                    self.conn.commit()
+                    if deleted:
+                        logger.info("Bytecode cache pruned: %d unknown entries removed", deleted)
+                except Exception as e:
+                    logger.warning("Bytecode cache prune failed: %s", e)
 
             await asyncio.sleep(60)
 

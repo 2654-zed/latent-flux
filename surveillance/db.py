@@ -34,6 +34,7 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA wal_autocheckpoint = 1000")  # Auto-checkpoint every 1000 pages (~4MB)
 
     # Check if schema is already applied
     cursor = conn.execute(
@@ -341,6 +342,41 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
         conn.execute("ALTER TABLE deployers ADD COLUMN score_breakdown TEXT")
         conn.commit()
 
+    # Migration: add vanity_tags table
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='vanity_tags'"
+    )
+    if cursor.fetchone() is None:
+        conn.executescript("""
+            CREATE TABLE vanity_tags (
+                address TEXT PRIMARY KEY,
+                address_type TEXT,
+                pattern_type TEXT,
+                label TEXT,
+                detected_at TEXT
+            );
+            CREATE INDEX idx_vanity_label ON vanity_tags(label);
+        """)
+
+    # Migration: add eth_traces table for Ethereum mainnet depth tracing
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='eth_traces'"
+    )
+    if cursor.fetchone() is None:
+        conn.executescript("""
+            CREATE TABLE eth_traces (
+                address TEXT PRIMARY KEY,
+                traced_at TEXT NOT NULL,
+                inbound_count INTEGER DEFAULT 0,
+                outbound_count INTEGER DEFAULT 0,
+                bridge_interactions TEXT,
+                cex_connections TEXT,
+                funding_hops TEXT,
+                labels_found TEXT,
+                raw_result TEXT
+            );
+        """)
+
     return conn
 
 
@@ -354,7 +390,13 @@ def ensure_deployer(conn: sqlite3.Connection, deployer_address: str,
     Upsert a minimal deployer row. Called BEFORE inserting a contract
     to satisfy the FK constraint. If the deployer already exists,
     updates last_seen and increments total_contracts_deployed.
+    Also tags vanity addresses on first sight.
     """
+    # Check if this is a new deployer (for vanity tagging)
+    is_new = conn.execute(
+        "SELECT 1 FROM deployers WHERE deployer_address = ?", (deployer_address,)
+    ).fetchone() is None
+
     conn.execute(
         """
         INSERT INTO deployers (deployer_address, chain, first_seen, last_seen,
@@ -366,6 +408,19 @@ def ensure_deployer(conn: sqlite3.Connection, deployer_address: str,
         """,
         (deployer_address, chain, timestamp_iso, timestamp_iso, timestamp_iso),
     )
+
+    # Tag vanity address on first appearance
+    if is_new:
+        try:
+            from surveillance.vanity_detector import detect_vanity
+            result = detect_vanity(deployer_address)
+            if result:
+                conn.execute(
+                    "INSERT OR IGNORE INTO vanity_tags (address, address_type, pattern_type, label, detected_at) VALUES (?, ?, ?, ?, ?)",
+                    (deployer_address.lower(), "deployer", result[0], result[1], timestamp_iso),
+                )
+        except Exception:
+            pass  # vanity detection is non-critical
 
 
 def get_deployer(conn: sqlite3.Connection, address: str) -> Optional[dict]:

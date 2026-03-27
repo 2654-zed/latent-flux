@@ -14,6 +14,8 @@ PORT = int(os.environ.get("PORT", 8080))
 # Alchemy HTTP URL derived from WSS URL
 _wss = os.environ.get("ARB_WSS_URL", "")
 ALCHEMY_HTTP = _wss.replace("wss://", "https://") if _wss else ""
+_eth_wss = os.environ.get("ETH_WSS_URL", "")
+ETH_HTTP = _eth_wss.replace("wss://", "https://") if _eth_wss else ""
 
 
 def _query(sql, fetchone=False):
@@ -961,6 +963,39 @@ class StatsHandler(BaseHTTPRequestHandler):
             result = asyncio.run(_run())
             self._json(200, result)
 
+        elif self.path == "/admin/eth-trace":
+            # Ethereum mainnet depth trace — on-demand only
+            if not ETH_HTTP:
+                self._json(500, {"error": "ETH_WSS_URL not configured"})
+                return
+            addr = data.get("address", "").lower()
+            check_only = data.get("check_only", False)
+            hops = data.get("hops", 2)
+            # batch mode: check multiple addresses for mainnet presence
+            addresses = data.get("addresses", [])
+
+            if not addr and not addresses:
+                self._json(400, {"error": "address or addresses[] required"})
+                return
+
+            async def _run():
+                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                from surveillance.eth_depth import (
+                    trace_eth_mainnet, trace_l2_address_on_eth,
+                    batch_check_mainnet_presence, ensure_tables,
+                )
+                con = sqlite3.connect(DB_PATH)
+                ensure_tables(con)
+                if addresses:
+                    return await batch_check_mainnet_presence(ETH_HTTP, [a.lower() for a in addresses], con)
+                elif check_only:
+                    return await trace_l2_address_on_eth(ETH_HTTP, addr, con)
+                else:
+                    return await trace_eth_mainnet(ETH_HTTP, addr, con, max_hops=hops)
+
+            result = asyncio.run(_run())
+            self._json(200, result)
+
         elif self.path == "/admin/register-webhook":
             # Register Alchemy Notify webhooks from inside Railway
             alchemy_token = os.environ.get("ALCHEMY_AUTH_TOKEN", "")
@@ -1083,6 +1118,49 @@ def run_stats_server():
 
 # Start HTTP stats server in background thread
 threading.Thread(target=run_stats_server, daemon=True).start()
+
+# ---- Startup DB cleanup (run before monitors start) ----
+print("Running startup DB cleanup...", flush=True)
+try:
+    _cleanup_conn = sqlite3.connect(DB_PATH, timeout=30)
+
+    # 1. Prune bytecode cache — remove entries for unknown contracts with no hits
+    _before = _cleanup_conn.execute("SELECT COUNT(*) FROM bytecode_cache").fetchone()[0]
+    _cleanup_conn.execute("""
+        DELETE FROM bytecode_cache WHERE source_contract IN (
+            SELECT bc.source_contract FROM bytecode_cache bc
+            LEFT JOIN contracts c ON c.contract_address = bc.source_contract
+            WHERE (c.confidence_tier = 'unknown' OR c.confidence_tier IS NULL)
+            AND bc.confidence_tier = 'unknown'
+            AND bc.hit_count = 0
+        )
+    """)
+    _after = _cleanup_conn.execute("SELECT COUNT(*) FROM bytecode_cache").fetchone()[0]
+    print(f"  Bytecode cache: {_before} -> {_after} ({_before - _after} pruned)", flush=True)
+
+    # 2. Deduplicate alerts table
+    _alert_before = _cleanup_conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+    _cleanup_conn.execute("""
+        DELETE FROM alerts WHERE rowid NOT IN (
+            SELECT MIN(rowid) FROM alerts GROUP BY alert_type, address, tx_hash
+        )
+    """)
+    _alert_after = _cleanup_conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+    print(f"  Alerts: {_alert_before} -> {_alert_after} ({_alert_before - _alert_after} deduped)", flush=True)
+
+    _cleanup_conn.commit()
+
+    # 3. WAL checkpoint + VACUUM
+    _cleanup_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    print("  WAL checkpoint: TRUNCATE complete", flush=True)
+
+    # 4. Set WAL auto-checkpoint to smaller threshold (1000 pages = ~4MB)
+    _cleanup_conn.execute("PRAGMA wal_autocheckpoint = 1000")
+
+    _cleanup_conn.close()
+    print("Startup cleanup complete.", flush=True)
+except Exception as e:
+    print(f"Startup cleanup failed (non-fatal): {e}", flush=True)
 
 # Start surveillance components
 processes = []
