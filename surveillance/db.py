@@ -342,6 +342,28 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
         conn.execute("ALTER TABLE deployers ADD COLUMN score_breakdown TEXT")
         conn.commit()
 
+    # Migration: add infra_events table for external infrastructure correlation
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='infra_events'"
+    )
+    if cursor.fetchone() is None:
+        conn.executescript("""
+            CREATE TABLE infra_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_date TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                provider TEXT,
+                chain TEXT,
+                description TEXT,
+                impact_metric TEXT,
+                impact_before REAL,
+                impact_after REAL,
+                impact_pct REAL,
+                source TEXT,
+                logged_at TEXT
+            );
+        """)
+
     # Migration: add vanity_tags table
     cursor = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='vanity_tags'"
