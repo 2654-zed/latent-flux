@@ -996,6 +996,43 @@ class StatsHandler(BaseHTTPRequestHandler):
             result = asyncio.run(_run())
             self._json(200, result)
 
+        elif self.path == "/admin/replay-gaps":
+            # Replay historical blocks to recover missed transaction events
+            chain = data.get("chain", "base")
+            from_block = data.get("from_block")
+            to_block = data.get("to_block")
+            fill_gaps = data.get("fill_gaps", False)
+            batch_size = data.get("batch", 50)
+
+            if not fill_gaps and (not from_block or not to_block):
+                self._json(400, {"error": "provide fill_gaps=true or from_block+to_block"})
+                return
+
+            # Run in background thread so it doesn't block the HTTP server
+            import threading
+
+            def _replay():
+                try:
+                    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                    from surveillance.block_replayer import replay_blocks, fill_gaps as do_fill_gaps
+                    if fill_gaps:
+                        asyncio.run(do_fill_gaps(chain))
+                    else:
+                        asyncio.run(replay_blocks(chain, from_block, to_block, batch_size))
+                except Exception as e:
+                    print(f"[replay] Error: {e}", flush=True)
+
+            t = threading.Thread(target=_replay, daemon=True)
+            t.start()
+            self._json(200, {
+                "status": "started",
+                "chain": chain,
+                "fill_gaps": fill_gaps,
+                "from_block": from_block,
+                "to_block": to_block,
+                "note": "Running in background. Check logs for progress."
+            })
+
         elif self.path == "/admin/register-webhook":
             # Register Alchemy Notify webhooks from inside Railway
             alchemy_token = os.environ.get("ALCHEMY_AUTH_TOKEN", "")
