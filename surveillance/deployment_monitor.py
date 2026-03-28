@@ -273,6 +273,104 @@ class DeploymentMonitor:
                 except Exception as e:
                     logger.warning("Bytecode cache prune failed: %s", e)
 
+            # Self-test trap detection every 30 heartbeats (~30 min)
+            # Finds contracts where 100% of interactions come from the deployer
+            if heartbeat_count % 30 == 0:
+                try:
+                    # Ensure table exists
+                    self.conn.execute("""
+                        CREATE TABLE IF NOT EXISTS self_test_traps (
+                            contract_address TEXT PRIMARY KEY,
+                            deployer_address TEXT NOT NULL,
+                            chain TEXT,
+                            self_hits INTEGER DEFAULT 0,
+                            self_reverts INTEGER DEFAULT 0,
+                            external_hits INTEGER DEFAULT 0,
+                            external_first_seen TEXT,
+                            status TEXT DEFAULT 'SELF_TEST',
+                            bytecode_patterns TEXT,
+                            detected_at TEXT,
+                            last_checked TEXT
+                        )
+                    """)
+
+                    from datetime import datetime, timezone
+                    now_iso = datetime.now(timezone.utc).isoformat()
+
+                    # Find contracts where deployer is the ONLY caller, 10+ hits
+                    new_self_tests = self.conn.execute("""
+                        SELECT c.contract_address, c.deployer_address, c.chain,
+                            c.bytecode_pattern_notes,
+                            COUNT(*) as self_hits,
+                            SUM(CASE WHEN te.is_reverted=1 THEN 1 ELSE 0 END) as self_reverts
+                        FROM contracts c
+                        JOIN transaction_events te ON te.contract_address = c.contract_address
+                        LEFT JOIN self_test_traps st ON st.contract_address = c.contract_address
+                        WHERE te.interacting_address = c.deployer_address
+                        AND st.contract_address IS NULL
+                        GROUP BY c.contract_address
+                        HAVING self_hits >= 10
+                        AND COUNT(DISTINCT te.interacting_address) = 1
+                    """).fetchall()
+
+                    for r in new_self_tests:
+                        self.conn.execute("""
+                            INSERT OR IGNORE INTO self_test_traps
+                            (contract_address, deployer_address, chain, self_hits, self_reverts,
+                             external_hits, status, bytecode_patterns, detected_at, last_checked)
+                            VALUES (?, ?, ?, ?, ?, 0, 'SELF_TEST', ?, ?, ?)
+                        """, (r["contract_address"], r["deployer_address"], r["chain"],
+                              r["self_hits"], r["self_reverts"],
+                              r["bytecode_pattern_notes"], now_iso, now_iso))
+                        logger.info(
+                            "SELF-TEST TRAP DETECTED: %s (deployer=%s, %d self-hits, %d reverts)",
+                            r["contract_address"][:18], r["deployer_address"][:14],
+                            r["self_hits"], r["self_reverts"])
+
+                    # Update existing self-test traps — check for first external interaction
+                    existing = self.conn.execute(
+                        "SELECT contract_address, deployer_address FROM self_test_traps WHERE status = 'SELF_TEST'"
+                    ).fetchall()
+
+                    for st in existing:
+                        ext = self.conn.execute("""
+                            SELECT COUNT(*) as hits, MIN(timestamp) as first_seen
+                            FROM transaction_events
+                            WHERE contract_address = ? AND interacting_address != ?
+                        """, (st["contract_address"], st["deployer_address"])).fetchone()
+
+                        if ext and ext["hits"] and ext["hits"] > 0:
+                            self.conn.execute("""
+                                UPDATE self_test_traps
+                                SET external_hits = ?, external_first_seen = ?,
+                                    status = 'ARMED', last_checked = ?
+                                WHERE contract_address = ?
+                            """, (ext["hits"], ext["first_seen"], now_iso, st["contract_address"]))
+                            logger.warning(
+                                "SELF-TEST TRAP ARMED: %s has first external victim! %d external hits since %s",
+                                st["contract_address"][:18], ext["hits"], ext["first_seen"])
+                        else:
+                            # Update self-hit count
+                            self_count = self.conn.execute("""
+                                SELECT COUNT(*) as hits,
+                                    SUM(CASE WHEN is_reverted=1 THEN 1 ELSE 0 END) as reverts
+                                FROM transaction_events
+                                WHERE contract_address = ? AND interacting_address = ?
+                            """, (st["contract_address"], st["deployer_address"])).fetchone()
+                            self.conn.execute("""
+                                UPDATE self_test_traps
+                                SET self_hits = ?, self_reverts = ?, last_checked = ?
+                                WHERE contract_address = ?
+                            """, (self_count["hits"], self_count["reverts"], now_iso,
+                                  st["contract_address"]))
+
+                    if new_self_tests:
+                        self.conn.commit()
+                        logger.info("Self-test scan: %d new traps detected", len(new_self_tests))
+
+                except Exception as e:
+                    logger.warning("Self-test trap scan failed: %s", e)
+
             await asyncio.sleep(60)
 
     def stop(self) -> None:

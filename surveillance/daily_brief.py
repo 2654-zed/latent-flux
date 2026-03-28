@@ -238,6 +238,36 @@ def generate_brief(target_date: str = None) -> Path:
         md += "Vanity tags table not yet created.\n"
     md += "\n"
 
+    # Self-test trap early warning
+    md += "## Zero-Day Trap Watch (Self-Test Detection)\n\n"
+    try:
+        self_tests = conn.execute("""
+            SELECT st.*,
+                ROUND(CAST(st.self_reverts AS REAL) / NULLIF(st.self_hits, 0) * 100, 0) as rev_pct
+            FROM self_test_traps st
+            ORDER BY CASE st.status WHEN 'ARMED' THEN 0 ELSE 1 END, st.self_hits DESC
+            LIMIT 10
+        """).fetchall()
+        if self_tests:
+            armed = [s for s in self_tests if s['status'] == 'ARMED']
+            testing = [s for s in self_tests if s['status'] == 'SELF_TEST']
+            if armed:
+                md += f"**{len(armed)} ARMED** (first external victim detected):\n\n"
+                md += "| Contract | Deployer | Self-Hits | Rev% | External | First Victim |\n|---|---|---|---|---|---|\n"
+                for s in armed:
+                    md += f"| `{s['contract_address'][:16]}...` | `{s['deployer_address'][:12]}...` | {s['self_hits']:,} | {s['rev_pct']:.0f}% | {s['external_hits']} | {s['external_first_seen'][:16] if s['external_first_seen'] else '?'} |\n"
+                md += "\n"
+            if testing:
+                md += f"**{len(testing)} in R&D** (deployer-only interaction):\n\n"
+                md += "| Contract | Deployer | Self-Hits | Rev% | Patterns |\n|---|---|---|---|---|\n"
+                for s in testing:
+                    md += f"| `{s['contract_address'][:16]}...` | `{s['deployer_address'][:12]}...` | {s['self_hits']:,} | {s['rev_pct']:.0f}% | {(s['bytecode_patterns'] or 'none')[:40]} |\n"
+        else:
+            md += "No self-test traps detected.\n"
+    except Exception:
+        md += "Self-test trap table not yet created.\n"
+    md += "\n"
+
     # Infrastructure events
     md += "## Infrastructure Events\n\n"
     try:

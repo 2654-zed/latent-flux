@@ -342,6 +342,29 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
         conn.execute("ALTER TABLE deployers ADD COLUMN score_breakdown TEXT")
         conn.commit()
 
+    # Migration: add self_test_traps table for deployer self-testing detection
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='self_test_traps'"
+    )
+    if cursor.fetchone() is None:
+        conn.executescript("""
+            CREATE TABLE self_test_traps (
+                contract_address TEXT PRIMARY KEY,
+                deployer_address TEXT NOT NULL,
+                chain TEXT,
+                self_hits INTEGER DEFAULT 0,
+                self_reverts INTEGER DEFAULT 0,
+                external_hits INTEGER DEFAULT 0,
+                external_first_seen TEXT,
+                status TEXT DEFAULT 'SELF_TEST',
+                bytecode_patterns TEXT,
+                detected_at TEXT,
+                last_checked TEXT
+            );
+            CREATE INDEX idx_selftest_status ON self_test_traps(status);
+            CREATE INDEX idx_selftest_deployer ON self_test_traps(deployer_address);
+        """)
+
     # Migration: add infra_events table for external infrastructure correlation
     cursor = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='infra_events'"
