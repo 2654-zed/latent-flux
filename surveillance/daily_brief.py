@@ -89,6 +89,36 @@ def generate_brief(target_date: str = None) -> Path:
         md += "No pending predictions.\n"
     md += "\n"
 
+    # Watchlist alerts
+    md += "## Watchlist Alerts\n\n"
+    try:
+        wl_hits = conn.execute("""
+            SELECT wh.hit_type, wh.contract_address, wh.chain, wh.timestamp,
+                   w.entity_name, w.priority, w.watch_reason
+            FROM watchlist_hits wh
+            JOIN watchlist w ON wh.watchlist_id = w.id
+            WHERE wh.alerted = 0
+            ORDER BY CASE w.priority WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 ELSE 3 END,
+                     wh.timestamp DESC
+            LIMIT 20
+        """).fetchall()
+        if wl_hits:
+            md += f"**{len(wl_hits)} new hits:**\n\n"
+            md += "| Priority | Entity | Type | Chain | Contract | Time |\n|---|---|---|---|---|---|\n"
+            for h in wl_hits:
+                md += f"| {h['priority']} | {h['entity_name']} | {h['hit_type']} | {h['chain']} | `{h['contract_address'][:16]}...` | {h['timestamp'][:16]} |\n"
+            conn.execute("UPDATE watchlist_hits SET alerted = 1 WHERE alerted = 0")
+            conn.commit()
+        else:
+            md += "No new watchlist activity.\n"
+        # Summary
+        total_w = conn.execute("SELECT COUNT(*) FROM watchlist WHERE active=1").fetchone()[0]
+        total_h = conn.execute("SELECT COUNT(*) FROM watchlist_hits").fetchone()[0]
+        md += f"\nActive watches: {total_w} | Total hits: {total_h}\n"
+    except Exception:
+        md += "Watchlist not yet initialized.\n"
+    md += "\n"
+
     # Trust amplification alerts
     md += "## Trust Amplification Alerts\n\n"
     alerts = conn.execute("SELECT * FROM trust_amplification WHERE alert_level IN ('CRITICAL','WARNING') ORDER BY amplification_factor DESC LIMIT 5").fetchall()

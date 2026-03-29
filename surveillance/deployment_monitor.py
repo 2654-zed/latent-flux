@@ -648,6 +648,40 @@ class DeploymentMonitor:
             # Deployment velocity check
             self._check_velocity(dep.deployer_address)
 
+            # Watchlist check — zero API calls, pure SQLite
+            try:
+                from surveillance.watchlist import check_watchlist
+                # Get funder from deployer record if available
+                deployer_rec = db.get_deployer(self.conn, dep.deployer_address)
+                funder = None
+                if deployer_rec and deployer_rec.get("funding_trail"):
+                    import json as _json
+                    try:
+                        trail = _json.loads(deployer_rec["funding_trail"])
+                        funder = trail.get("funder")
+                    except Exception:
+                        pass
+
+                hits = check_watchlist(
+                    self.conn,
+                    deployer=dep.deployer_address,
+                    chain=self.chain,
+                    contract_address=dep.contract_address,
+                    timestamp=dep.timestamp_iso,
+                    funder=funder,
+                    gas_price=dep.gas_price_gwei if hasattr(dep, "gas_price_gwei") else None,
+                )
+                for hit in hits:
+                    if hit["priority"] == "CRITICAL":
+                        logger.warning(
+                            "WATCHLIST CRITICAL: %s | %s | %s on %s | deployer=%s",
+                            hit["entity"], hit["hit_type"],
+                            dep.contract_address[:18], self.chain,
+                            dep.deployer_address[:18],
+                        )
+            except Exception as e:
+                logger.debug("Watchlist check failed: %s", e)
+
         except Exception as e:
             logger.error(
                 "DB insert failed for %s: %s", dep.contract_address, e
