@@ -810,9 +810,12 @@ def cache_store(conn: sqlite3.Connection, code_hash: str,
                 confidence_tier: str, confidence_reason: str,
                 bytecode_signals: dict, source_contract: str) -> None:
     """Store a classification result keyed by code hash.
-    Skips caching unknown/clean contracts to reduce DB bloat."""
+    Skips caching unknown/clean contracts to reduce DB bloat.
+    Always caches SELFDESTRUCT contracts (forensic preservation)."""
+    # Always cache SELFDESTRUCT — bytecode disappears on-chain after destruction
+    has_selfdestruct = bytecode_signals.get("selfdestruct") or "SELFDESTRUCT" in (confidence_reason or "")
     # Only cache contracts with detected patterns — skip clean unknowns
-    if confidence_tier == "unknown" and not any(bytecode_signals.values()):
+    if confidence_tier == "unknown" and not any(bytecode_signals.values()) and not has_selfdestruct:
         return
     conn.execute(
         """
