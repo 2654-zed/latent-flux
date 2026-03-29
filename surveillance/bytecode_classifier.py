@@ -516,11 +516,51 @@ def classify(deployment: Deployment) -> dict:
     if all_notes:
         signals["pattern_notes"] = all_notes
 
+    # Deferred threat score — contracts designed to change behavior after deployment
+    # Each mechanism adds points; combinations are exponentially more dangerous
+    DEFERRED_WEIGHTS = {
+        "selfdestruct": 3,           # Anti-forensic: erases evidence
+        "delegatecall_in_token": 3,  # Mutable: logic can change post-deploy
+        "timestamp_activation": 2,   # Time bomb: activates on schedule
+        "asymmetric_transfer": 2,    # Caller-gated: different behavior for different users
+        "blacklist_check": 2,        # Selective: blocks specific addresses post-deploy
+        "tx_origin_conditional": 2,  # EOA-gated: buy works, sell doesn't
+        "origin_eoa_gate": 1,        # Mild: tx.origin check
+        "callback_trap": 2,          # Deferred: fires during callback execution
+        "hidden_fee": 1,             # Camouflaged: silent extraction
+        "obfuscated_fee": 2,         # Heavily camouflaged: opcode-level hiding
+    }
+
+    deferred_score = sum(
+        DEFERRED_WEIGHTS.get(r.name, 0)
+        for r in fired
+    )
+    # Combination bonus: multiple deferred mechanisms compound the threat
+    if len(fired) >= 3:
+        deferred_score = int(deferred_score * 1.5)
+    elif len(fired) >= 2:
+        deferred_score = int(deferred_score * 1.2)
+
+    signals["deferred_threat_score"] = deferred_score
+    signals["deferred_mechanisms"] = [r.name for r in fired]
+
     # Classification decision
     if len(fired) >= MIN_PATTERNS_FOR_SUSPECTED:
         pattern_names = ", ".join(r.name for r in fired)
+
+        # Threat level from deferred score
+        if deferred_score >= 8:
+            threat_label = "CRITICAL"
+        elif deferred_score >= 5:
+            threat_label = "HIGH"
+        elif deferred_score >= 3:
+            threat_label = "ELEVATED"
+        else:
+            threat_label = "MODERATE"
+
         reason = (
-            f"Bytecode exhibits {len(fired)} trap pattern(s) [{pattern_names}]: "
+            f"Bytecode exhibits {len(fired)} trap pattern(s) [{pattern_names}] "
+            f"(deferred threat: {threat_label}, score={deferred_score}): "
             f"{all_notes}"
         )
         return {
