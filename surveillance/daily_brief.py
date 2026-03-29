@@ -268,6 +268,45 @@ def generate_brief(target_date: str = None) -> Path:
         md += "Self-test trap table not yet created.\n"
     md += "\n"
 
+    # Approval drain watchlist
+    md += "## Approval Drain Watchlist\n\n"
+    try:
+        aw_total = conn.execute("SELECT COUNT(*) FROM approval_watchlist").fetchone()[0]
+        aw_pending = conn.execute("SELECT COUNT(*) FROM approval_watchlist WHERE drain_detected=0").fetchone()[0]
+        aw_drained = conn.execute("SELECT COUNT(*) FROM approval_watchlist WHERE drain_detected=1").fetchone()[0]
+        aw_victims = conn.execute("SELECT COUNT(DISTINCT victim_address) FROM approval_watchlist").fetchone()[0]
+        aw_self_test = conn.execute("SELECT COUNT(*) FROM approval_watchlist WHERE is_self_test_trap=1").fetchone()[0]
+        md += f"Tracked approvals: **{aw_total}** | Pending drain: **{aw_pending}** | Drained: **{aw_drained}** | Unique victims: **{aw_victims}** | On self-test traps: **{aw_self_test}**\n\n"
+
+        # Top contracts by pending
+        top_pending = conn.execute("""
+            SELECT contract_address, deployer_address, COUNT(*) as pending, is_self_test_trap
+            FROM approval_watchlist WHERE drain_detected=0
+            GROUP BY contract_address ORDER BY pending DESC LIMIT 5
+        """).fetchall()
+        if top_pending:
+            md += "**Top pending approval targets:**\n\n"
+            md += "| Contract | Deployer | Pending Victims | Self-Test |\n|---|---|---|---|\n"
+            for t in top_pending:
+                st = "YES" if t['is_self_test_trap'] else ""
+                md += f"| `{t['contract_address'][:16]}...` | `{t['deployer_address'][:12]}...` | {t['pending']} | {st} |\n"
+            md += "\n"
+
+        # Any drains?
+        drains = conn.execute("""
+            SELECT contract_address, drain_caller, drain_timestamp, COUNT(*) as victims
+            FROM approval_watchlist WHERE drain_detected=1
+            GROUP BY contract_address ORDER BY victims DESC LIMIT 5
+        """).fetchall()
+        if drains:
+            md += "**DRAINS DETECTED:**\n\n"
+            md += "| Contract | Drain Caller | Victims | When |\n|---|---|---|---|\n"
+            for d in drains:
+                md += f"| `{d['contract_address'][:16]}...` | `{d['drain_caller'][:14]}...` | {d['victims']} | {d['drain_timestamp'][:16]} |\n"
+    except Exception:
+        md += "Approval watchlist table not yet created.\n"
+    md += "\n"
+
     # Infrastructure events
     md += "## Infrastructure Events\n\n"
     try:

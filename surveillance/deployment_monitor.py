@@ -371,6 +371,20 @@ class DeploymentMonitor:
                 except Exception as e:
                     logger.warning("Self-test trap scan failed: %s", e)
 
+            # Approval drain monitor every 30 heartbeats (~30 min)
+            # Tracks approve() calls on suspected contracts and watches for drains
+            if heartbeat_count % 30 == 5:  # offset from self-test scan
+                try:
+                    from surveillance.approval_drain_monitor import scan_approvals, check_drains
+                    r1 = scan_approvals(self.conn)
+                    r2 = check_drains(self.conn)
+                    if r1["new_approvals_tracked"] > 0:
+                        logger.info("Approval monitor: %d new approvals tracked", r1["new_approvals_tracked"])
+                    if r2["drains_detected"] > 0:
+                        logger.warning("APPROVAL DRAIN DETECTED: %d victims drained!", r2["drains_detected"])
+                except Exception as e:
+                    logger.warning("Approval drain scan failed: %s", e)
+
             await asyncio.sleep(60)
 
     def stop(self) -> None:
