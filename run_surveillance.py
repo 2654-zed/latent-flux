@@ -1161,16 +1161,10 @@ print("Running startup DB cleanup...", flush=True)
 try:
     _cleanup_conn = sqlite3.connect(DB_PATH, timeout=30)
 
-    # 1. Prune bytecode cache — remove entries for unknown contracts with no hits
+    # 1. Prune bytecode cache — remove ALL unknown entries (not just hit_count=0)
     _before = _cleanup_conn.execute("SELECT COUNT(*) FROM bytecode_cache").fetchone()[0]
     _cleanup_conn.execute("""
-        DELETE FROM bytecode_cache WHERE source_contract IN (
-            SELECT bc.source_contract FROM bytecode_cache bc
-            LEFT JOIN contracts c ON c.contract_address = bc.source_contract
-            WHERE (c.confidence_tier = 'unknown' OR c.confidence_tier IS NULL)
-            AND bc.confidence_tier = 'unknown'
-            AND bc.hit_count = 0
-        )
+        DELETE FROM bytecode_cache WHERE confidence_tier = 'unknown'
     """)
     _after = _cleanup_conn.execute("SELECT COUNT(*) FROM bytecode_cache").fetchone()[0]
     print(f"  Bytecode cache: {_before} -> {_after} ({_before - _after} pruned)", flush=True)
@@ -1187,12 +1181,14 @@ try:
 
     _cleanup_conn.commit()
 
-    # 3. WAL checkpoint + VACUUM
+    # 3. WAL checkpoint + VACUUM to reclaim disk space
     _cleanup_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     print("  WAL checkpoint: TRUNCATE complete", flush=True)
+    _cleanup_conn.execute("VACUUM")
+    print("  VACUUM complete — disk space reclaimed", flush=True)
 
-    # 4. Set WAL auto-checkpoint to smaller threshold (1000 pages = ~4MB)
-    _cleanup_conn.execute("PRAGMA wal_autocheckpoint = 1000")
+    # 4. Set WAL auto-checkpoint to smaller threshold (500 pages = ~2MB)
+    _cleanup_conn.execute("PRAGMA wal_autocheckpoint = 500")
 
     _cleanup_conn.close()
     print("Startup cleanup complete.", flush=True)

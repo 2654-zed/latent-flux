@@ -34,7 +34,7 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA wal_autocheckpoint = 1000")  # Auto-checkpoint every 1000 pages (~4MB)
+    conn.execute("PRAGMA wal_autocheckpoint = 500")  # Auto-checkpoint every 500 pages (~2MB)
 
     # Check if schema is already applied
     cursor = conn.execute(
@@ -809,7 +809,11 @@ def cache_lookup(conn: sqlite3.Connection, code_hash: str) -> Optional[dict]:
 def cache_store(conn: sqlite3.Connection, code_hash: str,
                 confidence_tier: str, confidence_reason: str,
                 bytecode_signals: dict, source_contract: str) -> None:
-    """Store a classification result keyed by code hash."""
+    """Store a classification result keyed by code hash.
+    Skips caching unknown/clean contracts to reduce DB bloat."""
+    # Only cache contracts with detected patterns — skip clean unknowns
+    if confidence_tier == "unknown" and not any(bytecode_signals.values()):
+        return
     conn.execute(
         """
         INSERT OR IGNORE INTO bytecode_cache
