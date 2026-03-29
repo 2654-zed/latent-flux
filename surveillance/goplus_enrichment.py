@@ -34,6 +34,7 @@ CHAIN_IDS = {
     "base": "8453",
     "arbitrum": "42161",
     "ethereum": "1",
+    "optimism": "10",
 }
 
 # Rate limiting

@@ -46,6 +46,8 @@ def _get_rpc(chain: str) -> str:
         return os.environ.get("BASE_WSS_URL", "")
     elif chain == "arbitrum":
         return os.environ.get("ARB_WSS_URL", "")
+    elif chain == "optimism":
+        return os.environ.get("OP_WSS_URL", "")
     return ""
 
 
@@ -272,7 +274,7 @@ if __name__ == "__main__":
     _load_env()
 
     parser = argparse.ArgumentParser(description="Block replayer for gap recovery")
-    parser.add_argument("--chain", required=True, choices=["base", "arbitrum"])
+    parser.add_argument("--chain", required=True, choices=["base", "arbitrum", "optimism"])
     parser.add_argument("--from-block", type=int, help="Start block")
     parser.add_argument("--to-block", type=int, help="End block")
     parser.add_argument("--fill-gaps", action="store_true", help="Auto-detect and fill gaps")

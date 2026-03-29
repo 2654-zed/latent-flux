@@ -1221,6 +1221,17 @@ if os.environ.get("BASE_WSS_URL"):
     processes.append(("base_monitor", monitor_base))
     print("Base chain monitor started", flush=True)
 
+# Optimism deployment monitor (if OP_WSS_URL is set)
+if os.environ.get("OP_WSS_URL"):
+    monitor_op = subprocess.Popen(
+        [sys.executable, "-m", "surveillance.deployment_monitor",
+         "--rpc", os.environ["OP_WSS_URL"], "--chain", "optimism"],
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+    )
+    processes.append(("optimism_monitor", monitor_op))
+    print("Optimism chain monitor started", flush=True)
+
 # Routing monitor (Arbitrum only for now)
 routing = subprocess.Popen(
     [sys.executable, "-m", "surveillance.routing_monitor"],
@@ -1266,6 +1277,12 @@ def _make_proc(name):
         return subprocess.Popen(
             [sys.executable, "-m", "surveillance.deployment_monitor",
              "--rpc", os.environ["BASE_WSS_URL"], "--chain", "base"],
+            stdout=sys.stdout, stderr=sys.stderr,
+        )
+    elif name == "optimism_monitor":
+        return subprocess.Popen(
+            [sys.executable, "-m", "surveillance.deployment_monitor",
+             "--rpc", os.environ["OP_WSS_URL"], "--chain", "optimism"],
             stdout=sys.stdout, stderr=sys.stderr,
         )
     elif name == "routing":
