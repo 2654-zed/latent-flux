@@ -365,6 +365,31 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
             CREATE INDEX idx_selftest_deployer ON self_test_traps(deployer_address);
         """)
 
+    # Migration: add upgrade_events table for DELEGATECALL monitoring
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='upgrade_events'"
+    )
+    if cursor.fetchone() is None:
+        conn.executescript("""
+            CREATE TABLE upgrade_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                contract_address TEXT NOT NULL,
+                chain TEXT,
+                detected_at TEXT,
+                trigger_type TEXT,
+                old_code_hash TEXT,
+                new_code_hash TEXT,
+                old_tier TEXT,
+                new_tier TEXT,
+                old_patterns TEXT,
+                new_patterns TEXT,
+                bytecode_changed INTEGER,
+                severity TEXT DEFAULT 'MEDIUM',
+                details TEXT
+            );
+            CREATE INDEX idx_upgrade_contract ON upgrade_events(contract_address);
+        """)
+
     # Migration: add infra_events table for external infrastructure correlation
     cursor = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='infra_events'"
