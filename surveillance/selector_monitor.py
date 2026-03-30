@@ -88,6 +88,7 @@ class SelectorMonitor:
         self._bots_tagged = 0
         self._drains_detected = 0
         self._last_refresh = 0.0
+        self._vanity_checked: set[str] = set()  # cache to avoid re-checking
 
     def refresh_watched(self) -> None:
         """Reload watched sets from DB."""
@@ -200,6 +201,20 @@ class SelectorMonitor:
             )
             self._events_logged += 1
 
+            # Tag vanity callers on first sight
+            if from_lower not in self._vanity_checked:
+                self._vanity_checked.add(from_lower)
+                try:
+                    from surveillance.vanity_detector import detect_vanity
+                    vr = detect_vanity(from_lower)
+                    if vr:
+                        self.conn.execute(
+                            "INSERT OR IGNORE INTO vanity_tags (address, address_type, pattern_type, label, detected_at) VALUES (?, ?, ?, ?, ?)",
+                            (from_lower, "caller", vr[0], vr[1], timestamp_iso),
+                        )
+                except Exception:
+                    pass
+
             if bot_tag:
                 self._bots_tagged += 1
                 logger.info(
@@ -252,3 +267,9 @@ class SelectorMonitor:
 
         except Exception as e:
             logger.error("Failed to log tx event: %s", e)
+
+        # Batch commit once per block (not per event)
+        try:
+            self.conn.commit()
+        except Exception:
+            pass

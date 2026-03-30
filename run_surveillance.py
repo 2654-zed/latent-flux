@@ -1195,6 +1195,30 @@ try:
 except Exception as e:
     print(f"Startup cleanup failed (non-fatal): {e}", flush=True)
 
+# WAL checkpoint thread — forces TRUNCATE every 5 minutes
+# Runs on its own connection to avoid blocking monitors
+def _wal_checkpoint_loop():
+    import time as _t
+    while True:
+        _t.sleep(300)  # 5 minutes
+        try:
+            _wal_conn = sqlite3.connect(DB_PATH, timeout=5)
+            result = _wal_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+            _wal_conn.close()
+            if result and result[1] and result[1] > 0:
+                print(f"WAL checkpoint: truncated {result[1]} pages", flush=True)
+        except Exception as e:
+            # If TRUNCATE fails (busy), try PASSIVE
+            try:
+                _wal_conn2 = sqlite3.connect(DB_PATH, timeout=5)
+                _wal_conn2.execute("PRAGMA wal_checkpoint(PASSIVE)")
+                _wal_conn2.close()
+            except Exception:
+                pass
+
+threading.Thread(target=_wal_checkpoint_loop, daemon=True).start()
+print("WAL checkpoint thread started (every 5 min)", flush=True)
+
 # Start surveillance components
 processes = []
 

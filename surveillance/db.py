@@ -852,7 +852,7 @@ def cache_store(conn: sqlite3.Connection, code_hash: str,
         (code_hash, confidence_tier, confidence_reason,
          json.dumps(bytecode_signals), source_contract, _now_iso()),
     )
-    conn.commit()
+    # No commit here — caller commits per block for batching
 
 
 def cache_stats(conn: sqlite3.Connection) -> dict:
@@ -957,7 +957,7 @@ def insert_transaction_event(conn: sqlite3.Connection, *,
          gas_price_gwei, max_priority_fee_gwei, gas_pattern,
          block_number, timestamp, int(is_reverted), tx_hash, value_wei),
     )
-    conn.commit()
+    # No commit here — caller commits per block for batching
 
 
 def get_transaction_events(conn: sqlite3.Connection,
