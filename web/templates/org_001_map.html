@@ -2,18 +2,21 @@
 {% block title %}org_001 — The Enterprise{% endblock %}
 {% block head %}
 <style>
-.iso svg{display:block;width:100%}
+.iso-wrap{position:relative;width:100%;aspect-ratio:960/780;background:#080E1A;border-radius:8px;overflow:hidden}
+.iso-wrap img{position:absolute;z-index:2;pointer-events:auto;cursor:pointer}
+.iso-wrap svg{position:absolute;top:0;left:0;width:100%;height:100%}
 .sb-stat{background:rgba(8,14,26,.8);border:1px solid #1F2937;border-radius:5px;padding:4px 8px;text-align:center}
 .sb-stat .n{font-size:15px;font-weight:700}
 .sb-stat .l{font-size:8px;color:#6B7280}
-#sidebar{display:none;position:absolute;top:60px;right:16px;width:280px;background:#1F2937;border:1px solid #2D3B50;border-radius:12px;padding:16px;z-index:10}
+#sidebar{display:none;position:absolute;top:60px;right:16px;width:280px;background:#1F2937;border:1px solid #2D3B50;border-radius:12px;padding:16px;z-index:20}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-6xl mx-auto">
-<div class="iso card" style="position:relative;overflow:hidden;">
+<div class="card" style="position:relative;overflow:hidden;">
 
+<!-- Header overlay -->
 <div style="position:absolute;top:14px;left:18px;z-index:10">
 <div style="font-size:10px;color:#EF4444;font-weight:600;letter-spacing:1.5px">ORG_001 — THE ENTERPRISE</div>
 <div style="font-size:18px;font-weight:700;margin-top:1px">Criminal infrastructure map</div>
@@ -29,153 +32,136 @@
 <a href="/org-map?org=entity_005" style="background:rgba(8,14,26,.8);border:1px solid #1F2937;border-radius:5px;padding:3px 8px;font-size:9px;color:#6B7280;text-decoration:none;">Entity_005</a>
 </div>
 
-<svg viewBox="0 0 960 780" xmlns="http://www.w3.org/2000/svg">
+<!-- ============ THE MAP ============ -->
+<div class="iso-wrap">
+
+<!-- LAYER 1: Pipes SVG (z-index 1, behind buildings) -->
+<svg viewBox="0 0 960 780" style="z-index:1;">
 <rect width="960" height="780" fill="#080E1A"/>
 <g opacity=".04"><line x1="0" y1="195" x2="960" y2="195" stroke="#1E3A5F"/><line x1="0" y1="390" x2="960" y2="390" stroke="#1E3A5F"/><line x1="0" y1="585" x2="960" y2="585" stroke="#1E3A5F"/><line x1="320" y1="0" x2="320" y2="780" stroke="#1E3A5F"/><line x1="640" y1="0" x2="640" y2="780" stroke="#1E3A5F"/></g>
 
-<!-- ====== LAYER 2: PIPES ====== -->
-
 <!-- Coinbase → Treasury -->
-<path d="M140 175 C260 215 360 250 410 275" stroke="#4B5563" stroke-width="4" fill="none" opacity="0.25" stroke-linecap="round"/>
-<path d="M140 175 C260 215 360 250 410 275" stroke="#6B7280" stroke-width="1.5" fill="none" stroke-dasharray="6 8" stroke-linecap="round"><animate attributeName="stroke-dashoffset" values="0;-14" dur="2.5s" repeatCount="indefinite"/></path>
+<path d="M150 170 C270 210 370 245 420 275" stroke="#4B5563" stroke-width="4" fill="none" opacity="0.25" stroke-linecap="round"/>
+<path d="M150 170 C270 210 370 245 420 275" stroke="#6B7280" stroke-width="1.5" fill="none" stroke-dasharray="6 8" stroke-linecap="round"><animate attributeName="stroke-dashoffset" values="0;-14" dur="2.5s" repeatCount="indefinite"/></path>
 
 <!-- Binance → Treasury -->
-<path d="M680 175 C600 215 520 250 480 275" stroke="#4B5563" stroke-width="4" fill="none" opacity="0.25" stroke-linecap="round"/>
-<path d="M680 175 C600 215 520 250 480 275" stroke="#6B7280" stroke-width="1.5" fill="none" stroke-dasharray="6 8" stroke-linecap="round"><animate attributeName="stroke-dashoffset" values="0;-14" dur="2.5s" repeatCount="indefinite"/></path>
+<path d="M700 170 C610 210 530 245 480 275" stroke="#4B5563" stroke-width="4" fill="none" opacity="0.25" stroke-linecap="round"/>
+<path d="M700 170 C610 210 530 245 480 275" stroke="#6B7280" stroke-width="1.5" fill="none" stroke-dasharray="6 8" stroke-linecap="round"><animate attributeName="stroke-dashoffset" values="0;-14" dur="2.5s" repeatCount="indefinite"/></path>
 
 <!-- Revenue Collector → Treasury -->
-<path d="M140 500 C230 460 340 400 405 350" stroke="#3B82F6" stroke-width="4" fill="none" opacity="0.15" stroke-linecap="round"/>
-<path d="M140 500 C230 460 340 400 405 350" stroke="#60A5FA" stroke-width="1.5" fill="none" stroke-dasharray="6 6" stroke-linecap="round"><animate attributeName="stroke-dashoffset" values="0;-12" dur="2s" repeatCount="indefinite"/></path>
+<path d="M140 500 C230 460 340 400 410 350" stroke="#3B82F6" stroke-width="4" fill="none" opacity="0.15" stroke-linecap="round"/>
+<path d="M140 500 C230 460 340 400 410 350" stroke="#60A5FA" stroke-width="1.5" fill="none" stroke-dasharray="6 6" stroke-linecap="round"><animate attributeName="stroke-dashoffset" values="0;-12" dur="2s" repeatCount="indefinite"/></path>
 
-<!-- Treasury → Gas Station -->
-<path d="M410 400 C375 440 340 480 305 510" stroke="#F59E0B" stroke-width="5" fill="none" opacity="0.15" stroke-linecap="round"/>
-<path d="M410 400 C375 440 340 480 305 510" stroke="#FCD34D" stroke-width="1.5" fill="none" stroke-dasharray="8 6" stroke-linecap="round"><animate attributeName="stroke-dashoffset" values="0;-14" dur="2s" repeatCount="indefinite"/></path>
+<!-- Treasury → Gas Station (thinner) -->
+<path d="M420 400 C385 440 345 480 310 510" stroke="#F59E0B" stroke-width="5" fill="none" opacity="0.15" stroke-linecap="round"/>
+<path d="M420 400 C385 440 345 480 310 510" stroke="#FCD34D" stroke-width="1.5" fill="none" stroke-dasharray="8 6" stroke-linecap="round"><animate attributeName="stroke-dashoffset" values="0;-14" dur="2s" repeatCount="indefinite"/></path>
 
 <!-- Treasury → Whale Trader (THICK) -->
-<path d="M510 380 C555 420 600 455 640 480" stroke="#F59E0B" stroke-width="8" fill="none" opacity="0.2" stroke-linecap="round"/>
-<path d="M510 380 C555 420 600 455 640 480" stroke="#FCD34D" stroke-width="2" fill="none" stroke-dasharray="10 8" stroke-linecap="round"><animate attributeName="stroke-dashoffset" values="0;-18" dur="1.5s" repeatCount="indefinite"/></path>
+<path d="M520 380 C560 415 605 450 640 475" stroke="#F59E0B" stroke-width="8" fill="none" opacity="0.2" stroke-linecap="round"/>
+<path d="M520 380 C560 415 605 450 640 475" stroke="#FCD34D" stroke-width="2" fill="none" stroke-dasharray="10 8" stroke-linecap="round"><animate attributeName="stroke-dashoffset" values="0;-18" dur="1.5s" repeatCount="indefinite"/></path>
 
 <!-- Treasury → MEV Bot -->
-<path d="M540 310 Q650 300 730 320" stroke="#8B5CF6" stroke-width="2" fill="none" opacity="0.1" stroke-linecap="round"/>
-<path d="M540 310 Q650 300 730 320" stroke="#8B5CF6" stroke-width="1" fill="none" stroke-dasharray="4 4" opacity=".3"><animate attributeName="stroke-dashoffset" values="0;-8" dur="3s" repeatCount="indefinite"/></path>
+<path d="M545 310 Q660 295 750 315" stroke="#8B5CF6" stroke-width="2" fill="none" opacity="0.1" stroke-linecap="round"/>
+<path d="M545 310 Q660 295 750 315" stroke="#8B5CF6" stroke-width="1" fill="none" stroke-dasharray="4 4" opacity=".3"><animate attributeName="stroke-dashoffset" values="0;-8" dur="3s" repeatCount="indefinite"/></path>
 
 <!-- Bridge link -->
-<path d="M150 350 L135 480" stroke="#3B82F6" stroke-width="2" fill="none" opacity="0.1" stroke-linecap="round"/>
-<path d="M150 350 L135 480" stroke="#3B82F6" stroke-width="1" fill="none" stroke-dasharray="4 4" opacity=".2"><animate attributeName="stroke-dashoffset" values="0;-8" dur="3s" repeatCount="indefinite"/></path>
+<path d="M150 350 L135 490" stroke="#3B82F6" stroke-width="2" fill="none" opacity="0.08" stroke-linecap="round"/>
 
 <!-- Gas → deployers -->
-<path d="M290 600 L260 660" stroke="#F59E0B" stroke-width="3" fill="none" opacity="0.12" stroke-linecap="round"/>
-<path d="M290 600 L260 660" stroke="#FCD34D" stroke-width="1" fill="none" stroke-dasharray="4 4" opacity=".3"><animate attributeName="stroke-dashoffset" values="0;-8" dur="2s" repeatCount="indefinite"/></path>
+<path d="M295 600 L260 660" stroke="#F59E0B" stroke-width="3" fill="none" opacity="0.12" stroke-linecap="round"/>
+<path d="M295 600 L260 660" stroke="#FCD34D" stroke-width="1" fill="none" stroke-dasharray="4 4" opacity=".3"><animate attributeName="stroke-dashoffset" values="0;-8" dur="2s" repeatCount="indefinite"/></path>
 
 <!-- Whale → deployers -->
-<path d="M650 620 L670 660" stroke="#F59E0B" stroke-width="5" fill="none" opacity="0.15" stroke-linecap="round"/>
-<path d="M650 620 L670 660" stroke="#FCD34D" stroke-width="1.5" fill="none" stroke-dasharray="6 4" opacity=".4"><animate attributeName="stroke-dashoffset" values="0;-10" dur="1.5s" repeatCount="indefinite"/></path>
+<path d="M660 620 L680 660" stroke="#F59E0B" stroke-width="5" fill="none" opacity="0.15" stroke-linecap="round"/>
+<path d="M660 620 L680 660" stroke="#FCD34D" stroke-width="1.5" fill="none" stroke-dasharray="6 4" opacity=".4"><animate attributeName="stroke-dashoffset" values="0;-10" dur="1.5s" repeatCount="indefinite"/></path>
 
 <!-- Cashout -->
-<path d="M740 540 L800 520" stroke="#8B5CF6" stroke-width="2" fill="none" opacity="0.1" stroke-linecap="round"/>
-<path d="M740 540 L800 520" stroke="#A78BFA" stroke-width="1" fill="none" stroke-dasharray="3 4" opacity=".25"><animate attributeName="stroke-dashoffset" values="0;-7" dur="2.5s" repeatCount="indefinite"/></path>
+<path d="M745 540 L810 510" stroke="#8B5CF6" stroke-width="2" fill="none" opacity="0.1" stroke-linecap="round"/>
 
-<!-- ====== LAYER 2.5: GROUND PLANE ====== -->
-<rect x="0" y="645" width="960" height="2" fill="#0A0F1A"/>
-<line x1="0" y1="647" x2="960" y2="647" stroke="#1E293B" stroke-width="0.5" opacity=".4"/>
+<!-- Ground plane -->
+<rect x="0" y="648" width="960" height="2" fill="#0A0F1A"/>
+<line x1="0" y1="650" x2="960" y2="650" stroke="#1E293B" stroke-width="0.5" opacity=".4"/>
 
-<!-- ====== LAYER 3: DEPLOYMENT ZONE BOXES ====== -->
-<rect x="0" y="650" width="960" height="130" fill="#060A14" opacity=".8"/>
-<rect x="40" y="670" width="380" height="80" rx="4" fill="#0A0D06" stroke="#F59E0B" stroke-width="1" opacity=".4" stroke-dasharray="5 3"/>
-<rect x="490" y="665" width="440" height="88" rx="5" fill="#0F0D04" stroke="#F59E0B" stroke-width="2"/>
+<!-- Deployment zone boxes -->
+<rect x="0" y="652" width="960" height="128" fill="#060A14" opacity=".8"/>
+<rect x="40" y="672" width="380" height="78" rx="4" fill="#0A0D06" stroke="#F59E0B" stroke-width="1" opacity=".4" stroke-dasharray="5 3"/>
+<rect x="490" y="668" width="440" height="85" rx="5" fill="#0F0D04" stroke="#F59E0B" stroke-width="2"/>
 
-<!-- ====== LAYER 4: BUILDINGS (proper aspect ratios, no clip-paths) ====== -->
+<!-- GoPlus callout -->
+<rect x="830" y="245" width="115" height="55" rx="5" fill="#3B0A0A" stroke="#EF4444" stroke-width="1"/>
+<text x="887" y="263" fill="#FCA5A5" font-size="8" text-anchor="middle" font-weight="500">GoPlus detects</text>
+<text x="887" y="277" fill="#EF4444" font-size="14" text-anchor="middle" font-weight="700">0</text>
+<text x="887" y="290" fill="#FCA5A5" font-size="8" text-anchor="middle">Layer 3: {{ "{:,}".format(org.total_contracts) }}</text>
+</svg>
 
-<!-- Coinbase 165:185 ratio → 99x111 -->
-<image href="/static/coinbase.png" x="55" y="75" class="cursor-pointer" onclick="showSB('Coinbase','0x503828976d22510aad0201ac7ec88293211d23da','Origin: Coinbase deposit address. Treasury traces here through 3 intermediate wallets. KYC-identifiable.')" width="100" height="112" preserveAspectRatio="xMidYMid meet"/>
+<!-- LAYER 2: Building images as HTML <img> (z-index 2, on top of pipes) -->
+<img src="/static/coinbase.png" style="left:6%;top:10%;width:10%" onclick="showSB('Coinbase','0x503828976d22510aad0201ac7ec88293211d23da','Origin: Coinbase deposit address. Treasury traces here through 3 intermediate wallets. KYC-identifiable.')">
+<img src="/static/binance.png" style="left:67%;top:9%;width:12%" onclick="showSB('Binance Pool','0x28c6c06298d514db089934071355e5743bf21d60','Origin: Binance hot wallet. 33,333 ETH withdrawal pool (2021). Institutional scale capital.')">
+<img src="/static/bridge.png" style="left:2%;top:35%;width:19%" onclick="showSB('LI.FI Bridge','0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae','Cross-chain bridge via LI.FI aggregator. Moves funds from Ethereum mainnet to Base, Arbitrum, Optimism.')">
+<img src="/static/mev_bot.png" style="left:78%;top:37%;width:10%" onclick="showSB('MEV Bot','0x5babe600b9fcd5fb7b66c0611bf4896d967b23a1','Still running on Ethereum mainnet. Original revenue source before L2 trap pivot.')">
+<img src="/static/revenue_collector.png" style="left:5%;top:58%;width:8%" onclick="showSB('Revenue Collector','0x391e7c679d29bd940d63be94ad22a25d25b5a604','Automated profit sweep. Collects extraction revenue and funnels to treasury. ~22 ETH documented.')">
+<img src="/static/treasury.png" style="left:40%;top:27%;width:14%" onclick="showSB('Central Treasury','0x4c968f6beecf1906710b08e8b472b8ba6e75f957','Central treasury on Ethereum mainnet. Feeds both gas station and whale trader paths. Revenue collector sweeps profits here.')">
+<img src="/static/gas_station.png" style="left:25%;top:63%;width:13%;opacity:0.65" onclick="showSB('Gas Station','0x8c826f795466e39acbff1bb4eeeb759609377ba1','{{ org.gas_deployers }} deployers, {{ org.gas_contracts_fmt }} contracts. DECLINING — {{ org.gas_pct }}%.')">
+<img src="/static/whale_trader.png" style="left:57%;top:55%;width:16%" onclick="showSB('Whale Trader','0xf70da97812cb96acdf810712aa562db8dfa3dbef','{{ org.whale_deployers }} deployers, {{ org.whale_contracts_fmt }} contracts. Grew from 40% to {{ org.whale_pct }}%. Traces to Binance.')">
+<img src="/static/laundry.png" style="left:83%;top:61%;width:11%" onclick="showSB('Cashout','0xc6962004f452be9203591991d15f6b388e09e8d0','Extraction pipeline totaling ${{ org.traced_usd }}. 3 laundry wallets + CEX exit.')">
 
-<!-- Binance 195:195 → 117x117 -->
-<image href="/static/binance.png" x="630" y="75" class="cursor-pointer" onclick="showSB('Binance Pool','0x28c6c06298d514db089934071355e5743bf21d60','Origin: Binance hot wallet. 33,333 ETH withdrawal pool (2021). Institutional scale capital.')" width="110" height="110" preserveAspectRatio="xMidYMid meet"/>
-
-<!-- Bridge 385:150 → 200x78 -->
-<image href="/static/bridge.png" x="25" y="275" class="cursor-pointer" onclick="showSB('LI.FI Bridge','0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae','Cross-chain bridge via LI.FI aggregator. Moves funds L1 to L2.')" width="190" height="74" preserveAspectRatio="xMidYMid meet"/>
-
-<!-- MEV Bot 180:125 → 108x75 -->
-<image href="/static/mev_bot.png" x="740" y="290" class="cursor-pointer" onclick="showSB('MEV Bot','0x5babe600b9fcd5fb7b66c0611bf4896d967b23a1','Still running on Ethereum mainnet. Original revenue source before L2 trap pivot.')" width="100" height="69" preserveAspectRatio="xMidYMid meet"/>
-
-<!-- Revenue Collector 130:155 → 78x93 -->
-<image href="/static/revenue_collector.png" x="52" y="455" class="cursor-pointer" onclick="showSB('Revenue Collector','0x391e7c679d29bd940d63be94ad22a25d25b5a604','Automated profit sweep. ~22 ETH documented.')" width="80" height="95" preserveAspectRatio="xMidYMid meet"/>
-
-<!-- TREASURY 215:305 → 193x274 (dominant center) -->
-<image href="/static/treasury.png" x="385" y="210" class="cursor-pointer" onclick="showSB('Central Treasury','0x4c968f6beecf1906710b08e8b472b8ba6e75f957','Central treasury on Ethereum mainnet. Feeds both gas station and whale trader paths.')" width="130" height="184" preserveAspectRatio="xMidYMid meet"/>
-
-<!-- Gas Station 175:120 → 122x84 (dimmed) -->
-<g opacity="0.65">
-<image href="/static/gas_station.png" x="240" y="505" class="cursor-pointer" onclick="showSB('Gas Station','0x8c826f795466e39acbff1bb4eeeb759609377ba1','{{ org.gas_deployers }} deployers, {{ org.gas_contracts_fmt }} contracts. DECLINING — {{ org.gas_pct }}%.')" width="120" height="82" preserveAspectRatio="xMidYMid meet"/>
-</g>
-
-<!-- Whale Trader 245:280 → 184x210 (large, prominent) -->
-<image href="/static/whale_trader.png" x="565" y="440" class="cursor-pointer" onclick="showSB('Whale Trader','0xf70da97812cb96acdf810712aa562db8dfa3dbef','{{ org.whale_deployers }} deployers, {{ org.whale_contracts_fmt }} contracts. Grew from 40% to {{ org.whale_pct }}%. Traces to Binance.')" width="150" height="171" preserveAspectRatio="xMidYMid meet"/>
-
-<!-- Cashout/Laundry 185:130 → 111x78 -->
-<image href="/static/laundry.png" x="795" y="480" class="cursor-pointer" onclick="showSB('Cashout','0xc6962004f452be9203591991d15f6b388e09e8d0','Extraction pipeline totaling ${{ org.traced_usd }}. 3 laundry wallets + CEX exit.')" width="110" height="77" preserveAspectRatio="xMidYMid meet"/>
-
-<!-- Deployer rows: 71:130 ratio → 24x44 each -->
+<!-- Deployer rows -->
 {% for i in range(8) %}
-<image href="/static/deployer.png" x="{{ 55 + i * 44 }}" y="682" opacity=".3" width="28" height="51" preserveAspectRatio="xMidYMid meet"/>
+<img src="/static/deployer.png" style="left:{{ 6 + i * 4.2 }}%;top:87%;width:3%;opacity:0.3;z-index:2">
 {% endfor %}
 {% for i in range(10) %}
-<image href="/static/deployer.png" x="{{ 505 + i * 41 }}" y="676" opacity=".75" width="28" height="51" preserveAspectRatio="xMidYMid meet"/>
+<img src="/static/deployer.png" style="left:{{ 53 + i * 4.0 }}%;top:86%;width:3%;opacity:0.75;z-index:2">
 {% endfor %}
 
-<!-- ====== LAYER 5: ALL LABELS ====== -->
+<!-- LAYER 3: Labels SVG (z-index 3, on top of buildings) -->
+<svg viewBox="0 0 960 780" style="z-index:3;pointer-events:none;">
 
-<text x="100" y="198" fill="#9CA3AF" font-size="11" text-anchor="middle" font-weight="500">Coinbase</text>
-<text x="100" y="211" fill="#4B5563" font-size="8" text-anchor="middle">3 hops · KYC</text>
+<!-- T1 labels -->
+<text x="105" y="200" fill="#9CA3AF" font-size="11" text-anchor="middle" font-weight="500">Coinbase</text>
+<text x="105" y="213" fill="#4B5563" font-size="8" text-anchor="middle">3 hops · KYC</text>
+<text x="700" y="200" fill="#9CA3AF" font-size="11" text-anchor="middle" font-weight="500">Binance</text>
+<text x="700" y="213" fill="#F59E0B" font-size="9" text-anchor="middle">33,333 ETH pool</text>
 
-<text x="678" y="198" fill="#9CA3AF" font-size="11" text-anchor="middle" font-weight="500">Binance</text>
-<text x="678" y="211" fill="#F59E0B" font-size="9" text-anchor="middle">33,333 ETH pool</text>
+<!-- T2 labels -->
+<text x="115" y="365" fill="#60A5FA" font-size="10" text-anchor="middle" font-weight="500">LI.FI Bridge</text>
+<text x="115" y="378" fill="#4B5563" font-size="8" text-anchor="middle">L1 → L2</text>
+<text x="450" y="475" fill="#FCA5A5" font-size="16" text-anchor="middle" font-weight="700">Central Treasury</text>
+<text x="450" y="491" fill="#F87171" font-size="10" text-anchor="middle" font-family="monospace">0x4c968f6b...</text>
+<text x="450" y="505" fill="#EF4444" font-size="9" text-anchor="middle">Ethereum mainnet</text>
+<text x="800" y="388" fill="#C4B5FD" font-size="10" text-anchor="middle" font-weight="500">MEV Bot</text>
+<text x="800" y="401" fill="#4B5563" font-size="8" text-anchor="middle">mainnet · active</text>
 
-<text x="120" y="358" fill="#60A5FA" font-size="10" text-anchor="middle" font-weight="500">LI.FI Bridge</text>
-<text x="120" y="371" fill="#4B5563" font-size="8" text-anchor="middle">L1 → L2</text>
+<!-- Pipe labels -->
+<text x="275" y="415" fill="#3B82F6" font-size="11" font-weight="600">~22 ETH</text>
+<text x="360" y="458" fill="#F59E0B" font-size="12" font-weight="600" opacity=".8">{{ org.gas_pct }}%</text>
+<text x="570" y="410" fill="#F59E0B" font-size="16" font-weight="700">{{ org.whale_pct }}% ↑</text>
 
-<text x="447" y="472" fill="#FCA5A5" font-size="16" text-anchor="middle" font-weight="700">Central Treasury</text>
-<text x="447" y="488" fill="#F87171" font-size="10" text-anchor="middle" font-family="monospace">0x4c968f6b...</text>
-<text x="447" y="502" fill="#EF4444" font-size="9" text-anchor="middle">Ethereum mainnet</text>
-
-<text x="789" y="370" fill="#C4B5FD" font-size="10" text-anchor="middle" font-weight="500">MEV Bot</text>
-<text x="789" y="383" fill="#4B5563" font-size="8" text-anchor="middle">mainnet · active</text>
-
-<text x="89" y="558" fill="#60A5FA" font-size="10" text-anchor="middle" font-weight="500">Revenue Collector</text>
-<text x="89" y="571" fill="#4B5563" font-size="8" text-anchor="middle">sweep → treasury</text>
-
-<text x="275" y="416" fill="#3B82F6" font-size="11" font-weight="600">~22 ETH</text>
-<text x="355" y="460" fill="#F59E0B" font-size="12" font-weight="600" opacity=".8">{{ org.gas_pct }}%</text>
-<text x="565" y="415" fill="#F59E0B" font-size="16" font-weight="700">{{ org.whale_pct }}% ↑</text>
-
-<text x="291" y="596" fill="#FCD34D" font-size="12" text-anchor="middle" font-weight="600" opacity=".7">Gas Station</text>
-<text x="291" y="612" fill="#F59E0B" font-size="9" text-anchor="middle">{{ org.gas_pct }}% · declining ↓</text>
-
-<text x="637" y="642" fill="#FCD34D" font-size="15" text-anchor="middle" font-weight="700">Whale Trader</text>
-
-<text x="845" y="563" fill="#C4B5FD" font-size="10" text-anchor="middle" font-weight="500">Cashout</text>
-<text x="845" y="579" fill="#A78BFA" font-size="13" text-anchor="middle" font-weight="700">${{ "{:,}".format(org.traced_usd) }}</text>
+<!-- T3 labels -->
+<text x="90" y="560" fill="#60A5FA" font-size="10" text-anchor="middle" font-weight="500">Revenue Collector</text>
+<text x="90" y="573" fill="#4B5563" font-size="8" text-anchor="middle">sweep → treasury</text>
+<text x="300" y="600" fill="#FCD34D" font-size="12" text-anchor="middle" font-weight="600" opacity=".7">Gas Station</text>
+<text x="300" y="616" fill="#F59E0B" font-size="9" text-anchor="middle">{{ org.gas_pct }}% · declining ↓</text>
+<text x="640" y="645" fill="#FCD34D" font-size="15" text-anchor="middle" font-weight="700">Whale Trader</text>
+<text x="845" y="567" fill="#C4B5FD" font-size="10" text-anchor="middle" font-weight="500">Cashout</text>
+<text x="845" y="583" fill="#A78BFA" font-size="13" text-anchor="middle" font-weight="700">${{ "{:,}".format(org.traced_usd) }}</text>
 
 <!-- Deployment zone labels -->
-<text x="230" y="686" fill="#F59E0B" font-size="9" text-anchor="middle" font-weight="500" opacity=".6">GAS STATION PATH</text>
+<text x="230" y="688" fill="#F59E0B" font-size="9" text-anchor="middle" font-weight="500" opacity=".6">GAS STATION PATH</text>
 <text x="160" y="742" fill="#D4A017" font-size="12" text-anchor="middle" font-weight="600" opacity=".6">{{ org.gas_deployers }} deployers</text>
 <text x="340" y="742" fill="#F59E0B" font-size="16" text-anchor="middle" font-weight="700" opacity=".6">{{ org.gas_contracts_fmt }}</text>
 <text x="398" y="742" fill="#6B7280" font-size="8" text-anchor="middle">contracts</text>
 
-<text x="710" y="681" fill="#F59E0B" font-size="10" text-anchor="middle" font-weight="600">WHALE TRADER PATH</text>
-<text x="590" y="740" fill="#FCD34D" font-size="14" text-anchor="middle" font-weight="600">{{ org.whale_deployers }} deployers</text>
-<text x="800" y="740" fill="#F59E0B" font-size="22" text-anchor="middle" font-weight="700">{{ org.whale_contracts_fmt }}</text>
-<text x="870" y="740" fill="#6B7280" font-size="9" text-anchor="middle">contracts</text>
-<rect x="905" y="669" width="16" height="8" rx="2" fill="#F59E0B"><animate attributeName="opacity" values=".8;.2;.8" dur="2s" repeatCount="indefinite"/></rect>
-
-<!-- ====== LAYER 6: GoPlus ====== -->
-<rect x="830" y="240" width="115" height="55" rx="5" fill="#3B0A0A" stroke="#EF4444" stroke-width="1"/>
-<text x="887" y="258" fill="#FCA5A5" font-size="8" text-anchor="middle" font-weight="500">GoPlus detects</text>
-<text x="887" y="272" fill="#EF4444" font-size="14" text-anchor="middle" font-weight="700">0</text>
-<text x="887" y="285" fill="#FCA5A5" font-size="8" text-anchor="middle">Layer 3: {{ "{:,}".format(org.total_contracts) }}</text>
+<text x="710" y="684" fill="#F59E0B" font-size="10" text-anchor="middle" font-weight="600">WHALE TRADER PATH</text>
+<text x="590" y="742" fill="#FCD34D" font-size="14" text-anchor="middle" font-weight="600">{{ org.whale_deployers }} deployers</text>
+<text x="800" y="742" fill="#F59E0B" font-size="22" text-anchor="middle" font-weight="700">{{ org.whale_contracts_fmt }}</text>
+<text x="870" y="742" fill="#6B7280" font-size="9" text-anchor="middle">contracts</text>
+<rect x="905" y="672" width="16" height="8" rx="2" fill="#F59E0B"><animate attributeName="opacity" values=".8;.2;.8" dur="2s" repeatCount="indefinite"/></rect>
 
 </svg>
 
+</div><!-- end iso-wrap -->
+
+<!-- Sidebar -->
 <div id="sidebar">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
 <div id="sb-title" style="font-size:15px;font-weight:600"></div>
@@ -186,6 +172,7 @@
 <div id="sb-actions" style="margin-top:12px"></div>
 </div>
 
+<!-- Legend -->
 <div style="display:flex;gap:12px;margin-top:4px;padding:4px 18px;">
 <span style="font-size:9px;color:#6B7280;display:flex;align-items:center;gap:3px"><span style="width:7px;height:7px;border-radius:2px;background:#EF4444;display:inline-block"></span>Treasury</span>
 <span style="font-size:9px;color:#6B7280;display:flex;align-items:center;gap:3px"><span style="width:7px;height:7px;border-radius:2px;background:#F59E0B;display:inline-block"></span>Funding path</span>
