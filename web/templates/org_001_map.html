@@ -2,7 +2,7 @@
 {% block title %}org_001 — The Enterprise{% endblock %}
 {% block head %}
 <style>
-.iso-wrap{position:relative;width:100%;aspect-ratio:16/10;background:#080E1A;border-radius:8px;overflow:hidden;min-height:700px}
+.iso-wrap{position:relative;width:100%;height:calc(100vh - 80px);background:#080E1A;border-radius:8px;overflow:hidden;min-height:500px}
 .iso-wrap img{position:absolute;z-index:2;pointer-events:auto;cursor:pointer}
 .iso-wrap svg{position:absolute;top:0;left:0;width:100%;height:100%}
 .sb-stat{background:rgba(8,14,26,.8);border:1px solid #1F2937;border-radius:5px;padding:4px 8px;text-align:center}
@@ -13,7 +13,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="mx-auto" style="max-width:1400px;">
+<div>
 <div class="card" style="position:relative;overflow:hidden;">
 
 <!-- Header overlay -->
