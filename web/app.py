@@ -26,6 +26,9 @@ app = FastAPI(title="Layer 3 Intelligence", docs_url=None, redoc_url=None)
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
+# Serve static files (building PNGs etc)
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
 DB = os.environ.get("DB_PATH", str(BASE_DIR.parent / "surveillance" / "data" / "surveillance.db"))
 
 
