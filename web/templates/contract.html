@@ -118,7 +118,7 @@
                     <div class="flex justify-between"><span class="text-gray-500">Contracts</span><span>{{ contract.deployer_info.total_contracts_deployed }}</span></div>
                     <div class="flex justify-between"><span class="text-gray-500">Chain</span><span>{{ contract.deployer_info.chain }}</span></div>
                     {% if contract.deployer_info.profile %}
-                    <div class="flex justify-between"><span class="text-gray-500">Gas</span><span class="font-mono">{{ contract.deployer_info.profile.gas_avg }}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Gas</span><span class="font-mono">{{ contract.deployer_info.profile.gas_avg or 'N/A' }}</span></div>
                     <div class="flex justify-between"><span class="text-gray-500">Timezone</span><span>{{ contract.deployer_info.profile.timezone_guess }}</span></div>
                     <div class="flex justify-between"><span class="text-gray-500">Technique</span><span>{{ contract.deployer_info.profile.primary_technique }}</span></div>
                     <div class="flex justify-between"><span class="text-gray-500">Style</span><span>{{ contract.deployer_info.profile.deployment_style }}</span></div>
