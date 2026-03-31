@@ -87,40 +87,40 @@
 <!-- ====== LAYER 4: BUILDINGS (proper aspect ratios, no clip-paths) ====== -->
 
 <!-- Coinbase 165:185 ratio → 99x111 -->
-<image href="/static/coinbase.png" x="55" y="75" width="90" height="101" preserveAspectRatio="xMidYMid meet" class="cursor-pointer" onclick="showSB('Coinbase','0x503828976d22510aad0201ac7ec88293211d23da','Origin: Coinbase deposit address. Treasury traces here through 3 intermediate wallets. KYC-identifiable.')"/>
+<image href="/static/coinbase.png" x="55" y="75" class="cursor-pointer" onclick="showSB('Coinbase','0x503828976d22510aad0201ac7ec88293211d23da','Origin: Coinbase deposit address. Treasury traces here through 3 intermediate wallets. KYC-identifiable.')" width="100" height="112" preserveAspectRatio="xMidYMid meet"/>
 
 <!-- Binance 195:195 → 117x117 -->
-<image href="/static/binance.png" x="630" y="75" width="100" height="100" preserveAspectRatio="xMidYMid meet" class="cursor-pointer" onclick="showSB('Binance Pool','0x28c6c06298d514db089934071355e5743bf21d60','Origin: Binance hot wallet. 33,333 ETH withdrawal pool (2021). Institutional scale capital.')"/>
+<image href="/static/binance.png" x="630" y="75" class="cursor-pointer" onclick="showSB('Binance Pool','0x28c6c06298d514db089934071355e5743bf21d60','Origin: Binance hot wallet. 33,333 ETH withdrawal pool (2021). Institutional scale capital.')" width="110" height="110" preserveAspectRatio="xMidYMid meet"/>
 
 <!-- Bridge 385:150 → 200x78 -->
-<image href="/static/bridge.png" x="25" y="275" width="180" height="70" preserveAspectRatio="xMidYMid meet" class="cursor-pointer" onclick="showSB('LI.FI Bridge','0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae','Cross-chain bridge via LI.FI aggregator. Moves funds L1 to L2.')"/>
+<image href="/static/bridge.png" x="25" y="275" class="cursor-pointer" onclick="showSB('LI.FI Bridge','0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae','Cross-chain bridge via LI.FI aggregator. Moves funds L1 to L2.')" width="190" height="74" preserveAspectRatio="xMidYMid meet"/>
 
 <!-- MEV Bot 180:125 → 108x75 -->
-<image href="/static/mev_bot.png" x="740" y="290" width="100" height="69" preserveAspectRatio="xMidYMid meet" class="cursor-pointer" onclick="showSB('MEV Bot','0x5babe600b9fcd5fb7b66c0611bf4896d967b23a1','Still running on Ethereum mainnet. Original revenue source before L2 trap pivot.')"/>
+<image href="/static/mev_bot.png" x="740" y="290" class="cursor-pointer" onclick="showSB('MEV Bot','0x5babe600b9fcd5fb7b66c0611bf4896d967b23a1','Still running on Ethereum mainnet. Original revenue source before L2 trap pivot.')" width="100" height="69" preserveAspectRatio="xMidYMid meet"/>
 
 <!-- Revenue Collector 130:155 → 78x93 -->
-<image href="/static/revenue_collector.png" x="52" y="455" width="75" height="89" preserveAspectRatio="xMidYMid meet" class="cursor-pointer" onclick="showSB('Revenue Collector','0x391e7c679d29bd940d63be94ad22a25d25b5a604','Automated profit sweep. ~22 ETH documented.')"/>
+<image href="/static/revenue_collector.png" x="52" y="455" class="cursor-pointer" onclick="showSB('Revenue Collector','0x391e7c679d29bd940d63be94ad22a25d25b5a604','Automated profit sweep. ~22 ETH documented.')" width="80" height="95" preserveAspectRatio="xMidYMid meet"/>
 
 <!-- TREASURY 215:305 → 193x274 (dominant center) -->
-<image href="/static/treasury.png" x="385" y="210" width="120" height="170" preserveAspectRatio="xMidYMid meet" class="cursor-pointer" onclick="showSB('Central Treasury','0x4c968f6beecf1906710b08e8b472b8ba6e75f957','Central treasury on Ethereum mainnet. Feeds both gas station and whale trader paths.')"/>
+<image href="/static/treasury.png" x="385" y="210" class="cursor-pointer" onclick="showSB('Central Treasury','0x4c968f6beecf1906710b08e8b472b8ba6e75f957','Central treasury on Ethereum mainnet. Feeds both gas station and whale trader paths.')" width="130" height="184" preserveAspectRatio="xMidYMid meet"/>
 
 <!-- Gas Station 175:120 → 122x84 (dimmed) -->
 <g opacity="0.65">
-<image href="/static/gas_station.png" x="240" y="505" width="110" height="75" preserveAspectRatio="xMidYMid meet" class="cursor-pointer" onclick="showSB('Gas Station','0x8c826f795466e39acbff1bb4eeeb759609377ba1','{{ org.gas_deployers }} deployers, {{ org.gas_contracts_fmt }} contracts. DECLINING — {{ org.gas_pct }}%.')"/>
+<image href="/static/gas_station.png" x="240" y="505" class="cursor-pointer" onclick="showSB('Gas Station','0x8c826f795466e39acbff1bb4eeeb759609377ba1','{{ org.gas_deployers }} deployers, {{ org.gas_contracts_fmt }} contracts. DECLINING — {{ org.gas_pct }}%.')" width="120" height="82" preserveAspectRatio="xMidYMid meet"/>
 </g>
 
 <!-- Whale Trader 245:280 → 184x210 (large, prominent) -->
-<image href="/static/whale_trader.png" x="565" y="440" width="140" height="160" preserveAspectRatio="xMidYMid meet" class="cursor-pointer" onclick="showSB('Whale Trader','0xf70da97812cb96acdf810712aa562db8dfa3dbef','{{ org.whale_deployers }} deployers, {{ org.whale_contracts_fmt }} contracts. Grew from 40% to {{ org.whale_pct }}%. Traces to Binance.')"/>
+<image href="/static/whale_trader.png" x="565" y="440" class="cursor-pointer" onclick="showSB('Whale Trader','0xf70da97812cb96acdf810712aa562db8dfa3dbef','{{ org.whale_deployers }} deployers, {{ org.whale_contracts_fmt }} contracts. Grew from 40% to {{ org.whale_pct }}%. Traces to Binance.')" width="150" height="171" preserveAspectRatio="xMidYMid meet"/>
 
 <!-- Cashout/Laundry 185:130 → 111x78 -->
-<image href="/static/laundry.png" x="795" y="480" width="100" height="70" preserveAspectRatio="xMidYMid meet" class="cursor-pointer" onclick="showSB('Cashout','0xc6962004f452be9203591991d15f6b388e09e8d0','Extraction pipeline totaling ${{ org.traced_usd }}. 3 laundry wallets + CEX exit.')"/>
+<image href="/static/laundry.png" x="795" y="480" class="cursor-pointer" onclick="showSB('Cashout','0xc6962004f452be9203591991d15f6b388e09e8d0','Extraction pipeline totaling ${{ org.traced_usd }}. 3 laundry wallets + CEX exit.')" width="110" height="77" preserveAspectRatio="xMidYMid meet"/>
 
 <!-- Deployer rows: 71:130 ratio → 24x44 each -->
 {% for i in range(8) %}
-<image href="/static/deployer.png" x="{{ 55 + i * 44 }}" y="682" width="30" height="55" preserveAspectRatio="xMidYMid meet" opacity=".3"/>
+<image href="/static/deployer.png" x="{{ 55 + i * 44 }}" y="682" opacity=".3" width="28" height="51" preserveAspectRatio="xMidYMid meet"/>
 {% endfor %}
 {% for i in range(10) %}
-<image href="/static/deployer.png" x="{{ 505 + i * 41 }}" y="676" width="30" height="55" preserveAspectRatio="xMidYMid meet" opacity=".75"/>
+<image href="/static/deployer.png" x="{{ 505 + i * 41 }}" y="676" opacity=".75" width="28" height="51" preserveAspectRatio="xMidYMid meet"/>
 {% endfor %}
 
 <!-- ====== LAYER 5: ALL LABELS ====== -->
