@@ -85,6 +85,19 @@ function nodeStyle(role) {
 
 function initGraph(data) {
     if (cy) cy.destroy();
+    console.log('initGraph: nodes=' + data.nodes.length + ' edges=' + data.edges.length);
+
+    // Register dagre if available
+    if (typeof cytoscapeDagre !== 'undefined') {
+        try { cytoscape.use(cytoscapeDagre); } catch(e) {}
+    }
+
+    // Determine layout - use dagre if available, fallback to breadthfirst
+    var layoutName = 'breadthfirst';
+    try {
+        if (typeof dagre !== 'undefined') layoutName = 'dagre';
+    } catch(e) {}
+
     cy = cytoscape({
         container: document.getElementById('cy'),
         elements: [...data.nodes, ...data.edges],
@@ -143,7 +156,7 @@ function initGraph(data) {
             }},
             { selector: 'node:selected', style: { 'border-color': '#3B82F6', 'border-width': 3, 'overlay-opacity': 0 }},
         ],
-        layout: { name: 'dagre', rankDir: 'TB', nodeSep: 30, rankSep: 60, padding: 30 },
+        layout: { name: layoutName, rankDir: 'TB', nodeSep: 30, rankSep: 60, padding: 30, directed: true, spacingFactor: 1.3 },
         wheelSensitivity: 0.3,
     });
 
@@ -174,7 +187,18 @@ function loadOrg(orgId) {
     document.getElementById('org-label').textContent = meta.label || orgId;
     document.getElementById('org-title').textContent = meta.title || 'Organization Map';
     document.getElementById('org-subtitle').textContent = meta.subtitle || '';
-    fetch('/api/org/' + orgId).then(r => r.json()).then(data => initGraph(data));
+    document.getElementById('cy').innerHTML = '<div style="padding:20px;color:#6B7280;font-size:13px;">Loading graph...</div>';
+    fetch('/api/org/' + orgId)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('cy').innerHTML = '';
+            console.log('Loaded ' + data.nodes.length + ' nodes, ' + data.edges.length + ' edges');
+            initGraph(data);
+        })
+        .catch(err => {
+            document.getElementById('cy').innerHTML = '<div style="padding:20px;color:#EF4444;">Error loading graph: ' + err.message + '</div>';
+            console.error('Graph load error:', err);
+        });
     history.replaceState(null, '', '/org-map?org=' + orgId);
 }
 
