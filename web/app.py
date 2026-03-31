@@ -16,7 +16,8 @@ from fastapi.templating import Jinja2Templates
 from web.data import (
     get_conn, get_overview_stats, get_key_metrics, get_chain_split,
     get_daily_trend, get_recent_alerts, get_strategy_lifecycle,
-    get_bot_sophistication, get_org_graph, get_contract, get_deployer,
+    get_bot_sophistication, get_org_graph, get_org_001_stats,
+    get_contract, get_deployer,
     get_threats, get_threat_counts, get_watched_entities, search_address,
 )
 
@@ -60,6 +61,16 @@ async def overview(request: Request):
 async def org_map(request: Request, org: str = "org_001"):
     c = conn()
     stats = get_overview_stats(c)
+
+    # org_001 gets the curated SVG template
+    if org == "org_001":
+        org_stats = get_org_001_stats(c)
+        c.close()
+        return templates.TemplateResponse("org_001_map.html", {
+            "request": request, "active_page": "org_map",
+            "stats": stats, "org": org_stats,
+        })
+
     c.close()
     return templates.TemplateResponse("org_map.html", {
         "request": request, "active_page": "org_map",

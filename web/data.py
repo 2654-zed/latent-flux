@@ -128,6 +128,33 @@ def get_bot_sophistication(conn) -> list:
 # Organization map
 # ---------------------------------------------------------------
 
+def get_org_001_stats(conn) -> dict:
+    """Curated stats for the org_001 SVG map."""
+    gas_deployers = conn.execute("SELECT COUNT(*) FROM deployers WHERE funding_trail LIKE '%org_001%'").fetchone()[0]
+    gas_contracts = conn.execute("SELECT SUM(total_contracts_deployed) FROM deployers WHERE funding_trail LIKE '%org_001%'").fetchone()[0] or 0
+    whale_deployers = conn.execute("SELECT COUNT(*) FROM deployers WHERE funding_trail LIKE '%f70da978%'").fetchone()[0]
+    whale_contracts = conn.execute("SELECT SUM(total_contracts_deployed) FROM deployers WHERE funding_trail LIKE '%f70da978%'").fetchone()[0] or 0
+    total_d = gas_deployers + whale_deployers
+    total_c = gas_contracts + whale_contracts
+    whale_pct = round(whale_deployers / max(total_d, 1) * 100) if total_d > 0 else 50
+    gas_pct = 100 - whale_pct
+    usd = conn.execute("SELECT SUM(total_usd_moved) FROM extraction_events WHERE event_id LIKE 'EXTRACTION_00%'").fetchone()[0] or 0
+    return {
+        "total_deployers": total_d,
+        "total_contracts": total_c,
+        "gas_deployers": gas_deployers,
+        "gas_contracts": gas_contracts,
+        "whale_deployers": whale_deployers,
+        "whale_contracts": whale_contracts,
+        "gas_pct": gas_pct,
+        "whale_pct": whale_pct,
+        "traced_usd": int(usd),
+        "gas_contracts_fmt": f"{gas_contracts:,}",
+        "whale_contracts_fmt": f"{whale_contracts:,}",
+        "total_contracts_fmt": f"{total_c:,}",
+    }
+
+
 def _nid(addr: str) -> str:
     """Consistent short node ID from address."""
     return addr.lower()[:14] if addr.startswith("0x") else addr
