@@ -43,6 +43,10 @@ TABLES = [
     "pair_creation_events",
     "cex_deposit_candidates",
     "org_transfer_events",
+    "watchlist",
+    "watchlist_hits",
+    "self_test_traps",
+    "approval_watchlist",
 ]
 
 BATCH_SIZE = 5000

@@ -411,10 +411,13 @@ def get_threats(conn, limit: int = 100, chain: str = None, priority: str = None,
 
 def get_threat_counts(conn) -> dict:
     counts = {}
+    # Use string comparison with ISO format (timestamps have +00:00 suffix)
+    from datetime import datetime, timezone, timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%S")
     for r in conn.execute("""SELECT w.priority, COUNT(*) as c
         FROM watchlist_hits wh JOIN watchlist w ON wh.watchlist_id = w.id
-        WHERE wh.timestamp >= datetime('now', '-24 hours')
-        GROUP BY w.priority"""):
+        WHERE wh.timestamp >= ?
+        GROUP BY w.priority""", (cutoff,)):
         counts[r["priority"]] = r["c"]
     return counts
 

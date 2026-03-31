@@ -65,10 +65,16 @@
 <script>
 // Relative timestamps
 document.querySelectorAll('[data-ts]').forEach(el => {
-    const ts = new Date(el.dataset.ts + 'Z');
+    let raw = el.dataset.ts || '';
+    // Normalize: replace +00:00 with Z, add Z if no timezone
+    raw = raw.replace('+00:00', 'Z').replace('+0000', 'Z');
+    if (!raw.endsWith('Z') && !raw.includes('+') && !raw.includes('-', 10)) raw += 'Z';
+    const ts = new Date(raw);
+    if (isNaN(ts.getTime())) { el.textContent = raw.substring(0, 16); return; }
     const now = new Date();
     const diff = Math.floor((now - ts) / 1000);
-    if (diff < 60) el.textContent = diff + 's ago';
+    if (diff < 0) el.textContent = 'just now';
+    else if (diff < 60) el.textContent = diff + 's ago';
     else if (diff < 3600) el.textContent = Math.floor(diff/60) + 'm ago';
     else if (diff < 86400) el.textContent = Math.floor(diff/3600) + 'h ago';
     else el.textContent = Math.floor(diff/86400) + 'd ago';
