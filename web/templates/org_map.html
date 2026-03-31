@@ -31,12 +31,13 @@
         <div class="flex-1">
             <div id="cy" style="background:#0D1117;"></div>
             <!-- Legend -->
-            <div class="flex gap-4 mt-3 pt-3 border-t border-gray-800">
-                <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full bg-red-500"></div><span class="text-xs text-gray-500">Treasury</span></div>
-                <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full bg-yellow-500"></div><span class="text-xs text-gray-500">Funding path</span></div>
-                <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full bg-blue-500"></div><span class="text-xs text-gray-500">Infrastructure</span></div>
-                <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full bg-purple-500"></div><span class="text-xs text-gray-500">Mainnet/Associated</span></div>
-                <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded bg-gray-700 border border-gray-600"></div><span class="text-xs text-gray-500">Deployers</span></div>
+            <div class="flex gap-5 mt-3 pt-3 border-t border-gray-800">
+                <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full" style="background:#9CA3AF;"></div><span class="text-xs text-gray-500">CEX Origin</span></div>
+                <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full" style="background:#EF4444;"></div><span class="text-xs text-gray-500">Treasury</span></div>
+                <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full" style="background:#F59E0B;"></div><span class="text-xs text-gray-500">Funding Path</span></div>
+                <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full" style="background:#3B82F6;"></div><span class="text-xs text-gray-500">Infrastructure</span></div>
+                <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full" style="background:#8B5CF6;"></div><span class="text-xs text-gray-500">Exit / Cashout</span></div>
+                <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded border" style="background:#111827;border-color:#2D3B50;border-style:dashed;"></div><span class="text-xs text-gray-500">Deployer Aggregate</span></div>
             </div>
         </div>
 
@@ -102,62 +103,83 @@ function initGraph(data) {
         container: document.getElementById('cy'),
         elements: [...data.nodes, ...data.edges],
         style: [
+            // Base node style
             { selector: 'node', style: {
                 'shape': 'round-rectangle',
                 'label': 'data(label)',
                 'color': '#E5E7EB',
-                'font-size': '9px',
+                'font-size': '11px',
                 'text-valign': 'center',
                 'text-halign': 'center',
                 'text-wrap': 'wrap',
-                'text-max-width': '80px',
+                'text-max-width': '140px',
                 'border-width': 1,
                 'border-color': '#4B5563',
                 'background-color': '#1F2937',
-                'width': 40, 'height': 25,
+                'width': 120, 'height': 50,
             }},
+            // Tier 2: Treasury — largest, red
             { selector: 'node[role="treasury"]', style: {
-                'background-color': '#7F1D1D', 'border-color': '#EF4444', 'border-width': 2,
-                'width': 60, 'height': 40, 'font-size': '11px', 'font-weight': 'bold', 'color': '#FCA5A5',
+                'background-color': '#7F1D1D', 'border-color': '#EF4444', 'border-width': 2.5,
+                'width': 160, 'height': 70, 'font-size': '16px', 'font-weight': 'bold', 'color': '#FCA5A5',
             }},
-            { selector: 'node[role="gas_station"], node[role="whale_trader"], node[role="funder"]', style: {
-                'border-color': '#F59E0B', 'border-width': 1.5, 'width': 55, 'height': 35, 'font-size': '10px', 'color': '#FCD34D',
+            // Tier 3: Funding paths — orange
+            { selector: 'node[role="funding"]', style: {
+                'border-color': '#F59E0B', 'border-width': 1.5,
+                'width': 140, 'height': 60, 'font-size': '14px', 'font-weight': 'bold', 'color': '#FCD34D',
             }},
+            // Tier 1: CEX origins — gray, medium
             { selector: 'node[role="cex"]', style: {
-                'border-color': '#3B82F6', 'border-width': 1, 'width': 50, 'height': 30, 'color': '#93C5FD',
+                'border-color': '#9CA3AF', 'border-width': 1,
+                'width': 120, 'height': 50, 'font-size': '13px', 'color': '#D1D5DB',
             }},
-            { selector: 'node[role="mev_bot"], node[role="revenue"]', style: {
-                'border-color': '#3B82F6', 'border-width': 1, 'width': 50, 'height': 30, 'color': '#93C5FD',
+            // Tier 3: Infrastructure — blue
+            { selector: 'node[role="infra"]', style: {
+                'border-color': '#3B82F6', 'border-width': 1,
+                'width': 120, 'height': 50, 'font-size': '12px', 'color': '#93C5FD',
             }},
-            { selector: 'node[role="bridge"], node[role="wrapper"]', style: {
-                'border-color': '#8B5CF6', 'border-width': 1, 'width': 45, 'height': 28, 'color': '#C4B5FD',
+            // Tier 4: Exit nodes — purple
+            { selector: 'node[role="exit"]', style: {
+                'border-color': '#8B5CF6', 'border-width': 1,
+                'width': 120, 'height': 50, 'font-size': '12px', 'color': '#C4B5FD',
             }},
+            // Tier 5: Summary aggregates — dashed, dark
+            { selector: 'node[role="summary"]', style: {
+                'background-color': '#111827', 'border-color': '#2D3B50', 'border-width': 1, 'border-style': 'dashed',
+                'width': 220, 'height': 50, 'font-size': '11px', 'color': '#9CA3AF',
+                'text-max-width': '200px',
+            }},
+            // Entity_005 associated — purple dashed
             { selector: 'node[role="associated"]', style: {
-                'border-color': '#8B5CF6', 'border-width': 1, 'border-style': 'dashed', 'width': 50, 'height': 30, 'color': '#C4B5FD',
+                'border-color': '#8B5CF6', 'border-width': 1, 'border-style': 'dashed',
+                'width': 130, 'height': 45, 'font-size': '11px', 'color': '#C4B5FD',
             }},
+            // Deployer nodes (org_002)
             { selector: 'node[role="deployer"]', style: {
-                'width': 35, 'height': 22, 'font-size': '8px', 'color': '#9CA3AF', 'border-color': '#4B5563', 'border-width': 0.5,
+                'width': 50, 'height': 30, 'font-size': '9px', 'color': '#9CA3AF',
+                'border-color': '#4B5563', 'border-width': 0.5,
             }},
             { selector: 'node[role="deployer_cluster"]', style: {
-                'width': 80, 'height': 28, 'font-size': '9px', 'color': '#6B7280', 'border-style': 'dashed',
+                'background-color': '#111827', 'border-color': '#2D3B50', 'border-style': 'dashed',
+                'width': 140, 'height': 40, 'font-size': '10px', 'color': '#6B7280',
             }},
-            { selector: 'node[role="bot_retired"], node[role="buffer"]', style: {
-                'border-color': '#6B7280', 'width': 45, 'height': 28, 'color': '#6B7280', 'font-size': '8px',
+            { selector: 'node[role="funder"]', style: {
+                'border-color': '#F59E0B', 'border-width': 1,
+                'width': 100, 'height': 40, 'font-size': '12px', 'color': '#FCD34D',
             }},
-            { selector: 'node[role^="org_"]', style: {
-                'border-color': '#3B82F6', 'width': 50, 'height': 30, 'color': '#93C5FD', 'font-size': '9px',
-            }},
+            // Edges
             { selector: 'edge', style: {
-                'width': 1, 'line-color': '#374151', 'target-arrow-color': '#374151',
-                'target-arrow-shape': 'triangle', 'arrow-scale': 0.7,
+                'width': 1, 'line-color': '#4B5563', 'target-arrow-color': '#4B5563',
+                'target-arrow-shape': 'triangle', 'arrow-scale': 0.6,
                 'curve-style': 'bezier',
-                'label': 'data(label)', 'font-size': '7px', 'color': '#4B5563',
-                'text-rotation': 'autorotate', 'text-margin-y': -8,
+                'label': 'data(label)', 'font-size': '9px', 'color': '#6B7280',
+                'text-rotation': 'autorotate', 'text-margin-y': -10,
+                'text-background-color': '#0D1117', 'text-background-opacity': 0.8,
+                'text-background-padding': '2px',
             }},
             { selector: 'node:selected', style: { 'border-color': '#3B82F6', 'border-width': 3, 'overlay-opacity': 0 }},
         ],
-        layout: { name: layoutName, rankDir: 'TB', nodeSep: 30, rankSep: 60, padding: 30, directed: true, spacingFactor: 1.3 },
-        wheelSensitivity: 0.3,
+        layout: { name: layoutName, rankDir: 'TB', rankSep: 100, nodeSep: 60, edgeSep: 30, padding: 30, ranker: 'network-simplex' },
     });
 
     cy.on('tap', 'node', function(evt) {

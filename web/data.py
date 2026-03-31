@@ -154,68 +154,52 @@ def get_org_graph(conn, org_id: str) -> dict:
         edges.append({"data": {"source": _nid(src_addr), "target": _nid(tgt_addr), "label": label}})
 
     if org_id == "org_001":
-        # Core infrastructure
-        add_node("0x503828976d22510aad0201ac7ec88293211d23da", "Coinbase", "cex", "#3B82F6")
-        add_node("0x66666ff8ee46eee265ba888dbbbaad69ccf50b1d", "Buffer Wallet", "buffer", "#6B7280")
+        # Tier 1: CEX origins
+        add_node("0x503828976d22510aad0201ac7ec88293211d23da", "Coinbase", "cex", "#9CA3AF")
+        add_node("binance", "Binance\n33,333 ETH pool", "cex", "#9CA3AF")
+
+        # Tier 2: Treasury
         add_node("0x4c968f6beecf1906710b08e8b472b8ba6e75f957", "Central Treasury", "treasury", "#EF4444")
-        add_node("0x8c826f795466e39acbff1bb4eeeb759609377ba1", "Gas Station", "gas_station", "#F59E0B")
-        add_node("0xf70da97812cb96acdf810712aa562db8dfa3dbef", "Whale Trader", "whale_trader", "#8B5CF6")
-        add_node("0x5babe600b9fcd5fb7b66c0611bf4896d967b23a1", "MEV Bot", "mev_bot", "#06B6D4")
-        add_node("0x391e7c679d29bd940d63be94ad22a25d25b5a604", "Revenue Collector", "revenue", "#10B981")
-        add_node("0x9e22ebec84c7e4c4bd6d4ae7ff6f4d436d6d8390", "v1 Bot (retired)", "bot_retired", "#6B7280")
-        add_node("0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae", "LI.FI Bridge", "bridge", "#D946EF")
-        add_node("0x5e0f8e7337c8955d2124b8e85ca74af884b3e124", "WETH Wrapper", "wrapper", "#9CA3AF")
 
-        # L2 operators from entity_classification
-        for r in conn.execute("SELECT address, subtype, notes FROM entity_classification WHERE org_id='org_001' AND category='CRIMINAL'"):
-            label_map = {"org_deployer": "Operator", "org_cashout": "Cashout", "org_laundry": "Laundry",
-                         "org_treasury": "L2 Treasury", "org_exit_ramp": "CEX Exit"}
-            lbl = label_map.get(r["subtype"], r["subtype"])
-            color_map = {"org_deployer": "#3B82F6", "org_cashout": "#F59E0B", "org_laundry": "#EF4444",
-                         "org_treasury": "#EF4444", "org_exit_ramp": "#D946EF"}
-            add_node(r["address"], lbl, r["subtype"], color_map.get(r["subtype"], "#9CA3AF"))
+        # Tier 3: Infrastructure
+        add_node("0x391e7c679d29bd940d63be94ad22a25d25b5a604", "Revenue\nCollector", "infra", "#3B82F6")
+        add_node("0x8c826f795466e39acbff1bb4eeeb759609377ba1", "Gas Station\n32%", "funding", "#F59E0B")
+        add_node("0xf70da97812cb96acdf810712aa562db8dfa3dbef", "Whale Trader\n68%", "funding", "#F59E0B")
+        add_node("0x5babe600b9fcd5fb7b66c0611bf4896d967b23a1", "MEV Bot", "infra", "#3B82F6")
+        add_node("0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae", "LI.FI Bridge", "infra", "#3B82F6")
+        add_node("0x5e0f8e7337c8955d2124b8e85ca74af884b3e124", "WETH Wrapper", "infra", "#3B82F6")
+        add_node("0xf186cb00e49e18491db5783ff04fae3818102ff7", "L2 Treasury", "treasury", "#EF4444")
 
-        # Edges: funding chain
-        add_edge("0x503828976d22510aad0201ac7ec88293211d23da", "0x66666ff8ee46eee265ba888dbbbaad69ccf50b1d", "Coinbase withdrawal")
-        add_edge("0x66666ff8ee46eee265ba888dbbbaad69ccf50b1d", "0x4c968f6beecf1906710b08e8b472b8ba6e75f957", "Fund treasury")
-        add_edge("0x4c968f6beecf1906710b08e8b472b8ba6e75f957", "0x8c826f795466e39acbff1bb4eeeb759609377ba1", "Fund gas station")
-        add_edge("0x4c968f6beecf1906710b08e8b472b8ba6e75f957", "0x5babe600b9fcd5fb7b66c0611bf4896d967b23a1", "Fund MEV bot")
-        add_edge("0x4c968f6beecf1906710b08e8b472b8ba6e75f957", "0x391e7c679d29bd940d63be94ad22a25d25b5a604", "Revenue sweep")
-        add_edge("0x391e7c679d29bd940d63be94ad22a25d25b5a604", "0x5babe600b9fcd5fb7b66c0611bf4896d967b23a1", "Sweep to bot")
-        add_edge("0x9e22ebec84c7e4c4bd6d4ae7ff6f4d436d6d8390", "0x4c968f6beecf1906710b08e8b472b8ba6e75f957", "Revenue (retired)")
-        add_edge("0xf70da97812cb96acdf810712aa562db8dfa3dbef", "0x8c826f795466e39acbff1bb4eeeb759609377ba1", "10 ETH")
-        add_edge("0x8c826f795466e39acbff1bb4eeeb759609377ba1", "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae", "LI.FI bridge")
-        add_edge("0x8c826f795466e39acbff1bb4eeeb759609377ba1", "0x5e0f8e7337c8955d2124b8e85ca74af884b3e124", "WETH wrap")
+        # Tier 4: Exit nodes
+        add_node("0xc6962004f452be9203591991d15f6b388e09e8d0", "Cashout", "exit", "#8B5CF6")
+        add_node("0x01989c93890aed05a63d179b03424997075b6acf", "CEX Exit", "exit", "#8B5CF6")
+        add_node("laundry", "3 Laundry\nWallets", "exit", "#8B5CF6")
 
-        # L2 treasury -> operators
-        add_edge("0xf186cb00e49e18491db5783ff04fae3818102ff7", "0xe93d64f3fbc352131e79fc5578cbe44b66697f86", "Operations")
-        add_edge("0xc6962004f452be9203591991d15f6b388e09e8d0", "0x01989c93890aed05a63d179b03424997075b6acf", "Cashout")
+        # Tier 5: Aggregate deployer summary
+        gas_count = conn.execute("SELECT COUNT(*) FROM deployers WHERE funding_trail LIKE '%org_001%'").fetchone()[0]
+        gas_contracts = conn.execute("SELECT SUM(total_contracts_deployed) FROM deployers WHERE funding_trail LIKE '%org_001%'").fetchone()[0] or 0
+        whale_count = conn.execute("SELECT COUNT(*) FROM deployers WHERE funding_trail LIKE '%f70da978%'").fetchone()[0]
+        whale_contracts = conn.execute("SELECT SUM(total_contracts_deployed) FROM deployers WHERE funding_trail LIKE '%f70da978%'").fetchone()[0] or 0
+        add_node("gas_summary", f"Gas Station Path\n{gas_count} deployers → {gas_contracts:,} contracts", "summary", "#2D3B50")
+        add_node("whale_summary", f"Whale Trader Path\n{whale_count} deployers → {whale_contracts:,} contracts", "summary", "#2D3B50")
 
-        # Gas station -> top deployers
-        gas_deps = conn.execute("""SELECT deployer_address, total_contracts_deployed FROM deployers
-            WHERE funding_trail LIKE '%org_001%' ORDER BY total_contracts_deployed DESC LIMIT 10""").fetchall()
-        for d in gas_deps:
-            nid = add_node(d["deployer_address"], f"{d['total_contracts_deployed']}c", "deployer", "#F59E0B")
-            add_edge("0x8c826f795466e39acbff1bb4eeeb759609377ba1", d["deployer_address"], "")
-
-        # Whale -> top deployers
-        whale_deps = conn.execute("""SELECT deployer_address, total_contracts_deployed FROM deployers
-            WHERE funding_trail LIKE '%f70da978%' ORDER BY total_contracts_deployed DESC LIMIT 10""").fetchall()
-        for d in whale_deps:
-            nid = add_node(d["deployer_address"], f"{d['total_contracts_deployed']}c", "deployer", "#8B5CF6")
-            add_edge("0xf70da97812cb96acdf810712aa562db8dfa3dbef", d["deployer_address"], "")
-
-        # Summary nodes for the rest
-        gas_total = conn.execute("SELECT COUNT(*) FROM deployers WHERE funding_trail LIKE '%org_001%'").fetchone()[0]
-        whale_total = conn.execute("SELECT COUNT(*) FROM deployers WHERE funding_trail LIKE '%f70da978%'").fetchone()[0]
-        gas_rest = gas_total - len(gas_deps)
-        whale_rest = whale_total - len(whale_deps)
-        if gas_rest > 0:
-            add_node("gas_rest", f"+{gas_rest} more", "deployer_cluster", "#92702A")
-            add_edge("0x8c826f795466e39acbff1bb4eeeb759609377ba1", "gas_rest", "")
-        if whale_rest > 0:
-            add_node("whale_rest", f"+{whale_rest} more", "deployer_cluster", "#5B3F8C")
-            add_edge("0xf70da97812cb96acdf810712aa562db8dfa3dbef", "whale_rest", "")
+        # Edges
+        add_edge("0x503828976d22510aad0201ac7ec88293211d23da", "0x4c968f6beecf1906710b08e8b472b8ba6e75f957", "")
+        add_edge("binance", "0xf70da97812cb96acdf810712aa562db8dfa3dbef", "")
+        add_edge("0x391e7c679d29bd940d63be94ad22a25d25b5a604", "0x4c968f6beecf1906710b08e8b472b8ba6e75f957", "~22 ETH")
+        add_edge("0x4c968f6beecf1906710b08e8b472b8ba6e75f957", "0x8c826f795466e39acbff1bb4eeeb759609377ba1", "fund gas station")
+        add_edge("0x4c968f6beecf1906710b08e8b472b8ba6e75f957", "0xf70da97812cb96acdf810712aa562db8dfa3dbef", "fund whale")
+        add_edge("0x4c968f6beecf1906710b08e8b472b8ba6e75f957", "0x5babe600b9fcd5fb7b66c0611bf4896d967b23a1", "")
+        add_edge("0x4c968f6beecf1906710b08e8b472b8ba6e75f957", "0x391e7c679d29bd940d63be94ad22a25d25b5a604", "")
+        add_edge("0x8c826f795466e39acbff1bb4eeeb759609377ba1", "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae", "")
+        add_edge("0x8c826f795466e39acbff1bb4eeeb759609377ba1", "0x5e0f8e7337c8955d2124b8e85ca74af884b3e124", "")
+        add_edge("0xf70da97812cb96acdf810712aa562db8dfa3dbef", "0x8c826f795466e39acbff1bb4eeeb759609377ba1", "")
+        add_edge("0x4c968f6beecf1906710b08e8b472b8ba6e75f957", "0xf186cb00e49e18491db5783ff04fae3818102ff7", "")
+        add_edge("0xf186cb00e49e18491db5783ff04fae3818102ff7", "0xc6962004f452be9203591991d15f6b388e09e8d0", "")
+        add_edge("0xc6962004f452be9203591991d15f6b388e09e8d0", "0x01989c93890aed05a63d179b03424997075b6acf", "")
+        add_edge("0xc6962004f452be9203591991d15f6b388e09e8d0", "laundry", "")
+        add_edge("0x8c826f795466e39acbff1bb4eeeb759609377ba1", "gas_summary", "")
+        add_edge("0xf70da97812cb96acdf810712aa562db8dfa3dbef", "whale_summary", "")
 
     elif org_id == "org_002":
         senior = "0x238d7170f309a55b87a144a341bd6105897082ca"
