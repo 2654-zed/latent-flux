@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Layer 3{% endblock %} — Layer 3 Intelligence</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: { 900: '#111827', 800: '#1F2937', 700: '#2D3B50', 600: '#374151' },
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background: #111827; color: #F9FAFB; font-family: system-ui, -apple-system, sans-serif; }
+        .card { background: #1F2937; border: 1px solid #2D3B50; border-radius: 0.5rem; }
+        .stat-number { font-size: 1.875rem; font-weight: 700; }
+        .stat-label { font-size: 0.75rem; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.05em; }
+        .table-header { background: #1E3A5F; }
+        .table-row-odd { background: #161E2E; }
+        .table-row-even { background: #1A2436; }
+        .nav-link { display: block; padding: 0.625rem 1rem; border-radius: 0.375rem; color: #9CA3AF; transition: all 0.15s; }
+        .nav-link:hover { background: #2D3B50; color: #F9FAFB; }
+        .nav-link.active { background: #1E3A5F; color: #3B82F6; }
+        .badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; }
+        .badge-critical { background: #7F1D1D; color: #FCA5A5; }
+        .badge-high { background: #78350F; color: #FCD34D; }
+        .badge-medium { background: #1E3A5F; color: #93C5FD; }
+        .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
+        .htmx-request .htmx-indicator { opacity: 1; }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body class="flex min-h-screen">
+    <!-- Sidebar -->
+    <nav class="w-56 min-h-screen p-4 border-r border-gray-700/50 flex flex-col" style="background: #0D1117;">
+        <div class="mb-8">
+            <h1 class="text-xl font-bold text-blue-400">LAYER 3</h1>
+            <p class="text-xs text-gray-500 mt-1">Behavioral Intelligence</p>
+        </div>
+        <div class="space-y-1 flex-1">
+            <a href="/" class="nav-link {% if active_page == 'overview' %}active{% endif %}">
+                <span class="mr-2">◉</span> Overview
+            </a>
+            <a href="/org-map" class="nav-link {% if active_page == 'org_map' %}active{% endif %}">
+                <span class="mr-2">⬡</span> Org Map
+            </a>
+            <a href="/contract" class="nav-link {% if active_page == 'contract' %}active{% endif %}">
+                <span class="mr-2">⧫</span> Contracts
+            </a>
+            <a href="/deployer" class="nav-link {% if active_page == 'deployer' %}active{% endif %}">
+                <span class="mr-2">◈</span> Deployers
+            </a>
+            <a href="/threats" class="nav-link {% if active_page == 'threats' %}active{% endif %}">
+                <span class="mr-2">⚡</span> Threat Feed
+            </a>
+        </div>
+        <div class="pt-4 border-t border-gray-700/50">
+            <p class="text-xs text-gray-600">{{ stats.contracts | default(0) }} contracts</p>
+            <p class="text-xs text-gray-600">3 chains monitored</p>
+        </div>
+    </nav>
+
+    <!-- Main content -->
+    <main class="flex-1 p-6 overflow-auto">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

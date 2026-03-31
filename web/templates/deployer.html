@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Deployer Profile{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto">
+    <h2 class="text-2xl font-bold mb-6">Deployer Profile</h2>
+
+    <form action="/deployer" method="get" class="mb-6">
+        <div class="flex gap-2">
+            <input type="text" name="q" value="{{ query or '' }}" placeholder="Enter deployer address (0x...)"
+                class="flex-1 bg-gray-800 border border-gray-600 rounded px-4 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none">
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm font-medium">Search</button>
+        </div>
+    </form>
+
+    {% if deployer %}
+    <div class="card p-6 mb-6">
+        <h3 class="font-mono text-sm text-gray-300 break-all mb-4">{{ deployer.deployer_address }}</h3>
+
+        <div class="grid grid-cols-3 gap-4 mb-6">
+            <div class="p-3 rounded text-center" style="background: #161E2E;">
+                <div class="text-lg font-bold text-blue-400">{{ deployer.total_contracts_deployed }}</div>
+                <div class="text-xs text-gray-500">Contracts</div>
+            </div>
+            <div class="p-3 rounded text-center" style="background: #161E2E;">
+                <div class="text-lg font-bold text-purple-400">{{ deployer.chain }}</div>
+                <div class="text-xs text-gray-500">Chain</div>
+            </div>
+            <div class="p-3 rounded text-center" style="background: #161E2E;">
+                <div class="text-lg font-bold text-cyan-400">{{ deployer.first_seen[:10] if deployer.first_seen else '?' }}</div>
+                <div class="text-xs text-gray-500">First Seen</div>
+            </div>
+        </div>
+
+        {% if deployer.funding %}
+        <div class="mb-4 p-3 rounded" style="background: #161E2E;">
+            <span class="text-gray-500 text-sm">Funded by:</span>
+            <a href="/deployer/{{ deployer.funding.funder }}" class="font-mono text-xs text-blue-400 hover:underline ml-2">{{ deployer.funding.funder[:20] }}...</a>
+            <span class="text-gray-500 text-xs ml-2">{{ "%.4f" | format(deployer.funding.value_eth) }} ETH</span>
+            {% if deployer.funding.org_link %}
+            <span class="badge badge-critical ml-2">{{ deployer.funding.org_link }}</span>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if deployer.profile %}
+        <h4 class="text-sm font-semibold text-gray-300 mb-2 mt-4">Behavioral Fingerprint</h4>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div class="p-2 rounded text-center text-xs" style="background: #161E2E;">
+                <div class="text-gray-400">Timezone</div>
+                <div class="text-white font-medium">{{ deployer.profile.timezone_guess }}</div>
+            </div>
+            <div class="p-2 rounded text-center text-xs" style="background: #161E2E;">
+                <div class="text-gray-400">Gas</div>
+                <div class="text-white font-medium">{{ deployer.profile.gas_avg }}</div>
+            </div>
+            <div class="p-2 rounded text-center text-xs" style="background: #161E2E;">
+                <div class="text-gray-400">Technique</div>
+                <div class="text-white font-medium">{{ deployer.profile.primary_technique }}</div>
+            </div>
+            <div class="p-2 rounded text-center text-xs" style="background: #161E2E;">
+                <div class="text-gray-400">Style</div>
+                <div class="text-white font-medium">{{ deployer.profile.deployment_style }}</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if deployer.similar %}
+    <div class="card p-5 mb-6">
+        <h4 class="text-sm font-semibold mb-3">Similar Deployers</h4>
+        <table class="w-full text-xs">
+            <thead><tr class="table-header text-gray-300">
+                <th class="p-2 text-left">Address</th><th class="p-2">Score</th><th class="p-2">TZ</th><th class="p-2">Gas</th><th class="p-2">Tech</th>
+            </tr></thead>
+            <tbody>
+            {% for s in deployer.similar %}
+            {% set other = s.deployer_b if s.deployer_a == deployer.deployer_address else s.deployer_a %}
+            <tr class="{{ 'table-row-odd' if loop.index is odd else 'table-row-even' }}">
+                <td class="p-2 font-mono"><a href="/deployer/{{ other }}" class="text-blue-400 hover:underline">{{ other[:18] }}...</a></td>
+                <td class="p-2 text-center">{{ "%.3f" | format(s.composite_score) }}</td>
+                <td class="p-2 text-center">{{ "%.2f" | format(s.timezone_score) }}</td>
+                <td class="p-2 text-center">{{ "%.2f" | format(s.gas_score) }}</td>
+                <td class="p-2 text-center">{{ "%.2f" | format(s.technique_score) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if deployer.contracts %}
+    <div class="card p-5">
+        <h4 class="text-sm font-semibold mb-3">Contracts ({{ deployer.contracts | length }}{% if deployer.contracts | length == 50 %}+{% endif %})</h4>
+        <div class="space-y-1 max-h-96 overflow-y-auto">
+            {% for c in deployer.contracts %}
+            <div class="flex items-center gap-3 p-2 rounded text-xs" style="background: #161E2E;">
+                <span class="badge {% if c.confidence_tier == 'suspected' %}badge-high{% else %}badge-medium{% endif %}">{{ c.confidence_tier }}</span>
+                <a href="/contract/{{ c.contract_address }}" class="font-mono text-blue-400 hover:underline">{{ c.contract_address[:20] }}...</a>
+                <span class="text-gray-500">{{ c.chain }}</span>
+                <span class="text-gray-600 ml-auto">{{ c.detection_timestamp[:16] }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% elif query %}
+    <div class="card p-6 text-center text-gray-500">
+        <p>No deployer found matching <span class="font-mono text-gray-400">{{ query }}</span></p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

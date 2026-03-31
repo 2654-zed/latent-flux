@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <h2 class="text-2xl font-bold mb-6">System Overview</h2>
+
+    <!-- Top stats row -->
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
+        <div class="card p-4 text-center">
+            <div class="stat-number text-blue-400">{{ "{:,}".format(stats.contracts) }}</div>
+            <div class="stat-label">Contracts</div>
+        </div>
+        <div class="card p-4 text-center">
+            <div class="stat-number text-purple-400">{{ "{:,}".format(stats.deployers) }}</div>
+            <div class="stat-label">Deployers</div>
+        </div>
+        <div class="card p-4 text-center">
+            <div class="stat-number text-cyan-400">{{ "{:,}".format(stats.tx_events) }}</div>
+            <div class="stat-label">TX Events</div>
+        </div>
+        <div class="card p-4 text-center">
+            <div class="stat-number text-yellow-400">{{ stats.bots }}</div>
+            <div class="stat-label">Bots Tracked</div>
+        </div>
+        <div class="card p-4 text-center">
+            <div class="stat-number text-green-400">{{ stats.chains }}</div>
+            <div class="stat-label">Chains</div>
+        </div>
+        <div class="card p-4 text-center">
+            <div class="stat-number text-red-400">{{ stats.orgs_mapped }}</div>
+            <div class="stat-label">Orgs Mapped</div>
+        </div>
+    </div>
+
+    <!-- Key metrics -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div class="card p-5">
+            <div class="text-sm text-gray-400 mb-1">Detection Advantage</div>
+            <div class="text-3xl font-bold text-red-400">{{ metrics.goplus_gap }}</div>
+            <div class="text-xs text-gray-500 mt-1">Threats invisible to GoPlus</div>
+        </div>
+        <div class="card p-5">
+            <div class="text-sm text-gray-400 mb-1">Camouflage Ratio</div>
+            <div class="text-3xl font-bold text-yellow-400">{{ metrics.camouflage_ratio }}%</div>
+            <div class="text-xs text-gray-500 mt-1">Traps evading revert detection</div>
+        </div>
+        <div class="card p-5">
+            <div class="text-sm text-gray-400 mb-1">Approval Exposure</div>
+            <div class="text-3xl font-bold text-orange-400">{{ "{:,}".format(metrics.approval_pending) }}</div>
+            <div class="text-xs text-gray-500 mt-1">Pending drains | {{ metrics.approval_drained }} executed</div>
+        </div>
+        <div class="card p-5">
+            <div class="text-sm text-gray-400 mb-1">Classifier Precision</div>
+            <div class="text-3xl font-bold text-green-400">{{ metrics.precision }}%</div>
+            <div class="text-xs text-gray-500 mt-1">12 false positives / 17,650 suspected</div>
+        </div>
+    </div>
+
+    <!-- Two-column: Zero-day traps + Strategy lifecycle -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div class="card p-5">
+            <h3 class="text-lg font-semibold mb-3">Zero-Day Trap Pipeline</h3>
+            <div class="flex gap-8 mb-4">
+                <div>
+                    <span class="text-2xl font-bold text-yellow-400">{{ metrics.self_test_rd }}</span>
+                    <span class="text-xs text-gray-500 ml-1">R&D</span>
+                </div>
+                <div>
+                    <span class="text-2xl font-bold text-red-400">{{ metrics.self_test_armed }}</span>
+                    <span class="text-xs text-gray-500 ml-1">Armed</span>
+                </div>
+            </div>
+            <p class="text-xs text-gray-500">Self-test traps detected before first victim. Armed = external victims arriving.</p>
+        </div>
+
+        <div class="card p-5">
+            <h3 class="text-lg font-semibold mb-3">Watchlist</h3>
+            <div class="flex gap-8 mb-4">
+                <div>
+                    <span class="text-2xl font-bold text-blue-400">{{ metrics.watchlist_active }}</span>
+                    <span class="text-xs text-gray-500 ml-1">Active</span>
+                </div>
+                <div>
+                    <span class="text-2xl font-bold text-red-400">{{ metrics.watchlist_critical }}</span>
+                    <span class="text-xs text-gray-500 ml-1">Critical</span>
+                </div>
+            </div>
+            <p class="text-xs text-gray-500">Entities under surveillance. Zero-API detection via SQLite.</p>
+        </div>
+    </div>
+
+    <!-- Strategy lifecycle -->
+    <div class="card p-5 mb-8">
+        <h3 class="text-lg font-semibold mb-3">Strategy Lifecycle</h3>
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="table-header text-left text-xs text-gray-300">
+                    <th class="p-2">Strategy</th>
+                    <th class="p-2">Bots</th>
+                    <th class="p-2">Traps</th>
+                    <th class="p-2">Saturation</th>
+                    <th class="p-2">Stage</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in lifecycle %}
+                <tr class="{{ 'table-row-odd' if loop.index is odd else 'table-row-even' }}">
+                    <td class="p-2 font-mono text-xs">{{ s.strategy_type }}</td>
+                    <td class="p-2">{{ s.active_bots }}</td>
+                    <td class="p-2">{{ s.trap_count }}</td>
+                    <td class="p-2">{{ "%.3f" | format(s.saturation_index) }}</td>
+                    <td class="p-2">
+                        {% if s.lifecycle_stage == 'WEAPONIZED' %}
+                        <span class="badge badge-critical">{{ s.lifecycle_stage }}</span>
+                        {% elif s.lifecycle_stage == 'ARMS_RACE' %}
+                        <span class="badge badge-high">{{ s.lifecycle_stage }}</span>
+                        {% else %}
+                        <span class="badge badge-medium">{{ s.lifecycle_stage }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Bot sophistication -->
+    <div class="card p-5 mb-8">
+        <h3 class="text-lg font-semibold mb-3">Bot Sophistication Distribution</h3>
+        <div class="grid grid-cols-3 gap-4">
+            {% for b in bot_soph %}
+            <div class="text-center p-3 rounded" style="background: #161E2E;">
+                <div class="text-xl font-bold {% if b.sophistication == 'SIMULATOR' %}text-green-400{% elif b.sophistication == 'HYBRID' %}text-yellow-400{% else %}text-red-400{% endif %}">
+                    {{ b.count }}
+                </div>
+                <div class="text-xs text-gray-400">{{ b.sophistication }}</div>
+                <div class="text-xs text-gray-600">{{ b.avg_revert }}% avg revert</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Recent alerts -->
+    <div class="card p-5">
+        <h3 class="text-lg font-semibold mb-3">Recent Watchlist Hits</h3>
+        <div class="space-y-2 max-h-96 overflow-y-auto">
+            {% for a in alerts %}
+            <div class="flex items-center gap-3 p-2 rounded text-sm" style="background: #161E2E;">
+                <span class="badge {% if a.priority == 'CRITICAL' %}badge-critical{% elif a.priority == 'HIGH' %}badge-high{% else %}badge-medium{% endif %}">
+                    {{ a.priority }}
+                </span>
+                <span class="text-gray-400 text-xs w-32 shrink-0">{{ a.timestamp[:16] if a.timestamp else '' }}</span>
+                <span class="text-white font-medium">{{ a.entity_name }}</span>
+                <span class="text-gray-500 text-xs">{{ a.hit_type }}</span>
+                <span class="text-gray-600 text-xs font-mono ml-auto">{{ a.chain }}</span>
+            </div>
+            {% endfor %}
+            {% if not alerts %}
+            <p class="text-gray-500 text-sm">No recent watchlist activity.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,19 @@
+<div class="space-y-2">
+    {% for t in threats %}
+    <div class="card p-3 flex items-center gap-3">
+        <span class="badge {% if t.priority == 'CRITICAL' %}badge-critical{% elif t.priority == 'HIGH' %}badge-high{% else %}badge-medium{% endif %} w-16 text-center">
+            {{ t.priority }}
+        </span>
+        <span class="text-xs text-gray-500 w-36 shrink-0">{{ t.timestamp[:19] if t.timestamp else '' }}</span>
+        <span class="text-white font-medium text-sm">{{ t.entity_name }}</span>
+        <span class="text-gray-500 text-xs">{{ t.hit_type }}</span>
+        <a href="/contract/{{ t.contract_address }}" class="font-mono text-xs text-blue-400 hover:underline ml-auto">
+            {{ t.contract_address[:18] if t.contract_address else '' }}...
+        </a>
+        <span class="text-gray-600 text-xs w-16 text-right">{{ t.chain }}</span>
+    </div>
+    {% endfor %}
+    {% if not threats %}
+    <div class="card p-6 text-center text-gray-500">No threats matching filters.</div>
+    {% endif %}
+</div>

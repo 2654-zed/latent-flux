@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Contract Inspector{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto">
+    <h2 class="text-2xl font-bold mb-6">Contract Inspector</h2>
+
+    <!-- Search -->
+    <form action="/contract" method="get" class="mb-6">
+        <div class="flex gap-2">
+            <input type="text" name="q" value="{{ query or '' }}" placeholder="Enter contract address (0x...)"
+                class="flex-1 bg-gray-800 border border-gray-600 rounded px-4 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none">
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm font-medium">Search</button>
+        </div>
+    </form>
+
+    {% if contract %}
+    <div class="card p-6 mb-6">
+        <div class="flex items-start justify-between mb-4">
+            <div>
+                <h3 class="font-mono text-sm text-gray-300 break-all">{{ contract.contract_address }}</h3>
+                <div class="flex gap-3 mt-2">
+                    <span class="badge {% if contract.confidence_tier == 'suspected' %}badge-high{% elif contract.confidence_tier == 'confirmed' %}badge-critical{% else %}badge-medium{% endif %}">
+                        {{ contract.confidence_tier }}
+                    </span>
+                    <span class="text-xs text-gray-500">{{ contract.chain }}</span>
+                    <span class="text-xs text-gray-500">Block {{ contract.detection_block }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="grid grid-cols-4 gap-4 mb-6">
+            <div class="p-3 rounded text-center" style="background: #161E2E;">
+                <div class="text-lg font-bold text-blue-400">{{ "{:,}".format(contract.hits) }}</div>
+                <div class="text-xs text-gray-500">Interactions</div>
+            </div>
+            <div class="p-3 rounded text-center" style="background: #161E2E;">
+                <div class="text-lg font-bold text-purple-400">{{ "{:,}".format(contract.callers) }}</div>
+                <div class="text-xs text-gray-500">Unique Callers</div>
+            </div>
+            <div class="p-3 rounded text-center" style="background: #161E2E;">
+                <div class="text-lg font-bold {% if contract.revert_rate > 50 %}text-red-400{% elif contract.revert_rate > 10 %}text-yellow-400{% else %}text-green-400{% endif %}">{{ contract.revert_rate }}%</div>
+                <div class="text-xs text-gray-500">Revert Rate</div>
+            </div>
+            <div class="p-3 rounded text-center" style="background: #161E2E;">
+                <div class="text-lg font-bold text-orange-400">{{ contract.pending_approvals }}</div>
+                <div class="text-xs text-gray-500">Pending Approvals</div>
+            </div>
+        </div>
+
+        <!-- Details -->
+        <div class="space-y-3 text-sm">
+            <div class="flex">
+                <span class="text-gray-500 w-32">Deployer</span>
+                <a href="/deployer/{{ contract.deployer_address }}" class="font-mono text-blue-400 hover:underline text-xs">{{ contract.deployer_address }}</a>
+            </div>
+            <div class="flex">
+                <span class="text-gray-500 w-32">Detected</span>
+                <span>{{ contract.detection_timestamp }}</span>
+            </div>
+            {% if contract.family %}
+            <div class="flex">
+                <span class="text-gray-500 w-32">Bytecode Family</span>
+                <span class="font-mono text-xs">{{ contract.family }}</span>
+            </div>
+            {% endif %}
+            {% if contract.bytecode_pattern_notes %}
+            <div>
+                <span class="text-gray-500">Bytecode Patterns:</span>
+                <pre class="mt-1 p-3 rounded text-xs text-yellow-300 overflow-x-auto" style="background: #161E2E;">{{ contract.bytecode_pattern_notes }}</pre>
+            </div>
+            {% else %}
+            <div class="flex">
+                <span class="text-gray-500 w-32">Patterns</span>
+                <span class="text-gray-600">None detected</span>
+            </div>
+            {% endif %}
+            {% if contract.self_test %}
+            <div class="mt-4 p-3 rounded border border-yellow-600/30" style="background: #1C1A0F;">
+                <span class="badge badge-high">Self-Test Trap</span>
+                <span class="text-xs text-yellow-200 ml-2">Status: {{ contract.self_test.status }} | Self-hits: {{ contract.self_test.self_hits }} | External: {{ contract.self_test.external_hits }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% elif query %}
+    <div class="card p-6 text-center text-gray-500">
+        <p>No contract found matching <span class="font-mono text-gray-400">{{ query }}</span></p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
