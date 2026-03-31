@@ -31,6 +31,11 @@
 
 <svg viewBox="0 0 960 750" xmlns="http://www.w3.org/2000/svg">
 <rect width="960" height="750" fill="#080E1A"/>
+<defs>
+<clipPath id="clip-rev"><rect x="55" y="455" width="80" height="80"/></clipPath>
+<clipPath id="clip-cashout"><rect x="800" y="465" width="90" height="90"/></clipPath>
+<clipPath id="clip-mev"><rect x="775" y="285" width="90" height="90"/></clipPath>
+</defs>
 
 <!-- ====== LAYER 1: GRID ====== -->
 <g opacity=".04">
@@ -101,14 +106,14 @@
 <!-- T1: Binance (back-right) -->
 <image href="/static/binance.png" x="640" y="80" width="120" height="120" class="cursor-pointer" onclick="showSB('Binance Pool','0x28c6c06298d514db089934071355e5743bf21d60','Origin: Binance hot wallet. 33,333 ETH withdrawal pool (2021). Institutional scale capital.')"/>
 
-<!-- T2: LI.FI Bridge (left) -->
-<image href="/static/bridge.png" x="15" y="260" width="200" height="100" class="cursor-pointer" onclick="showSB('LI.FI Bridge','0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae','Cross-chain bridge via LI.FI aggregator. Moves funds from Ethereum mainnet to Base, Arbitrum, Optimism.')"/>
+<!-- T2: LI.FI Bridge (left, moved right so fully visible) -->
+<image href="/static/bridge.png" x="40" y="265" width="160" height="80" class="cursor-pointer" onclick="showSB('LI.FI Bridge','0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae','Cross-chain bridge via LI.FI aggregator. Moves funds from Ethereum mainnet to Base, Arbitrum, Optimism.')"/>
 
-<!-- T2: MEV Bot (right) -->
-<image href="/static/mev_bot.png" x="770" y="280" width="100" height="100" class="cursor-pointer" onclick="showSB('MEV Bot','0x5babe600b9fcd5fb7b66c0611bf4896d967b23a1','Still running on Ethereum mainnet. Original revenue source before L2 trap pivot.')"/>
+<!-- T2: MEV Bot (right, clipped) -->
+<image href="/static/mev_bot.png" x="775" y="285" width="90" height="90" clip-path="url(#clip-mev)" class="cursor-pointer" onclick="showSB('MEV Bot','0x5babe600b9fcd5fb7b66c0611bf4896d967b23a1','Still running on Ethereum mainnet. Original revenue source before L2 trap pivot.')"/>
 
-<!-- T3: Revenue Collector (far left) -->
-<image href="/static/revenue_collector.png" x="60" y="450" width="90" height="90" class="cursor-pointer" onclick="showSB('Revenue Collector','0x391e7c679d29bd940d63be94ad22a25d25b5a604','Automated profit sweep. Collects extraction revenue and funnels to treasury. ~22 ETH documented.')"/>
+<!-- T3: Revenue Collector (far left, clipped tight) -->
+<image href="/static/revenue_collector.png" x="55" y="455" width="80" height="80" clip-path="url(#clip-rev)" class="cursor-pointer" onclick="showSB('Revenue Collector','0x391e7c679d29bd940d63be94ad22a25d25b5a604','Automated profit sweep. Collects extraction revenue and funnels to treasury. ~22 ETH documented.')"/>
 
 <!-- T2: CENTRAL TREASURY (center, on top of side buildings) -->
 <image href="/static/treasury.png" x="360" y="230" width="200" height="200" class="cursor-pointer" onclick="showSB('Central Treasury','0x4c968f6beecf1906710b08e8b472b8ba6e75f957','Central treasury on Ethereum mainnet. Feeds both gas station and whale trader paths. Revenue collector sweeps profits here.')"/>
@@ -121,8 +126,8 @@
 <!-- T3: Whale Trader (right-center, large, on top) -->
 <image href="/static/whale_trader.png" x="540" y="430" width="185" height="185" class="cursor-pointer" onclick="showSB('Whale Trader','0xf70da97812cb96acdf810712aa562db8dfa3dbef','{{ org.whale_deployers }} deployers, {{ org.whale_contracts_fmt }} contracts. Grew from 40% to {{ org.whale_pct }}%. Traces to Binance.')"/>
 
-<!-- T3: Cashout (far right) -->
-<image href="/static/laundry.png" x="790" y="460" width="100" height="100" class="cursor-pointer" onclick="showSB('Cashout','0xc6962004f452be9203591991d15f6b388e09e8d0','Extraction pipeline. Two observed cycles totaling ${{ org.traced_usd }}. 3 laundry wallets + CEX exit ramp.')"/>
+<!-- T3: Cashout (far right, clipped tight) -->
+<image href="/static/laundry.png" x="800" y="465" width="90" height="90" clip-path="url(#clip-cashout)" class="cursor-pointer" onclick="showSB('Cashout','0xc6962004f452be9203591991d15f6b388e09e8d0','Extraction pipeline. Two observed cycles totaling ${{ org.traced_usd }}. 3 laundry wallets + CEX exit ramp.')"/>
 
 <!-- T4: Deployer rows -->
 {% for i in range(8) %}
@@ -141,23 +146,23 @@
 <text x="700" y="223" fill="#F59E0B" font-size="9" text-anchor="middle">33,333 ETH pool</text>
 
 <!-- T2 labels -->
-<text x="115" y="370" fill="#60A5FA" font-size="10" text-anchor="middle" font-weight="500">LI.FI Bridge</text>
-<text x="115" y="383" fill="#4B5563" font-size="8" text-anchor="middle">L1 → L2</text>
+<text x="120" y="355" fill="#60A5FA" font-size="10" text-anchor="middle" font-weight="500">LI.FI Bridge</text>
+<text x="120" y="368" fill="#4B5563" font-size="8" text-anchor="middle">L1 → L2</text>
 <text x="460" y="442" fill="#FCA5A5" font-size="16" text-anchor="middle" font-weight="700">Central Treasury</text>
 <text x="460" y="458" fill="#F87171" font-size="10" text-anchor="middle" font-family="monospace">0x4c968f6b...</text>
 <text x="460" y="472" fill="#EF4444" font-size="9" text-anchor="middle">Ethereum mainnet</text>
-<text x="820" y="390" fill="#C4B5FD" font-size="10" text-anchor="middle" font-weight="500">MEV Bot</text>
-<text x="820" y="403" fill="#4B5563" font-size="8" text-anchor="middle">mainnet · active</text>
+<text x="820" y="385" fill="#C4B5FD" font-size="10" text-anchor="middle" font-weight="500">MEV Bot</text>
+<text x="820" y="398" fill="#4B5563" font-size="8" text-anchor="middle">mainnet · active</text>
 
 <!-- T3 labels -->
-<text x="105" y="550" fill="#60A5FA" font-size="10" text-anchor="middle" font-weight="500">Revenue Collector</text>
-<text x="105" y="563" fill="#4B5563" font-size="8" text-anchor="middle">sweep → treasury</text>
+<text x="95" y="545" fill="#60A5FA" font-size="10" text-anchor="middle" font-weight="500">Revenue Collector</text>
+<text x="95" y="558" fill="#4B5563" font-size="8" text-anchor="middle">sweep → treasury</text>
 <text x="300" y="605" fill="#FCD34D" font-size="12" text-anchor="middle" font-weight="600" opacity=".7">Gas Station</text>
 <text x="300" y="620" fill="#F59E0B" font-size="9" text-anchor="middle">{{ org.gas_pct }}% · declining ↓</text>
 <text x="632" y="626" fill="#FCD34D" font-size="15" text-anchor="middle" font-weight="700">Whale Trader</text>
 <text x="632" y="645" fill="#F59E0B" font-size="9" text-anchor="middle">was 40% one week ago</text>
-<text x="840" y="570" fill="#C4B5FD" font-size="10" text-anchor="middle" font-weight="500">Cashout</text>
-<text x="840" y="586" fill="#A78BFA" font-size="13" text-anchor="middle" font-weight="700">${{ "{:,}".format(org.traced_usd) }}</text>
+<text x="845" y="565" fill="#C4B5FD" font-size="10" text-anchor="middle" font-weight="500">Cashout</text>
+<text x="845" y="581" fill="#A78BFA" font-size="13" text-anchor="middle" font-weight="700">${{ "{:,}".format(org.traced_usd) }}</text>
 
 <!-- Pipe labels (on top of pipes AND buildings) -->
 <text x="275" y="415" fill="#3B82F6" font-size="11" font-weight="600">~22 ETH</text>
