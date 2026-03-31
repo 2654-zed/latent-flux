@@ -2,37 +2,86 @@
 {% block title %}Organization Map{% endblock %}
 {% block head %}
 <script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+<script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+<script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
 <style>
-    #cy { width: 100%; height: 600px; background: #0D1117; border-radius: 0.5rem; border: 1px solid #2D3B50; }
-    #node-detail { min-width: 300px; }
+    #cy { width: 100%; height: 560px; border-radius: 0.5rem; border: 1px solid #2D3B50; }
+    #node-detail { width: 280px; flex-shrink: 0; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto">
-    <div class="flex items-center gap-4 mb-6">
-        <h2 class="text-2xl font-bold">Organization Map</h2>
-        <select id="org-select" onchange="loadOrg(this.value)"
-            class="bg-gray-800 border border-gray-600 rounded px-3 py-1 text-sm">
-            <option value="org_001" {% if org_id == 'org_001' %}selected{% endif %}>org_001 — The Enterprise</option>
-            <option value="org_002" {% if org_id == 'org_002' %}selected{% endif %}>org_002 — The Factory</option>
-            <option value="entity_005" {% if org_id == 'entity_005' %}selected{% endif %}>Entity_005 — The Architect</option>
-        </select>
+    <div class="flex justify-between items-start mb-5">
+        <div>
+            <div class="text-xs text-blue-500 font-semibold tracking-wider mb-1" id="org-label">{{ org_id.upper() }}</div>
+            <div class="text-2xl font-bold" id="org-title">Organization Map</div>
+            <div class="text-sm text-gray-500 mt-1" id="org-subtitle"></div>
+        </div>
+        <div class="flex gap-2">
+            <select id="org-select" onchange="loadOrg(this.value)" class="bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-sm">
+                <option value="org_001" {% if org_id == 'org_001' %}selected{% endif %}>org_001 — The Enterprise</option>
+                <option value="org_002" {% if org_id == 'org_002' %}selected{% endif %}>org_002 — The Factory</option>
+                <option value="entity_005" {% if org_id == 'entity_005' %}selected{% endif %}>Entity_005 — The Architect</option>
+            </select>
+        </div>
     </div>
 
     <div class="flex gap-4">
         <div class="flex-1">
-            <div id="cy"></div>
+            <div id="cy" style="background:#0D1117;"></div>
+            <!-- Legend -->
+            <div class="flex gap-4 mt-3 pt-3 border-t border-gray-800">
+                <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full bg-red-500"></div><span class="text-xs text-gray-500">Treasury</span></div>
+                <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full bg-yellow-500"></div><span class="text-xs text-gray-500">Funding path</span></div>
+                <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full bg-blue-500"></div><span class="text-xs text-gray-500">Infrastructure</span></div>
+                <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full bg-purple-500"></div><span class="text-xs text-gray-500">Mainnet/Associated</span></div>
+                <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded bg-gray-700 border border-gray-600"></div><span class="text-xs text-gray-500">Deployers</span></div>
+            </div>
         </div>
-        <div id="node-detail" class="card p-4 hidden">
-            <h3 class="text-lg font-semibold mb-3" id="detail-title">Select a node</h3>
-            <div id="detail-content" class="text-sm space-y-2"></div>
+
+        <!-- Sidebar -->
+        <div id="node-detail" class="hidden">
+            <div class="card p-4">
+                <div class="flex justify-between items-center mb-3">
+                    <div id="detail-title" class="text-base font-semibold"></div>
+                    <span class="text-gray-600 cursor-pointer text-lg" onclick="document.getElementById('node-detail').classList.add('hidden')">×</span>
+                </div>
+                <div id="detail-addr" class="text-xs text-blue-400 font-mono mb-3 break-all"></div>
+                <div id="detail-content" class="text-xs text-gray-400 space-y-2"></div>
+                <div id="detail-actions" class="flex gap-2 mt-3"></div>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
 let cy;
+const orgMeta = {
+    'org_001': { label: 'ORG_001', title: '"The Enterprise" — infrastructure map', subtitle: '755 deployers · 2,680 contracts · 3 chains · $46K traced' },
+    'org_002': { label: 'ORG_002', title: '"The Factory" — funding structure', subtitle: '254 deployers · 254 contracts · 1,010 ETH · Base only' },
+    'entity_005': { label: 'ENTITY_005', title: '"The Architect" — R&D network', subtitle: '21 contracts · Arbitrum · 4-mechanism weapon' },
+};
+
+function nodeStyle(role) {
+    const styles = {
+        treasury: { bg: '#7F1D1D', border: '#EF4444', w: 60, h: 40, bw: 2 },
+        gas_station: { bg: '#1F2937', border: '#F59E0B', w: 55, h: 35, bw: 1.5 },
+        whale_trader: { bg: '#1F2937', border: '#F59E0B', w: 55, h: 35, bw: 1.5 },
+        cex: { bg: '#1F2937', border: '#3B82F6', w: 50, h: 30, bw: 1 },
+        buffer: { bg: '#1F2937', border: '#4B5563', w: 45, h: 28, bw: 0.5 },
+        mev_bot: { bg: '#1F2937', border: '#8B5CF6', w: 50, h: 30, bw: 1 },
+        bot_retired: { bg: '#1F2937', border: '#6B7280', w: 45, h: 28, bw: 0.5 },
+        revenue: { bg: '#1F2937', border: '#3B82F6', w: 50, h: 30, bw: 1 },
+        bridge: { bg: '#1F2937', border: '#D946EF', w: 45, h: 28, bw: 1 },
+        wrapper: { bg: '#1F2937', border: '#9CA3AF', w: 40, h: 25, bw: 0.5 },
+        deployer: { bg: '#1F2937', border: '#F59E0B', w: 35, h: 22, bw: 0.5 },
+        deployer_cluster: { bg: '#1F2937', border: '#4B5563', w: 70, h: 28, bw: 0.5 },
+        funder: { bg: '#1F2937', border: '#F59E0B', w: 45, h: 28, bw: 1 },
+        associated: { bg: '#1F2937', border: '#8B5CF6', w: 45, h: 28, bw: 1 },
+    };
+    return styles[role] || styles.deployer;
+}
 
 function initGraph(data) {
     if (cy) cy.destroy();
@@ -40,75 +89,95 @@ function initGraph(data) {
         container: document.getElementById('cy'),
         elements: [...data.nodes, ...data.edges],
         style: [
-            {
-                selector: 'node',
-                style: {
-                    'background-color': 'data(color)',
-                    'label': 'data(label)',
-                    'color': '#E5E7EB',
-                    'font-size': '10px',
-                    'text-valign': 'bottom',
-                    'text-margin-y': '8px',
-                    'width': '32px',
-                    'height': '32px',
-                    'border-width': '2px',
-                    'border-color': '#374151',
-                }
-            },
-            {
-                selector: 'node[role="treasury"]',
-                style: { 'width': '48px', 'height': '48px', 'font-size': '12px', 'font-weight': 'bold' }
-            },
-            {
-                selector: 'node[role="deployer_cluster"]',
-                style: { 'shape': 'round-rectangle', 'width': '80px', 'height': '32px', 'font-size': '9px' }
-            },
-            {
-                selector: 'node[role="cex"]',
-                style: { 'shape': 'diamond', 'width': '40px', 'height': '40px' }
-            },
-            {
-                selector: 'edge',
-                style: {
-                    'width': 1.5,
-                    'line-color': '#4B5563',
-                    'target-arrow-color': '#4B5563',
-                    'target-arrow-shape': 'triangle',
-                    'curve-style': 'bezier',
-                    'label': 'data(label)',
-                    'font-size': '8px',
-                    'color': '#6B7280',
-                    'text-rotation': 'autorotate',
-                }
-            },
-            {
-                selector: 'node:selected',
-                style: { 'border-color': '#3B82F6', 'border-width': '3px' }
-            }
+            { selector: 'node', style: {
+                'shape': 'round-rectangle',
+                'label': 'data(label)',
+                'color': '#E5E7EB',
+                'font-size': '9px',
+                'text-valign': 'center',
+                'text-halign': 'center',
+                'text-wrap': 'wrap',
+                'text-max-width': '80px',
+                'border-width': 1,
+                'border-color': '#4B5563',
+                'background-color': '#1F2937',
+                'width': 40, 'height': 25,
+            }},
+            { selector: 'node[role="treasury"]', style: {
+                'background-color': '#7F1D1D', 'border-color': '#EF4444', 'border-width': 2,
+                'width': 60, 'height': 40, 'font-size': '11px', 'font-weight': 'bold', 'color': '#FCA5A5',
+            }},
+            { selector: 'node[role="gas_station"], node[role="whale_trader"], node[role="funder"]', style: {
+                'border-color': '#F59E0B', 'border-width': 1.5, 'width': 55, 'height': 35, 'font-size': '10px', 'color': '#FCD34D',
+            }},
+            { selector: 'node[role="cex"]', style: {
+                'border-color': '#3B82F6', 'border-width': 1, 'width': 50, 'height': 30, 'color': '#93C5FD',
+            }},
+            { selector: 'node[role="mev_bot"], node[role="revenue"]', style: {
+                'border-color': '#3B82F6', 'border-width': 1, 'width': 50, 'height': 30, 'color': '#93C5FD',
+            }},
+            { selector: 'node[role="bridge"], node[role="wrapper"]', style: {
+                'border-color': '#8B5CF6', 'border-width': 1, 'width': 45, 'height': 28, 'color': '#C4B5FD',
+            }},
+            { selector: 'node[role="associated"]', style: {
+                'border-color': '#8B5CF6', 'border-width': 1, 'border-style': 'dashed', 'width': 50, 'height': 30, 'color': '#C4B5FD',
+            }},
+            { selector: 'node[role="deployer"]', style: {
+                'width': 35, 'height': 22, 'font-size': '8px', 'color': '#9CA3AF', 'border-color': '#4B5563', 'border-width': 0.5,
+            }},
+            { selector: 'node[role="deployer_cluster"]', style: {
+                'width': 80, 'height': 28, 'font-size': '9px', 'color': '#6B7280', 'border-style': 'dashed',
+            }},
+            { selector: 'node[role="bot_retired"], node[role="buffer"]', style: {
+                'border-color': '#6B7280', 'width': 45, 'height': 28, 'color': '#6B7280', 'font-size': '8px',
+            }},
+            { selector: 'node[role^="org_"]', style: {
+                'border-color': '#3B82F6', 'width': 50, 'height': 30, 'color': '#93C5FD', 'font-size': '9px',
+            }},
+            { selector: 'edge', style: {
+                'width': 1, 'line-color': '#374151', 'target-arrow-color': '#374151',
+                'target-arrow-shape': 'triangle', 'arrow-scale': 0.7,
+                'curve-style': 'bezier',
+                'label': 'data(label)', 'font-size': '7px', 'color': '#4B5563',
+                'text-rotation': 'autorotate', 'text-margin-y': -8,
+            }},
+            { selector: 'node:selected', style: { 'border-color': '#3B82F6', 'border-width': 3, 'overlay-opacity': 0 }},
         ],
-        layout: { name: 'breadthfirst', directed: true, padding: 40, spacingFactor: 1.5 },
+        layout: { name: 'dagre', rankDir: 'TB', nodeSep: 30, rankSep: 60, padding: 30 },
+        wheelSensitivity: 0.3,
     });
 
     cy.on('tap', 'node', function(evt) {
         const d = evt.target.data();
-        document.getElementById('node-detail').classList.remove('hidden');
+        const panel = document.getElementById('node-detail');
+        panel.classList.remove('hidden');
         document.getElementById('detail-title').textContent = d.label || d.id;
+        document.getElementById('detail-addr').textContent = d.address || d.id;
         let html = '';
-        if (d.address) html += '<p class="font-mono text-xs text-gray-400 break-all">' + d.address + '</p>';
-        if (d.role) html += '<p><span class="text-gray-500">Role:</span> <span class="text-blue-400">' + d.role + '</span></p>';
-        if (d.contracts !== undefined) html += '<p><span class="text-gray-500">Contracts:</span> ' + d.contracts + '</p>';
-        if (d.address) html += '<p class="mt-2"><a href="/deployer/' + d.address + '" class="text-blue-400 underline text-xs">View profile →</a></p>';
+        if (d.role) html += '<p><span class="text-gray-600">Role:</span> ' + d.role + '</p>';
+        if (d.contracts) html += '<p><span class="text-gray-600">Contracts:</span> ' + d.contracts + '</p>';
         document.getElementById('detail-content').innerHTML = html;
+        let actions = '';
+        if (d.address && d.address.startsWith('0x')) {
+            actions += '<a href="/deployer/' + d.address + '" class="rounded px-2 py-1 text-xs border border-gray-600 text-gray-400 hover:text-blue-400 hover:border-blue-500">View profile</a>';
+        }
+        document.getElementById('detail-actions').innerHTML = actions;
+    });
+
+    cy.on('tap', function(evt) {
+        if (evt.target === cy) document.getElementById('node-detail').classList.add('hidden');
     });
 }
 
 function loadOrg(orgId) {
-    fetch('/api/org/' + orgId)
-        .then(r => r.json())
-        .then(data => initGraph(data));
+    const meta = orgMeta[orgId] || {};
+    document.getElementById('org-label').textContent = meta.label || orgId;
+    document.getElementById('org-title').textContent = meta.title || 'Organization Map';
+    document.getElementById('org-subtitle').textContent = meta.subtitle || '';
+    fetch('/api/org/' + orgId).then(r => r.json()).then(data => initGraph(data));
+    history.replaceState(null, '', '/org-map?org=' + orgId);
 }
 
-// Load initial org
 loadOrg('{{ org_id }}');
 </script>
 {% endblock %}

@@ -287,6 +287,51 @@ def get_contract(conn, address: str) -> Optional[dict]:
                              (r["contract_address"],)).fetchone()
     result["pending_approvals"] = approvals["pending"] or 0
 
+    # Per-detector results (parse from bytecode_pattern_notes)
+    patterns = result.get("bytecode_pattern_notes") or ""
+    detectors = [
+        ("asymmetric_transfer", "CALLER at", "Caller-gated revert"),
+        ("blacklist_check", "address-keyed storage", "Blacklist mapping"),
+        ("tx_origin_conditional", "tx.origin conditional", "Buy-not-sell"),
+        ("callback_trap", "callback", "Incomplete callback"),
+        ("hidden_fee", "hidden fee", "Hidden fee logic"),
+        ("selfdestruct", "SELFDESTRUCT", "Self-destruct"),
+        ("delegatecall_in_token", "DELEGATECALL", "Upgradeable logic"),
+        ("timestamp_activation", "TIMESTAMP", "Time-lock activation"),
+        ("origin_eoa_gate", "tx.origin", "EOA gate"),
+        ("obfuscated_fee", "KECCAK256-keyed", "Obfuscated fee"),
+    ]
+    result["detector_results"] = []
+    for name, pattern, desc in detectors:
+        fired = pattern.lower() in patterns.lower() if patterns else False
+        result["detector_results"].append({"name": name, "desc": desc, "fired": fired})
+
+    # Trust amplification
+    ta = conn.execute("SELECT * FROM trust_amplification WHERE contract_address=?", (r["contract_address"],)).fetchone()
+    result["trust_amp"] = dict(ta) if ta else None
+
+    # Deployer sidebar data
+    dep = conn.execute("SELECT * FROM deployers WHERE deployer_address=?", (r["deployer_address"],)).fetchone()
+    if dep:
+        dep_dict = dict(dep)
+        if dep_dict.get("funding_trail"):
+            try:
+                dep_dict["funding"] = json.loads(dep_dict["funding_trail"])
+            except Exception:
+                dep_dict["funding"] = None
+        else:
+            dep_dict["funding"] = None
+        # Profile
+        dp = conn.execute("SELECT * FROM deployer_profiles WHERE deployer_address=?", (r["deployer_address"],)).fetchone()
+        dep_dict["profile"] = dict(dp) if dp else None
+        # Entity classification
+        ec = conn.execute("SELECT category, subtype, confidence, org_id FROM entity_classification WHERE address=?",
+                          (r["deployer_address"],)).fetchone()
+        dep_dict["entity"] = dict(ec) if ec else None
+        result["deployer_info"] = dep_dict
+    else:
+        result["deployer_info"] = None
+
     return result
 
 
@@ -334,9 +379,9 @@ def get_deployer(conn, address: str) -> Optional[dict]:
 # Threat feed
 # ---------------------------------------------------------------
 
-def get_threats(conn, limit: int = 100, chain: str = None, priority: str = None) -> list:
+def get_threats(conn, limit: int = 100, chain: str = None, priority: str = None, entity: str = None) -> list:
     query = """SELECT wh.timestamp, w.entity_name, w.priority, wh.hit_type,
-        wh.contract_address, wh.chain, w.watch_reason
+        wh.contract_address, wh.chain, w.watch_reason, wh.details
         FROM watchlist_hits wh JOIN watchlist w ON wh.watchlist_id = w.id WHERE 1=1"""
     params = []
     if chain:
@@ -345,9 +390,28 @@ def get_threats(conn, limit: int = 100, chain: str = None, priority: str = None)
     if priority:
         query += " AND w.priority = ?"
         params.append(priority)
+    if entity:
+        query += " AND w.entity_name LIKE ?"
+        params.append(f"%{entity}%")
     query += " ORDER BY wh.timestamp DESC LIMIT ?"
     params.append(limit)
     return [dict(r) for r in conn.execute(query, params).fetchall()]
+
+
+def get_threat_counts(conn) -> dict:
+    counts = {}
+    for r in conn.execute("""SELECT w.priority, COUNT(*) as c
+        FROM watchlist_hits wh JOIN watchlist w ON wh.watchlist_id = w.id
+        WHERE wh.timestamp >= datetime('now', '-24 hours')
+        GROUP BY w.priority"""):
+        counts[r["priority"]] = r["c"]
+    return counts
+
+
+def get_watched_entities(conn) -> list:
+    return [r["entity_name"] for r in conn.execute(
+        "SELECT DISTINCT entity_name FROM watchlist WHERE active=1 ORDER BY entity_name"
+    ).fetchall()]
 
 
 def search_address(conn, query: str) -> dict:

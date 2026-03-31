@@ -17,7 +17,7 @@ from web.data import (
     get_conn, get_overview_stats, get_key_metrics, get_chain_split,
     get_daily_trend, get_recent_alerts, get_strategy_lifecycle,
     get_bot_sophistication, get_org_graph, get_contract, get_deployer,
-    get_threats, search_address,
+    get_threats, get_threat_counts, get_watched_entities, search_address,
 )
 
 app = FastAPI(title="Layer 3 Intelligence", docs_url=None, redoc_url=None)
@@ -116,22 +116,18 @@ async def deployer_view(request: Request, address: str = None, q: str = None):
 # ---------------------------------------------------------------
 
 @app.get("/threats", response_class=HTMLResponse)
-async def threats_view(request: Request, chain: str = None, priority: str = None):
+async def threats_view(request: Request, chain: str = None, priority: str = None, entity: str = None):
     c = conn()
-    threats = get_threats(c, 100, chain or None, priority or None)
+    threats = get_threats(c, 100, chain or None, priority or None, entity or None)
+    counts = get_threat_counts(c)
+    entities = get_watched_entities(c)
     stats = get_overview_stats(c)
     c.close()
 
-    # If HTMX request, return just the list partial
-    if request.headers.get("HX-Request"):
-        return templates.TemplateResponse("partials/threat_list.html", {
-            "request": request, "threats": threats,
-        })
-
     return templates.TemplateResponse("threats.html", {
         "request": request, "active_page": "threats",
-        "stats": stats, "threats": threats,
-        "chain": chain, "priority": priority,
+        "stats": stats, "threats": threats, "counts": counts,
+        "entities": entities, "chain": chain, "priority": priority, "entity": entity,
     })
 
 

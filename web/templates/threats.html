@@ -1,30 +1,77 @@
 {% extends "base.html" %}
-{% block title %}Threat Feed{% endblock %}
+{% block title %}Threat Timeline{% endblock %}
 
 {% block content %}
 <div class="max-w-6xl mx-auto">
-    <h2 class="text-2xl font-bold mb-6">Threat Feed</h2>
-
-    <!-- Filters -->
-    <div class="flex gap-3 mb-6">
-        <select name="chain" hx-get="/threats" hx-target="#threat-list" hx-include="[name]"
-            class="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm">
-            <option value="">All Chains</option>
-            <option value="base" {% if chain == 'base' %}selected{% endif %}>Base</option>
-            <option value="arbitrum" {% if chain == 'arbitrum' %}selected{% endif %}>Arbitrum</option>
-            <option value="optimism" {% if chain == 'optimism' %}selected{% endif %}>Optimism</option>
-        </select>
-        <select name="priority" hx-get="/threats" hx-target="#threat-list" hx-include="[name]"
-            class="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm">
-            <option value="">All Priorities</option>
-            <option value="CRITICAL" {% if priority == 'CRITICAL' %}selected{% endif %}>Critical</option>
-            <option value="HIGH" {% if priority == 'HIGH' %}selected{% endif %}>High</option>
-            <option value="MEDIUM" {% if priority == 'MEDIUM' %}selected{% endif %}>Medium</option>
-        </select>
+    <div class="flex justify-between items-start mb-5">
+        <div>
+            <div class="text-2xl font-bold">Threat Timeline</div>
+            <div class="text-sm text-gray-500 mt-1">Last 24 hours · 3 chains · live</div>
+        </div>
+        <div class="flex gap-1.5">
+            <div class="rounded-md px-2.5 py-1 text-xl font-bold text-white" style="background:#EF4444;min-width:36px;text-align:center;">{{ counts.get('CRITICAL', 0) }}</div>
+            <div class="rounded-md px-2.5 py-1 text-xl font-bold text-white" style="background:#F59E0B;min-width:36px;text-align:center;">{{ counts.get('HIGH', 0) }}</div>
+            <div class="rounded-md px-2.5 py-1 text-xl font-bold text-white" style="background:#3B82F6;min-width:36px;text-align:center;">{{ counts.get('MEDIUM', 0) }}</div>
+        </div>
     </div>
 
-    <div id="threat-list">
-        {% include "partials/threat_list.html" %}
+    <!-- Filter pills -->
+    <div class="flex gap-2 mb-4 flex-wrap">
+        <a href="/threats?priority=CRITICAL" class="rounded-md px-2.5 py-1 text-xs border cursor-pointer {% if priority == 'CRITICAL' %}bg-red-900/30 border-red-500 text-red-400{% else %}border-gray-600 text-gray-500 hover:border-red-500 hover:text-red-400{% endif %}">Critical ({{ counts.get('CRITICAL', 0) }})</a>
+        <a href="/threats?priority=HIGH" class="rounded-md px-2.5 py-1 text-xs border cursor-pointer {% if priority == 'HIGH' %}bg-yellow-900/30 border-yellow-500 text-yellow-400{% else %}border-gray-600 text-gray-500 hover:border-yellow-500 hover:text-yellow-400{% endif %}">High ({{ counts.get('HIGH', 0) }})</a>
+        <a href="/threats" class="rounded-md px-2.5 py-1 text-xs border cursor-pointer {% if not priority %}bg-gray-800 border-blue-500 text-blue-400{% else %}border-gray-600 text-gray-500{% endif %}">All</a>
+        <div class="flex-1"></div>
+        {% for e in entities %}
+        <a href="/threats?entity={{ e }}" class="rounded-md px-2.5 py-1 text-xs border cursor-pointer {% if entity == e %}bg-gray-800 border-blue-500 text-blue-400{% else %}border-gray-600 text-gray-500 hover:border-blue-500{% endif %}">{{ e }}</a>
+        {% endfor %}
+    </div>
+
+    <!-- Threat list -->
+    <div id="threat-list" class="space-y-0">
+        {% for t in threats %}
+        <div class="flex gap-3 py-3 border-b border-gray-800 cursor-pointer" onclick="var d=this.querySelector('.detail');d.style.display=d.style.display==='block'?'none':'block'">
+            <div class="w-1 rounded-sm flex-shrink-0 {% if t.priority == 'CRITICAL' %}bg-red-500{% elif t.priority == 'HIGH' %}bg-yellow-500{% else %}bg-blue-500{% endif %}"></div>
+            <div class="flex-1">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center gap-2">
+                        <span class="badge {% if t.priority == 'CRITICAL' %}badge-critical{% elif t.priority == 'HIGH' %}badge-high{% else %}badge-medium{% endif %}">{{ t.priority }}</span>
+                        <span class="text-sm font-medium">{{ t.entity_name }}</span>
+                    </div>
+                    <span class="text-xs text-gray-600" data-ts="{{ t.timestamp }}">{{ t.timestamp[:16] if t.timestamp else '' }}</span>
+                </div>
+                <div class="text-xs text-gray-500 mt-1">
+                    {{ t.hit_type }} · {{ t.chain }}
+                    {% if t.contract_address %} · <span class="font-mono">{{ t.contract_address[:14] }}...</span>{% endif %}
+                </div>
+                <div class="detail" style="display:none;">
+                    <div class="mt-2.5 card p-3 text-xs text-gray-400" style="line-height:1.6;">
+                        {{ t.watch_reason or '' }}
+                    </div>
+                    <div class="flex gap-2 mt-2">
+                        {% if t.contract_address %}
+                        <a href="/contract/{{ t.contract_address }}" class="rounded px-2 py-1 text-xs border border-gray-600 text-blue-400 hover:border-blue-500">Inspect contract</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% if not threats %}
+        <div class="card p-6 text-center text-gray-500">No threats matching filters.</div>
+        {% endif %}
     </div>
 </div>
+
+<script>
+// Relative timestamps
+document.querySelectorAll('[data-ts]').forEach(el => {
+    const ts = new Date(el.dataset.ts + 'Z');
+    const now = new Date();
+    const diff = Math.floor((now - ts) / 1000);
+    if (diff < 60) el.textContent = diff + 's ago';
+    else if (diff < 3600) el.textContent = Math.floor(diff/60) + 'm ago';
+    else if (diff < 86400) el.textContent = Math.floor(diff/3600) + 'h ago';
+    else el.textContent = Math.floor(diff/86400) + 'd ago';
+});
+</script>
 {% endblock %}
