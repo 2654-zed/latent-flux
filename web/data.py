@@ -428,6 +428,81 @@ def get_watched_entities(conn) -> list:
     ).fetchall()]
 
 
+def get_address_detail(conn, address: str) -> Optional[dict]:
+    """Get detail panel data for an address (building click)."""
+    addr = address.lower()
+    result = {"address": addr}
+
+    # Check if deployer
+    d = conn.execute("SELECT * FROM deployers WHERE deployer_address LIKE ?", (addr + "%",)).fetchone()
+    if d:
+        result["type"] = "deployer"
+        result["chain"] = d["chain"]
+        result["contracts"] = d["total_contracts_deployed"]
+        result["first_seen"] = d["first_seen"]
+        result["last_seen"] = d["last_seen"]
+        if d["funding_trail"]:
+            try:
+                trail = json.loads(d["funding_trail"])
+                result["funder"] = trail.get("funder")
+                result["fund_eth"] = trail.get("value_eth")
+                result["org"] = trail.get("org_link")
+            except Exception:
+                pass
+
+        # Profile
+        dp = conn.execute("SELECT * FROM deployer_profiles WHERE deployer_address LIKE ?", (addr + "%",)).fetchone()
+        if dp:
+            result["timezone"] = dp["timezone_guess"]
+            result["gas"] = dp["gas_avg"]
+            result["technique"] = dp["primary_technique"]
+            result["style"] = dp["deployment_style"]
+
+        # Entity
+        ec = conn.execute("SELECT category, subtype, org_id FROM entity_classification WHERE address LIKE ?", (addr + "%",)).fetchone()
+        if ec:
+            result["entity"] = ec["category"]
+            result["entity_sub"] = ec["subtype"]
+            result["entity_org"] = ec["org_id"]
+
+        # Contracts deployed (recent 5)
+        result["recent_contracts"] = [dict(r) for r in conn.execute(
+            "SELECT contract_address, chain, confidence_tier, detection_timestamp FROM contracts WHERE deployer_address LIKE ? ORDER BY detection_timestamp DESC LIMIT 5",
+            (addr + "%",)
+        ).fetchall()]
+
+    # Check if contract
+    c = conn.execute("SELECT * FROM contracts WHERE contract_address LIKE ?", (addr + "%",)).fetchone()
+    if c:
+        result["type"] = result.get("type", "contract")
+        result["chain"] = c["chain"]
+        result["tier"] = c["confidence_tier"]
+        result["patterns"] = c["bytecode_pattern_notes"]
+        result["deployer"] = c["deployer_address"]
+
+        stats = conn.execute("SELECT COUNT(*) as h, COUNT(DISTINCT interacting_address) as cal FROM transaction_events WHERE contract_address LIKE ?", (addr + "%",)).fetchone()
+        result["hits"] = stats["h"] or 0
+        result["callers"] = stats["cal"] or 0
+
+    # Watchlist
+    w = conn.execute("SELECT entity_name, priority, watch_reason FROM watchlist WHERE address LIKE ? AND active=1", (addr + "%",)).fetchone()
+    if w:
+        result["watchlist"] = {"entity": w["entity_name"], "priority": w["priority"], "reason": w["watch_reason"]}
+
+    return result if len(result) > 1 else None
+
+
+def get_recent_watchlist_hits(conn, limit: int = 5) -> list:
+    """Get most recent watchlist hits for the live feed."""
+    return [dict(r) for r in conn.execute("""
+        SELECT wh.timestamp, w.entity_name, w.priority, wh.hit_type,
+            wh.contract_address, wh.chain
+        FROM watchlist_hits wh
+        JOIN watchlist w ON wh.watchlist_id = w.id
+        ORDER BY wh.timestamp DESC LIMIT ?
+    """, (limit,)).fetchall()]
+
+
 def search_address(conn, query: str) -> dict:
     """Search for an address as contract or deployer."""
     q = query.lower().strip()

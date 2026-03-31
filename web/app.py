@@ -17,7 +17,7 @@ from web.data import (
     get_conn, get_overview_stats, get_key_metrics, get_chain_split,
     get_daily_trend, get_recent_alerts, get_strategy_lifecycle,
     get_bot_sophistication, get_org_graph, get_org_001_stats,
-    get_contract, get_deployer,
+    get_contract, get_deployer, get_address_detail, get_recent_watchlist_hits,
     get_threats, get_threat_counts, get_watched_entities, search_address,
 )
 
@@ -153,5 +153,23 @@ async def threats_view(request: Request, chain: str = None, priority: str = None
 async def api_search(q: str = ""):
     c = conn()
     result = search_address(c, q)
+    c.close()
+    return JSONResponse(result)
+
+
+@app.get("/api/address/{address}")
+async def api_address(address: str):
+    c = conn()
+    result = get_address_detail(c, address)
+    c.close()
+    if not result:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return JSONResponse(result)
+
+
+@app.get("/api/watchlist/recent")
+async def api_watchlist_recent(limit: int = 5):
+    c = conn()
+    result = get_recent_watchlist_hits(c, limit)
     c.close()
     return JSONResponse(result)

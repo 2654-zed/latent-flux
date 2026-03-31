@@ -38,6 +38,16 @@
 <!-- LAYER 1: Pipes SVG (z-index 1, behind buildings) -->
 <svg viewBox="0 0 960 780" style="z-index:1;">
 <rect width="960" height="780" fill="#080E1A"/>
+<defs>
+<!-- Named paths for particle animation -->
+<path id="pipe-coinbase" d="M150 170 C270 210 370 245 420 275"/>
+<path id="pipe-binance" d="M700 170 C610 210 530 245 480 275"/>
+<path id="pipe-revenue" d="M140 500 C230 460 340 400 410 350"/>
+<path id="pipe-gas" d="M420 400 C385 440 345 480 310 510"/>
+<path id="pipe-whale" d="M520 380 C560 415 605 450 640 475"/>
+<path id="pipe-whale2gas" d="M660 620 L680 660"/>
+<path id="pipe-gas2dep" d="M295 600 L260 660"/>
+</defs>
 <g opacity=".04"><line x1="0" y1="195" x2="960" y2="195" stroke="#1E3A5F"/><line x1="0" y1="390" x2="960" y2="390" stroke="#1E3A5F"/><line x1="0" y1="585" x2="960" y2="585" stroke="#1E3A5F"/><line x1="320" y1="0" x2="320" y2="780" stroke="#1E3A5F"/><line x1="640" y1="0" x2="640" y2="780" stroke="#1E3A5F"/></g>
 
 <!-- Coinbase → Treasury -->
@@ -77,6 +87,41 @@
 
 <!-- Cashout -->
 <path d="M745 540 L810 510" stroke="#8B5CF6" stroke-width="2" fill="none" opacity="0.1" stroke-linecap="round"/>
+
+<!-- ====== PARTICLES (fund flow animation) ====== -->
+<!-- Whale Trader particles (2, fast, large) -->
+<circle r="4" fill="#F59E0B" opacity="0.8">
+<animateMotion dur="1.8s" repeatCount="indefinite"><mpath href="#pipe-whale"/></animateMotion>
+</circle>
+<circle r="3.5" fill="#FCD34D" opacity="0.6">
+<animateMotion dur="1.8s" repeatCount="indefinite" begin="0.9s"><mpath href="#pipe-whale"/></animateMotion>
+</circle>
+
+<!-- Gas Station particle (1, slow, smaller) -->
+<circle r="2.5" fill="#F59E0B" opacity="0.5">
+<animateMotion dur="2.5s" repeatCount="indefinite"><mpath href="#pipe-gas"/></animateMotion>
+</circle>
+
+<!-- CEX origin particles -->
+<circle r="2" fill="#9CA3AF" opacity="0.4">
+<animateMotion dur="3s" repeatCount="indefinite"><mpath href="#pipe-coinbase"/></animateMotion>
+</circle>
+<circle r="2" fill="#9CA3AF" opacity="0.4">
+<animateMotion dur="3s" repeatCount="indefinite"><mpath href="#pipe-binance"/></animateMotion>
+</circle>
+
+<!-- Revenue collector particle (blue) -->
+<circle r="2" fill="#60A5FA" opacity="0.5">
+<animateMotion dur="2.5s" repeatCount="indefinite"><mpath href="#pipe-revenue"/></animateMotion>
+</circle>
+
+<!-- Deployer zone particles -->
+<circle r="2" fill="#FCD34D" opacity="0.4">
+<animateMotion dur="2s" repeatCount="indefinite"><mpath href="#pipe-whale2gas"/></animateMotion>
+</circle>
+<circle r="1.5" fill="#FCD34D" opacity="0.3">
+<animateMotion dur="3s" repeatCount="indefinite"><mpath href="#pipe-gas2dep"/></animateMotion>
+</circle>
 
 <!-- Ground plane -->
 <rect x="0" y="648" width="960" height="2" fill="#0A0F1A"/>
@@ -162,14 +207,22 @@
 </div><!-- end iso-wrap -->
 
 <!-- Sidebar -->
-<div id="sidebar">
+<!-- Detail panel (slides in on building click) -->
+<div id="sidebar" style="display:none;position:absolute;top:60px;right:16px;width:280px;background:#1F2937;border:1px solid #2D3B50;border-radius:12px;padding:16px;z-index:20;max-height:80%;overflow-y:auto;">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
 <div id="sb-title" style="font-size:15px;font-weight:600"></div>
 <div style="cursor:pointer;color:#6B7280;font-size:18px" onclick="document.getElementById('sidebar').style.display='none'">×</div>
 </div>
 <div id="sb-addr" style="font-size:12px;color:#3B82F6;margin-bottom:8px;font-family:monospace;word-break:break-all"></div>
 <div id="sb-detail" style="font-size:12px;color:#9CA3AF;line-height:1.5"></div>
-<div id="sb-actions" style="margin-top:12px"></div>
+<div id="sb-rich" style="margin-top:10px"></div>
+<div id="sb-actions" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"></div>
+</div>
+
+<!-- Live event feed (bottom-left) -->
+<div id="live-feed" style="position:absolute;bottom:50px;left:16px;width:280px;z-index:10;">
+<div style="font-size:9px;color:#6B7280;margin-bottom:4px;letter-spacing:0.5px;">LIVE ACTIVITY</div>
+<div id="feed-items" style="display:flex;flex-direction:column;gap:3px;"></div>
 </div>
 
 <!-- Legend -->
@@ -185,12 +238,69 @@
 </div>
 
 <script>
-function showSB(t, a, d) {
-    document.getElementById('sidebar').style.display = 'block';
-    document.getElementById('sb-title').textContent = t;
-    document.getElementById('sb-addr').textContent = a || '';
-    document.getElementById('sb-detail').textContent = d;
-    document.getElementById('sb-actions').innerHTML = a && a.startsWith('0x') ? '<a href="/deployer/' + a + '" style="background:#111827;border:1px solid #2D3B50;border-radius:6px;padding:4px 10px;font-size:11px;color:#3B82F6;text-decoration:none;">View profile</a>' : '';
+function showSB(title, addr, desc) {
+    const sb = document.getElementById('sidebar');
+    sb.style.display = 'block';
+    document.getElementById('sb-title').textContent = title;
+    document.getElementById('sb-addr').textContent = addr || '';
+    document.getElementById('sb-detail').textContent = desc;
+    document.getElementById('sb-rich').innerHTML = '<div style="color:#4B5563;font-size:11px;">Loading...</div>';
+    document.getElementById('sb-actions').innerHTML = '';
+
+    if (addr && addr.startsWith('0x')) {
+        fetch('/api/address/' + addr)
+            .then(r => r.json())
+            .then(d => {
+                let html = '<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:11px;">';
+                if (d.entity) html += '<span style="color:#6B7280">Entity</span><span style="color:#EF4444;font-weight:500">' + d.entity + '</span>';
+                if (d.chain) html += '<span style="color:#6B7280">Chain</span><span>' + d.chain + '</span>';
+                if (d.contracts) html += '<span style="color:#6B7280">Contracts</span><span>' + d.contracts + '</span>';
+                if (d.timezone) html += '<span style="color:#6B7280">Timezone</span><span>' + d.timezone + '</span>';
+                if (d.technique) html += '<span style="color:#6B7280">Technique</span><span>' + d.technique + '</span>';
+                if (d.fund_eth) html += '<span style="color:#6B7280">Funded</span><span>' + d.fund_eth.toFixed(4) + ' ETH</span>';
+                if (d.org) html += '<span style="color:#6B7280">Org</span><span style="color:#EF4444">' + d.org + '</span>';
+                if (d.watchlist) html += '<span style="color:#6B7280">Watch</span><span style="color:#F59E0B">' + d.watchlist.priority + '</span>';
+                html += '</div>';
+                document.getElementById('sb-rich').innerHTML = html;
+
+                let actions = '<a href="/deployer/' + addr + '" style="background:#111827;border:1px solid #2D3B50;border-radius:6px;padding:4px 10px;font-size:10px;color:#3B82F6;text-decoration:none;">Profile</a>';
+                if (d.recent_contracts && d.recent_contracts.length > 0) {
+                    actions += '<a href="/contract/' + d.recent_contracts[0].contract_address + '" style="background:#111827;border:1px solid #2D3B50;border-radius:6px;padding:4px 10px;font-size:10px;color:#3B82F6;text-decoration:none;">Contracts</a>';
+                }
+                document.getElementById('sb-actions').innerHTML = actions;
+            })
+            .catch(() => {
+                document.getElementById('sb-rich').innerHTML = '';
+                document.getElementById('sb-actions').innerHTML = '<a href="/deployer/' + addr + '" style="background:#111827;border:1px solid #2D3B50;border-radius:6px;padding:4px 10px;font-size:10px;color:#3B82F6;text-decoration:none;">View profile</a>';
+            });
+    } else {
+        document.getElementById('sb-rich').innerHTML = '';
+    }
 }
+
+// Live event feed
+function loadFeed() {
+    fetch('/api/watchlist/recent?limit=5')
+        .then(r => r.json())
+        .then(items => {
+            const container = document.getElementById('feed-items');
+            const colors = {CRITICAL: '#EF4444', HIGH: '#F59E0B', MEDIUM: '#3B82F6'};
+            container.innerHTML = items.map(it => {
+                const c = colors[it.priority] || '#6B7280';
+                let ts = (it.timestamp || '').substring(11, 16);
+                return '<div style="background:rgba(31,41,55,0.8);border-left:3px solid ' + c + ';border-radius:4px;padding:4px 8px;font-size:10px;animation:fadeIn 0.3s;">' +
+                    '<span style="color:' + c + ';font-weight:600;">' + it.entity_name + '</span>' +
+                    '<span style="color:#6B7280;margin-left:6px;">' + it.hit_type + '</span>' +
+                    '<span style="color:#4B5563;float:right;">' + ts + '</span>' +
+                    '</div>';
+            }).join('');
+        })
+        .catch(() => {});
+}
+loadFeed();
+setInterval(loadFeed, 30000);
 </script>
+<style>
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+</style>
 {% endblock %}
