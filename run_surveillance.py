@@ -6,6 +6,7 @@ import sys
 import threading
 from datetime import datetime, timedelta, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
+from multiprocessing import Process, Queue as MPQueue
 
 import asyncio
 
@@ -18,8 +19,13 @@ _eth_wss = os.environ.get("ETH_WSS_URL", "")
 ETH_HTTP = _eth_wss.replace("wss://", "https://") if _eth_wss else ""
 
 
+def _ro_connect(timeout=10):
+    """Open a read-only SQLite connection for stats/dump queries."""
+    return sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=timeout)
+
+
 def _query(sql, fetchone=False):
-    con = sqlite3.connect(DB_PATH, timeout=10)
+    con = _ro_connect()
     cur = con.cursor()
     try:
         result = cur.execute(sql).fetchone() if fetchone else cur.execute(sql).fetchall()
@@ -32,7 +38,7 @@ class StatsHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/stats":
             # Single connection, all fresh queries, no caching
-            con = sqlite3.connect(DB_PATH, timeout=10)
+            con = _ro_connect()
             c = con.cursor()
 
             stats = {
@@ -283,7 +289,7 @@ class StatsHandler(BaseHTTPRequestHandler):
             ])
 
         elif self.path == "/clusters":
-            con = sqlite3.connect(DB_PATH)
+            con = _ro_connect()
             rows = con.execute(
                 """SELECT selector_cluster, COUNT(*) as members, SUM(total_revert_count) as reverts
                    FROM bot_candidates WHERE selector_cluster IS NOT NULL
@@ -545,7 +551,7 @@ class StatsHandler(BaseHTTPRequestHandler):
             offset = int(params.get("offset", ["0"])[0])
             limit = int(params.get("limit", ["5000"])[0])
             limit = min(limit, 10000)
-            con = sqlite3.connect(DB_PATH, timeout=10)
+            con = _ro_connect()
             con.row_factory = sqlite3.Row
             rows = con.execute(
                 f"SELECT * FROM [{table}] LIMIT ? OFFSET ?", (limit, offset)
@@ -1289,73 +1295,100 @@ try:
 except Exception as e:
     print(f"Startup cleanup failed (non-fatal): {e}", flush=True)
 
-# WAL checkpoint thread — forces checkpoint every 2 minutes
-# Uses PASSIVE first (always succeeds), then TRUNCATE (needs no readers)
-def _wal_checkpoint_loop():
-    import time as _t
-    while True:
-        _t.sleep(120)  # 2 minutes
-        try:
-            _wal_conn = sqlite3.connect(DB_PATH, timeout=5)
-            # Always do PASSIVE first — moves pages from WAL to DB
-            result = _wal_conn.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
-            log_pages = result[1] if result and result[1] else 0
-            checkpointed = result[2] if result and result[2] else 0
-            # Then try TRUNCATE to reclaim WAL disk space
-            try:
-                _wal_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                if log_pages > 100:
-                    print(f"WAL checkpoint: TRUNCATE ok (was {log_pages} pages, checkpointed {checkpointed})", flush=True)
-            except Exception:
-                if log_pages > 500:
-                    print(f"WAL checkpoint: PASSIVE only ({checkpointed}/{log_pages} pages)", flush=True)
-            _wal_conn.close()
-        except Exception:
-            pass
+# ---- Single-writer architecture ----
+# One writer process owns the only read-write connection.
+# All monitors push writes via multiprocessing.Queue.
+# Stats server and analysis use read-only connections.
+# WAL checkpoint is handled by the writer (trivial — single writer, no contention).
 
-threading.Thread(target=_wal_checkpoint_loop, daemon=True).start()
-print("WAL checkpoint thread started (every 5 min)", flush=True)
+from surveillance.db_writer import run as _db_writer_run
+from surveillance.deployment_monitor import run_monitor as _run_monitor
+from surveillance.routing_monitor import run_routing_monitor as _run_routing
+
+_write_queue = MPQueue()
+
+# Start writer process (must be first — creates/owns the DB connection)
+_writer_proc = Process(
+    target=_db_writer_run,
+    args=(DB_PATH, _write_queue),
+    daemon=True,
+    name="db_writer",
+)
+_writer_proc.start()
+print(f"DB writer process started (pid={_writer_proc.pid})", flush=True)
+
+
+def _monitor_entry(chain, rpc_url, write_queue):
+    """Entry point for chain monitor subprocess."""
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format=f"%(asctime)s [{chain}:%(name)s] %(levelname)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    from surveillance.bytecode_classifier import classify
+    asyncio.run(_run_monitor(
+        rpc_url, None, classifier=classify, chain=chain,
+        write_queue=write_queue,
+    ))
+
+
+def _routing_entry(api_key, write_queue):
+    """Entry point for routing monitor subprocess."""
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [routing:%(name)s] %(levelname)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    asyncio.run(_run_routing(api_key, None, write_queue=write_queue))
+
 
 # Start surveillance components
 processes = []
 
 # Arbitrum deployment monitor
-monitor_arb = subprocess.Popen(
-    [sys.executable, "-m", "surveillance.deployment_monitor"],
-    stdout=sys.stdout,
-    stderr=sys.stderr,
-)
-processes.append(("arbitrum_monitor", monitor_arb))
+arb_wss = os.environ.get("ARB_WSS_URL", "")
+if arb_wss:
+    p = Process(target=_monitor_entry, args=("arbitrum", arb_wss, _write_queue),
+                daemon=True, name="monitor_arbitrum")
+    p.start()
+    processes.append(("arbitrum_monitor", p))
+    print(f"Arbitrum monitor started (pid={p.pid})", flush=True)
 
-# Base deployment monitor (if BASE_WSS_URL is set)
-if os.environ.get("BASE_WSS_URL"):
-    monitor_base = subprocess.Popen(
-        [sys.executable, "-m", "surveillance.deployment_monitor",
-         "--rpc", os.environ["BASE_WSS_URL"], "--chain", "base"],
-        stdout=sys.stdout,
-        stderr=sys.stderr,
+# Base deployment monitor
+base_wss = os.environ.get("BASE_WSS_URL", "")
+if base_wss:
+    p = Process(target=_monitor_entry, args=("base", base_wss, _write_queue),
+                daemon=True, name="monitor_base")
+    p.start()
+    processes.append(("base_monitor", p))
+    print(f"Base monitor started (pid={p.pid})", flush=True)
+
+# Optimism deployment monitor
+op_wss = os.environ.get("OP_WSS_URL", "")
+if op_wss:
+    p = Process(target=_monitor_entry, args=("optimism", op_wss, _write_queue),
+                daemon=True, name="monitor_optimism")
+    p.start()
+    processes.append(("optimism_monitor", p))
+    print(f"Optimism monitor started (pid={p.pid})", flush=True)
+
+# Routing monitor
+oneinch_key = os.environ.get("ONEINCH_API_KEY", "")
+if oneinch_key:
+    p = Process(target=_routing_entry, args=(oneinch_key, _write_queue),
+                daemon=True, name="routing_monitor")
+    p.start()
+    processes.append(("routing", p))
+    print(f"Routing monitor started (pid={p.pid})", flush=True)
+else:
+    # Routing monitor without API key — start in standalone mode
+    routing = subprocess.Popen(
+        [sys.executable, "-m", "surveillance.routing_monitor"],
+        stdout=sys.stdout, stderr=sys.stderr,
     )
-    processes.append(("base_monitor", monitor_base))
-    print("Base chain monitor started", flush=True)
-
-# Optimism deployment monitor (if OP_WSS_URL is set)
-if os.environ.get("OP_WSS_URL"):
-    monitor_op = subprocess.Popen(
-        [sys.executable, "-m", "surveillance.deployment_monitor",
-         "--rpc", os.environ["OP_WSS_URL"], "--chain", "optimism"],
-        stdout=sys.stdout,
-        stderr=sys.stderr,
-    )
-    processes.append(("optimism_monitor", monitor_op))
-    print("Optimism chain monitor started", flush=True)
-
-# Routing monitor (Arbitrum only for now)
-routing = subprocess.Popen(
-    [sys.executable, "-m", "surveillance.routing_monitor"],
-    stdout=sys.stdout,
-    stderr=sys.stderr,
-)
-processes.append(("routing", routing))
+    processes.append(("routing", routing))
 
 # Daily report scheduler — runs at 06:00 UTC every day
 def _daily_report_scheduler():
@@ -1384,40 +1417,62 @@ threading.Thread(target=_daily_report_scheduler, daemon=True).start()
 import time as _time
 
 def _make_proc(name):
-    """Recreate a subprocess by name."""
-    if name == "arbitrum_monitor":
-        return subprocess.Popen(
-            [sys.executable, "-m", "surveillance.deployment_monitor"],
-            stdout=sys.stdout, stderr=sys.stderr,
-        )
-    elif name == "base_monitor":
-        return subprocess.Popen(
-            [sys.executable, "-m", "surveillance.deployment_monitor",
-             "--rpc", os.environ["BASE_WSS_URL"], "--chain", "base"],
-            stdout=sys.stdout, stderr=sys.stderr,
-        )
-    elif name == "optimism_monitor":
-        return subprocess.Popen(
-            [sys.executable, "-m", "surveillance.deployment_monitor",
-             "--rpc", os.environ["OP_WSS_URL"], "--chain", "optimism"],
-            stdout=sys.stdout, stderr=sys.stderr,
-        )
+    """Recreate a monitor process by name."""
+    if name == "arbitrum_monitor" and os.environ.get("ARB_WSS_URL"):
+        p = Process(target=_monitor_entry, args=("arbitrum", os.environ["ARB_WSS_URL"], _write_queue),
+                    daemon=True, name="monitor_arbitrum")
+        p.start()
+        return p
+    elif name == "base_monitor" and os.environ.get("BASE_WSS_URL"):
+        p = Process(target=_monitor_entry, args=("base", os.environ["BASE_WSS_URL"], _write_queue),
+                    daemon=True, name="monitor_base")
+        p.start()
+        return p
+    elif name == "optimism_monitor" and os.environ.get("OP_WSS_URL"):
+        p = Process(target=_monitor_entry, args=("optimism", os.environ["OP_WSS_URL"], _write_queue),
+                    daemon=True, name="monitor_optimism")
+        p.start()
+        return p
     elif name == "routing":
-        return subprocess.Popen(
-            [sys.executable, "-m", "surveillance.routing_monitor"],
-            stdout=sys.stdout, stderr=sys.stderr,
-        )
+        _key = os.environ.get("ONEINCH_API_KEY", "")
+        if _key:
+            p = Process(target=_routing_entry, args=(_key, _write_queue),
+                        daemon=True, name="routing_monitor")
+            p.start()
+            return p
+        else:
+            return subprocess.Popen(
+                [sys.executable, "-m", "surveillance.routing_monitor"],
+                stdout=sys.stdout, stderr=sys.stderr,
+            )
     return None
+
+
+def _proc_alive(proc):
+    """Check if a process (multiprocessing.Process or subprocess.Popen) is still running."""
+    if isinstance(proc, Process):
+        return proc.is_alive()
+    else:
+        return proc.poll() is None
+
 
 while True:
     for i, (name, proc) in enumerate(processes):
-        ret = proc.poll()
-        if ret is not None:
-            print(f"Process {name} exited with code {ret} — restarting...", flush=True)
+        if not _proc_alive(proc):
+            exit_info = proc.exitcode if isinstance(proc, Process) else proc.poll()
+            print(f"Process {name} exited ({exit_info}) — restarting...", flush=True)
             new_proc = _make_proc(name)
             if new_proc:
                 processes[i] = (name, new_proc)
-                print(f"Process {name} restarted (pid={new_proc.pid})", flush=True)
+                pid = new_proc.pid
+                print(f"Process {name} restarted (pid={pid})", flush=True)
             else:
                 print(f"Cannot restart {name}", flush=True)
+    # Also check writer
+    if not _writer_proc.is_alive():
+        print("DB writer died — restarting...", flush=True)
+        _writer_proc = Process(target=_db_writer_run, args=(DB_PATH, _write_queue),
+                               daemon=True, name="db_writer")
+        _writer_proc.start()
+        print(f"DB writer restarted (pid={_writer_proc.pid})", flush=True)
     _time.sleep(5)

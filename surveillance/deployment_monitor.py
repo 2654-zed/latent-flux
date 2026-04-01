@@ -236,35 +236,14 @@ class DeploymentMonitor:
 
             heartbeat_count += 1
 
-            # WAL checkpoint every 5 heartbeats (~5 min) — aggressive to prevent WAL bloat
-            if heartbeat_count % 5 == 0:
+            # WAL checkpoint: only needed in standalone mode (no write_queue)
+            # When running under the single-writer architecture, the writer
+            # process handles all checkpoints — monitors are read-only.
+            if heartbeat_count % 15 == 0 and not hasattr(self.conn, '_queue'):
                 try:
                     result = self.conn.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
                     log_pages = result[1] if result and result[1] else 0
-                    checkpointed = result[2] if result and result[2] else 0
-                    logger.info("WAL checkpoint (PASSIVE): log=%s, checkpointed=%s",
-                                log_pages, checkpointed)
-                    # If WAL is still large after PASSIVE, close and reopen to allow TRUNCATE
-                    if log_pages > 1000:
-                        db_path = self.conn.execute("PRAGMA database_list").fetchone()[2]
-                        self.conn.close()
-                        trunc_conn = sqlite3.connect(db_path, timeout=10)
-                        trunc_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                        trunc_conn.close()
-                        self.conn = sqlite3.connect(db_path, timeout=30)
-                        self.conn.execute("PRAGMA journal_mode=WAL")
-                        self.conn.execute("PRAGMA wal_autocheckpoint=500")
-                        self.conn.row_factory = sqlite3.Row
-                        # Reinitialize sub-monitors with new connection
-                        if self._selector_monitor:
-                            self._selector_monitor.conn = self.conn
-                        if self._revert_detector:
-                            self._revert_detector.conn = self.conn
-                        if self._event_monitors:
-                            self._event_monitors.conn = self.conn
-                        if self._funder_tracer:
-                            self._funder_tracer.conn = self.conn
-                        logger.info("WAL TRUNCATE succeeded after reconnect (was %d pages)", log_pages)
+                    logger.info("WAL checkpoint (PASSIVE): log=%s", log_pages)
                 except Exception as e:
                     logger.warning("WAL checkpoint failed: %s", e)
 
@@ -828,9 +807,20 @@ class DeploymentMonitor:
 
 
 async def run_monitor(rpc_url: str, db_path: Optional[Path] = None,
-                      classifier=None, chain: str = "arbitrum") -> None:
-    """Entry point: initialize DB, start monitor, handle shutdown."""
-    conn = db.init_db(db_path)
+                      classifier=None, chain: str = "arbitrum",
+                      write_queue=None) -> None:
+    """Entry point: initialize DB, start monitor, handle shutdown.
+
+    Args:
+        write_queue: If provided, use QueueConnection (single-writer arch).
+                     If None, open a regular read-write connection (standalone mode).
+    """
+    if write_queue is not None:
+        from surveillance.db_queue import QueueConnection
+        resolved = str(db_path) if db_path else str(db.DEFAULT_DB_PATH)
+        conn = QueueConnection(resolved, write_queue)
+    else:
+        conn = db.init_db(db_path)
 
     monitor = DeploymentMonitor(rpc_url, conn, classifier, chain=chain)
 

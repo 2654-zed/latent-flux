@@ -368,9 +368,15 @@ class RoutingMonitor:
 # ------------------------------------------------------------------
 
 async def run_routing_monitor(api_key: str, db_path: Optional[Path] = None,
-                              poll_interval: int = DEFAULT_POLL_SECONDS) -> None:
+                              poll_interval: int = DEFAULT_POLL_SECONDS,
+                              write_queue=None) -> None:
     """Entry point: initialize DB, start routing monitor, handle shutdown."""
-    conn = db.init_db(db_path)
+    if write_queue is not None:
+        from surveillance.db_queue import QueueConnection
+        resolved = str(db_path) if db_path else str(db.DEFAULT_DB_PATH)
+        conn = QueueConnection(resolved, write_queue)
+    else:
+        conn = db.init_db(db_path)
     monitor = RoutingMonitor(api_key, conn, poll_interval)
 
     loop = asyncio.get_running_loop()
