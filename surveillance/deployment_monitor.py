@@ -679,6 +679,21 @@ class DeploymentMonitor:
                             dep.contract_address[:18], self.chain,
                             dep.deployer_address[:18],
                         )
+                    # Generate alert for every watchlist hit
+                    try:
+                        from surveillance.alert_engine import alert_watchlist_hit
+                        alert_watchlist_hit(
+                            self.conn,
+                            entity_name=hit.get("entity", "unknown"),
+                            hit_type=hit.get("hit_type", "unknown"),
+                            deployer_address=dep.deployer_address,
+                            contract_address=dep.contract_address,
+                            chain=self.chain,
+                            priority=hit.get("priority", "HIGH"),
+                            timestamp=dep.timestamp_iso,
+                        )
+                    except Exception:
+                        pass
             except Exception as e:
                 logger.debug("Watchlist check failed: %s", e)
 
@@ -737,6 +752,20 @@ class DeploymentMonitor:
             deployer_address[:18] + "...", count, self.velocity_threshold,
             len(unknown_contracts),
         )
+
+        # Generate alert
+        try:
+            from surveillance.alert_engine import alert_high_velocity_deployer
+            alert_high_velocity_deployer(
+                self.conn,
+                deployer_address=deployer_address,
+                contract_count=count,
+                threshold=self.velocity_threshold,
+                chain=self.chain,
+            )
+            self.conn.commit()
+        except Exception:
+            pass
 
     @property
     def blocks_processed(self) -> int:

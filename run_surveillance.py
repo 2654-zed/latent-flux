@@ -534,6 +534,10 @@ class StatsHandler(BaseHTTPRequestHandler):
                 "known_selectors", "alerts", "live_exposures", "pattern_matches",
                 "cluster_events", "funding_hops", "contract_verification", "traces",
                 "bytecode_cache", "heartbeat", "connection_gaps",
+                "liquidity_events", "approval_events", "bridge_events",
+                "pair_creation_events", "cex_deposit_candidates",
+                "org_transfer_events", "watchlist", "watchlist_hits",
+                "self_test_traps", "approval_watchlist",
             ]
             if table not in valid_tables:
                 self._json(400, {"error": f"table required, valid: {valid_tables}"})
@@ -552,6 +556,69 @@ class StatsHandler(BaseHTTPRequestHandler):
             self._json(200, {"table": table, "total": total, "offset": offset,
                              "limit": limit, "count": len(data), "rows": data})
 
+        elif self.path.startswith("/old-dump"):
+            # Dump from an old mounted volume for data recovery.
+            # Mount old volume at /app/old_data, then query like /dump.
+            import urllib.parse
+            parsed = urllib.parse.urlparse(self.path)
+            params = urllib.parse.parse_qs(parsed.query)
+            token = os.environ.get("ADMIN_TOKEN", "")
+            req_token = params.get("token", [""])[0]
+            if not token or req_token != token:
+                self._json(403, {"error": "forbidden"})
+                return
+            old_db_path = params.get("path", ["/app/old_data/surveillance.db"])[0]
+            # Safety: only allow paths under /app/old_data
+            if not old_db_path.startswith("/app/old_data"):
+                self._json(400, {"error": "path must be under /app/old_data"})
+                return
+            import pathlib
+            if not pathlib.Path(old_db_path).exists():
+                # Try to find any .db file under /app/old_data
+                found = list(pathlib.Path("/app/old_data").rglob("*.db")) if pathlib.Path("/app/old_data").exists() else []
+                self._json(404, {
+                    "error": f"DB not found at {old_db_path}",
+                    "found_files": [str(f) for f in found[:20]],
+                    "old_data_exists": pathlib.Path("/app/old_data").exists(),
+                })
+                return
+            table = params.get("table", [""])[0]
+            if table == "":
+                # List all tables in the old DB
+                try:
+                    old_con = sqlite3.connect(old_db_path, timeout=10)
+                    old_con.row_factory = sqlite3.Row
+                    tables = [r[0] for r in old_con.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                    ).fetchall()]
+                    counts = {}
+                    for t in tables:
+                        try:
+                            counts[t] = old_con.execute(f"SELECT COUNT(*) FROM [{t}]").fetchone()[0]
+                        except Exception:
+                            counts[t] = -1
+                    old_con.close()
+                    self._json(200, {"db_path": old_db_path, "tables": counts})
+                except Exception as e:
+                    self._json(500, {"error": str(e)})
+                return
+            offset = int(params.get("offset", ["0"])[0])
+            limit = int(params.get("limit", ["5000"])[0])
+            limit = min(limit, 10000)
+            try:
+                old_con = sqlite3.connect(old_db_path, timeout=10)
+                old_con.row_factory = sqlite3.Row
+                rows = old_con.execute(
+                    f"SELECT * FROM [{table}] LIMIT ? OFFSET ?", (limit, offset)
+                ).fetchall()
+                data = [dict(r) for r in rows]
+                total = old_con.execute(f"SELECT COUNT(*) FROM [{table}]").fetchone()[0]
+                old_con.close()
+                self._json(200, {"table": table, "total": total, "offset": offset,
+                                 "limit": limit, "count": len(data), "rows": data})
+            except Exception as e:
+                self._json(500, {"error": str(e)})
+
         else:
             self._json(404, {
                 "error": "not found",
@@ -559,7 +626,8 @@ class StatsHandler(BaseHTTPRequestHandler):
                               "/health", "/tx-events", "/known-selectors",
                               "/clusters", "/cluster-events", "/bot-deployers",
                               "/bot-selectors", "/funding", "/funding-hops",
-                              "/verification", "/traces", "/alerts", "/dump"],
+                              "/verification", "/traces", "/alerts", "/dump",
+                              "/old-dump"],
             })
 
     def do_POST(self):
@@ -1160,6 +1228,15 @@ threading.Thread(target=run_stats_server, daemon=True).start()
 print("Running startup DB cleanup...", flush=True)
 try:
     _cleanup_conn = sqlite3.connect(DB_PATH, timeout=30)
+
+    # 0. Ensure watchlist tables exist (may be missing on older Railway deploys)
+    try:
+        from surveillance.watchlist import ensure_tables as _ensure_wl
+        _ensure_wl(_cleanup_conn)
+        _cleanup_conn.commit()
+        print("  Watchlist tables: ensured", flush=True)
+    except Exception as _e:
+        print(f"  Watchlist tables: {_e}", flush=True)
 
     # 1. Prune bytecode cache — remove ALL unknown entries (not just hit_count=0)
     _before = _cleanup_conn.execute("SELECT COUNT(*) FROM bytecode_cache").fetchone()[0]

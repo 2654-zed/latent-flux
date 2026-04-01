@@ -89,12 +89,16 @@ class SelectorMonitor:
         self._drains_detected = 0
         self._last_refresh = 0.0
         self._vanity_checked: set[str] = set()  # cache to avoid re-checking
+        # Behavioral confirmation — auto-detects trap events from reverts
+        from surveillance.behavioral_confirmation import BehavioralConfirmation
+        self._behavioral = BehavioralConfirmation(conn)
 
     def refresh_watched(self) -> None:
         """Reload watched sets from DB."""
         self._watched = db.get_watched_addresses(self.conn)
         self._exposure_contracts = db.get_exposure_contracts(self.conn)
         self._exposed_addresses = db.get_exposed_addresses(self.conn)
+        self._behavioral.refresh_caches()
 
     @property
     def watched_count(self) -> int:
@@ -223,13 +227,42 @@ class SelectorMonitor:
                     selector, bot_tag, gas_pattern, is_reverted,
                 )
 
-            # If reverted, this might also be a trap event
+            # If reverted, check for behavioral trap confirmation
             if is_reverted:
-                logger.info(
-                    "REVERTED TX: %s -> %s selector=%s tx=%s",
-                    from_lower[:18] + "...", contract_address[:18] + "...",
-                    selector, tx_hash[:18] + "...",
+                confirmed = self._behavioral.check_revert(
+                    contract_address=contract_address,
+                    caller_address=from_lower,
+                    tx_hash=tx_hash,
+                    block_number=block_number,
+                    timestamp=timestamp_iso,
+                    function_selector=selector,
                 )
+                if confirmed:
+                    # Also generate an alert for the trap confirmation
+                    try:
+                        from surveillance.alert_engine import alert_trap_confirmed
+                        chain = self.conn.execute(
+                            "SELECT chain FROM contracts WHERE contract_address = ?",
+                            (contract_address,),
+                        ).fetchone()
+                        alert_trap_confirmed(
+                            self.conn,
+                            contract_address=contract_address,
+                            bot_address=from_lower,
+                            tx_hash=tx_hash,
+                            block_number=block_number,
+                            timestamp=timestamp_iso,
+                            chain=chain[0] if chain else None,
+                        )
+                        self.conn.commit()
+                    except Exception as e:
+                        logger.debug("Alert generation failed: %s", e)
+                else:
+                    logger.info(
+                        "REVERTED TX: %s -> %s selector=%s tx=%s",
+                        from_lower[:18] + "...", contract_address[:18] + "...",
+                        selector, tx_hash[:18] + "...",
+                    )
 
             # DRAIN DETECTION: transferFrom where spender is a watched contract
             # and the 'from' in calldata is an exposed address
@@ -256,7 +289,7 @@ class SelectorMonitor:
                         self.conn.execute(
                             """INSERT INTO alerts (alert_type, address, tx_hash, block_number, timestamp, payload)
                                VALUES ('APPROVAL_DRAIN', ?, ?, ?, ?, ?)""",
-                            ("APPROVAL_DRAIN", victim_lower, tx_hash, block_number,
+                            (victim_lower, tx_hash, block_number,
                              timestamp_iso, json.dumps({
                                  "victim": victim_lower,
                                  "contract": contract_address,
