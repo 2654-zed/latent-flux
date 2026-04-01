@@ -874,14 +874,29 @@ class StatsHandler(BaseHTTPRequestHandler):
             after = con.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
             deleted = before - after
             con.commit()
-            # WAL checkpoint
+            # Prune old bot_candidate_events (keep last 7 days)
+            bce_before = con.execute("SELECT COUNT(*) FROM bot_candidate_events").fetchone()[0]
+            con.execute("DELETE FROM bot_candidate_events WHERE timestamp < datetime('now', '-7 days')")
+            bce_after = con.execute("SELECT COUNT(*) FROM bot_candidate_events").fetchone()[0]
+            con.commit()
+            # WAL checkpoint + VACUUM
             con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            try:
+                con.execute("VACUUM")
+                vacuumed = True
+            except Exception:
+                vacuumed = False
+            # Check DB size
+            db_size = con.execute("SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()").fetchone()[0]
             con.close()
             self._json(200, {
                 "alerts_before": before,
                 "alerts_after": after,
                 "duplicates_removed": deleted,
+                "bot_events_pruned": bce_before - bce_after,
                 "wal_checkpoint": "completed",
+                "vacuum": vacuumed,
+                "db_size_mb": round(db_size / 1024 / 1024, 1),
             })
 
         elif self.path == "/admin/mark-false-positive":
@@ -1274,26 +1289,29 @@ try:
 except Exception as e:
     print(f"Startup cleanup failed (non-fatal): {e}", flush=True)
 
-# WAL checkpoint thread — forces TRUNCATE every 5 minutes
-# Runs on its own connection to avoid blocking monitors
+# WAL checkpoint thread — forces checkpoint every 2 minutes
+# Uses PASSIVE first (always succeeds), then TRUNCATE (needs no readers)
 def _wal_checkpoint_loop():
     import time as _t
     while True:
-        _t.sleep(300)  # 5 minutes
+        _t.sleep(120)  # 2 minutes
         try:
             _wal_conn = sqlite3.connect(DB_PATH, timeout=5)
-            result = _wal_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
-            _wal_conn.close()
-            if result and result[1] and result[1] > 0:
-                print(f"WAL checkpoint: truncated {result[1]} pages", flush=True)
-        except Exception as e:
-            # If TRUNCATE fails (busy), try PASSIVE
+            # Always do PASSIVE first — moves pages from WAL to DB
+            result = _wal_conn.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
+            log_pages = result[1] if result and result[1] else 0
+            checkpointed = result[2] if result and result[2] else 0
+            # Then try TRUNCATE to reclaim WAL disk space
             try:
-                _wal_conn2 = sqlite3.connect(DB_PATH, timeout=5)
-                _wal_conn2.execute("PRAGMA wal_checkpoint(PASSIVE)")
-                _wal_conn2.close()
+                _wal_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                if log_pages > 100:
+                    print(f"WAL checkpoint: TRUNCATE ok (was {log_pages} pages, checkpointed {checkpointed})", flush=True)
             except Exception:
-                pass
+                if log_pages > 500:
+                    print(f"WAL checkpoint: PASSIVE only ({checkpointed}/{log_pages} pages)", flush=True)
+            _wal_conn.close()
+        except Exception:
+            pass
 
 threading.Thread(target=_wal_checkpoint_loop, daemon=True).start()
 print("WAL checkpoint thread started (every 5 min)", flush=True)

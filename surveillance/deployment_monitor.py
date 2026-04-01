@@ -236,20 +236,35 @@ class DeploymentMonitor:
 
             heartbeat_count += 1
 
-            # WAL checkpoint every 15 heartbeats (~15 min) using PASSIVE mode
-            # PASSIVE doesn't require exclusive lock — safe with concurrent writers
-            if heartbeat_count % 15 == 0:
+            # WAL checkpoint every 5 heartbeats (~5 min) — aggressive to prevent WAL bloat
+            if heartbeat_count % 5 == 0:
                 try:
                     result = self.conn.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
-                    logger.info("WAL checkpoint (PASSIVE): busy=%s, log=%s, checkpointed=%s",
-                                result[0], result[1], result[2])
-                    # If WAL is large (log > 5000 pages), try TRUNCATE
-                    if result and result[1] and result[1] > 5000:
-                        try:
-                            self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                            logger.info("WAL checkpoint (TRUNCATE) succeeded - WAL was large")
-                        except Exception:
-                            logger.info("WAL TRUNCATE failed (concurrent access) - PASSIVE was enough")
+                    log_pages = result[1] if result and result[1] else 0
+                    checkpointed = result[2] if result and result[2] else 0
+                    logger.info("WAL checkpoint (PASSIVE): log=%s, checkpointed=%s",
+                                log_pages, checkpointed)
+                    # If WAL is still large after PASSIVE, close and reopen to allow TRUNCATE
+                    if log_pages > 1000:
+                        db_path = self.conn.execute("PRAGMA database_list").fetchone()[2]
+                        self.conn.close()
+                        trunc_conn = sqlite3.connect(db_path, timeout=10)
+                        trunc_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                        trunc_conn.close()
+                        self.conn = sqlite3.connect(db_path, timeout=30)
+                        self.conn.execute("PRAGMA journal_mode=WAL")
+                        self.conn.execute("PRAGMA wal_autocheckpoint=500")
+                        self.conn.row_factory = sqlite3.Row
+                        # Reinitialize sub-monitors with new connection
+                        if self._selector_monitor:
+                            self._selector_monitor.conn = self.conn
+                        if self._revert_detector:
+                            self._revert_detector.conn = self.conn
+                        if self._event_monitors:
+                            self._event_monitors.conn = self.conn
+                        if self._funder_tracer:
+                            self._funder_tracer.conn = self.conn
+                        logger.info("WAL TRUNCATE succeeded after reconnect (was %d pages)", log_pages)
                 except Exception as e:
                     logger.warning("WAL checkpoint failed: %s", e)
 
