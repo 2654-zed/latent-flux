@@ -582,11 +582,13 @@ class StatsHandler(BaseHTTPRequestHandler):
                     "old_data_exists": pathlib.Path("/app/old_data").exists(),
                 })
                 return
+            # Open old DB in immutable mode to bypass WAL locks
+            db_uri = f"file:{old_db_path}?immutable=1"
             table = params.get("table", [""])[0]
             if table == "":
                 # List all tables in the old DB
                 try:
-                    old_con = sqlite3.connect(old_db_path, timeout=10)
+                    old_con = sqlite3.connect(db_uri, uri=True, timeout=10)
                     old_con.row_factory = sqlite3.Row
                     tables = [r[0] for r in old_con.execute(
                         "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
@@ -606,7 +608,7 @@ class StatsHandler(BaseHTTPRequestHandler):
             limit = int(params.get("limit", ["5000"])[0])
             limit = min(limit, 10000)
             try:
-                old_con = sqlite3.connect(old_db_path, timeout=10)
+                old_con = sqlite3.connect(db_uri, uri=True, timeout=10)
                 old_con.row_factory = sqlite3.Row
                 rows = old_con.execute(
                     f"SELECT * FROM [{table}] LIMIT ? OFFSET ?", (limit, offset)
