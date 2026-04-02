@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -20,8 +21,20 @@ from web.data import (
     get_contract, get_deployer, get_address_detail, get_recent_watchlist_hits,
     get_threats, get_threat_counts, get_watched_entities, search_address,
 )
+from web.api_v1 import router as v1_router
 
 app = FastAPI(title="Layer 3 Intelligence", docs_url=None, redoc_url=None)
+
+# CORS for API consumers
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
+# Mount public API v1
+app.include_router(v1_router, prefix="/api/v1")
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
