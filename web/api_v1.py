@@ -136,8 +136,16 @@ def _min_tier(route: str) -> int:
 # ---------------------------------------------------------------------------
 
 def _confidence_score(row: dict, victim_count: int = 0) -> Optional[float]:
+    """Confidence scoring — only claims what we can verify.
+
+    0.90+ requires behavioral confirmation (trap event with external victim).
+    0.70-0.89 requires multiple bytecode trap signatures.
+    0.50-0.69 requires at least one signature.
+    Below 0.50 is deployer-history-only detection (no bytecode evidence).
+    """
     tier = row.get("confidence_tier", "unknown")
     if tier == "confirmed":
+        # Behavioral confirmation: bot != deployer, reverted on this contract
         base = 0.90
         bonus = min(victim_count / 1000, 0.09)  # up to 0.99
         return round(base + bonus, 2)
@@ -368,6 +376,14 @@ def _build_risk(conn: sqlite3.Connection, row: dict) -> dict:
             "family_size": fam_size[0] if fam_size else None,
             "family_deployers": fam_size[1] if fam_size else None,
         }
+
+    # NOTE: No GoPlus comparison field. GoPlus benchmark must be stored in
+    # a goplus_results table before we reference it in API responses.
+    # TODO: Rerun GoPlus benchmark when their API is accessible and persist
+    # results to goplus_results table. Then add goplus_risk field here.
+    #
+    # NOTE: No trust_amplification field. The trust_amplification table must
+    # have data before we include it. Omitted until analysis is rerun and persisted.
 
     return {
         "address": addr,
@@ -645,20 +661,25 @@ async def list_orgs():
 async def org_detail(org_id: str):
     conn = _ro_conn()
     try:
-        # Deployers in this org
-        deployers = conn.execute("""
-            SELECT DISTINCT address FROM entity_classification WHERE org_id = ?
-            UNION
-            SELECT DISTINCT deployer_address FROM deployer_profiles WHERE org_link = ?
-        """, (org_id, org_id)).fetchall()
-        dep_addrs = [d[0] for d in deployers]
+        # Primary method: funding_trail (most defensible — traces on-chain fund flow)
+        dep_addrs = [d[0] for d in conn.execute("""
+            SELECT DISTINCT deployer_address FROM deployers
+            WHERE funding_trail LIKE ?
+        """, (f'%{org_id}%',)).fetchall()]
+
+        # Conservative count from entity_classification (manually tagged)
+        ec_count = conn.execute(
+            "SELECT COUNT(DISTINCT address) FROM entity_classification WHERE org_id = ?",
+            (org_id,),
+        ).fetchone()[0]
 
         if not dep_addrs:
-            # Check funding_trail
+            # Fallback to entity_classification + deployer_profiles
             dep_addrs = [d[0] for d in conn.execute("""
-                SELECT deployer_address FROM deployers
-                WHERE funding_trail LIKE ?
-            """, (f'%"org_link": "{org_id}"%',)).fetchall()]
+                SELECT DISTINCT address FROM entity_classification WHERE org_id = ?
+                UNION
+                SELECT DISTINCT deployer_address FROM deployer_profiles WHERE org_link = ?
+            """, (org_id, org_id)).fetchall()]
 
         if not dep_addrs:
             return _error("NOT_FOUND", f"Organization '{org_id}' not found", 404)
@@ -685,6 +706,9 @@ async def org_detail(org_id: str):
 
         return JSONResponse(_ok({
             "org_id": org_id,
+            "attribution_method": "funding_chain",
+            "methodology_note": f"Primary count via on-chain funding trail. "
+                                f"Conservative entity_classification count: {ec_count} deployers.",
             "scale": {
                 "deployers": len(dep_addrs),
                 "contracts": contracts[0],
@@ -823,15 +847,27 @@ async def ecosystem_stats():
             SELECT COUNT(DISTINCT org_id) FROM entity_classification
             WHERE org_id IS NOT NULL AND org_id != ''
         """).fetchone()[0]
-        rotations = conn.execute(
-            "SELECT COUNT(*) FROM deployer_similarity WHERE composite_score >= 0.80"
-        ).fetchone()[0]
 
-        # Camouflage
-        cam = conn.execute(
-            "SELECT camouflage_ratio FROM camouflage_metrics ORDER BY date DESC LIMIT 1"
-        ).fetchone()
-        cam_ratio = round(cam[0], 3) if cam else None
+        # Wallet rotations: similarity > 0.85 AND temporal succession
+        rotations = conn.execute("""
+            SELECT COUNT(*) FROM deployer_similarity ds
+            JOIN deployers da ON ds.deployer_a = da.deployer_address
+            JOIN deployers db ON ds.deployer_b = db.deployer_address
+            WHERE ds.composite_score >= 0.85
+            AND (db.first_seen > da.last_seen OR da.first_seen > db.last_seen)
+        """).fetchone()[0]
+
+        # Camouflage: compute live from transaction_events (contracts with 10+ tx)
+        cam = conn.execute("""
+            SELECT COUNT(*) as total,
+                   SUM(CASE WHEN rr < 0.10 THEN 1 ELSE 0 END) as camo
+            FROM (
+                SELECT contract_address,
+                       CAST(SUM(CASE WHEN is_reverted=1 THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as rr
+                FROM transaction_events GROUP BY contract_address HAVING COUNT(*) >= 10
+            )
+        """).fetchone()
+        cam_ratio = round(cam[1] / cam[0], 3) if cam and cam[0] > 0 else None
 
         return JSONResponse(_ok({
             "corpus": {
@@ -844,11 +880,13 @@ async def ecosystem_stats():
                 "confirmed_threats": confirmed,
                 "suspected_threats": suspected,
                 "camouflage_ratio": cam_ratio,
+                "camouflage_note": "Fraction of contracts (10+ interactions) with <10% revert rate",
                 "behavioral_confirmations_24h": traps_24h,
             },
             "organizations": {
                 "mapped": orgs,
                 "wallet_rotations_detected": rotations,
+                "rotation_criteria": "similarity >= 0.85 with temporal succession",
             },
         }, conn))
     finally:
