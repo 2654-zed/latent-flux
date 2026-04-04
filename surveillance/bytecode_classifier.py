@@ -330,10 +330,49 @@ def detect_delegatecall_in_token(bytecode_hex: str) -> tuple[bool, str]:
     return False, ""
 
 
+def _extract_push_before(bytecode_hex: str, target_byte_offset: int) -> int | None:
+    """Extract the value from the PUSH instruction immediately before target_byte_offset.
+
+    Walks the bytecode from the start to find the PUSH that ends just before
+    the target opcode. Returns the pushed integer value, or None if not found.
+    """
+    bc = bytecode_hex.lower()
+    # Walk bytecode tracking each instruction's position and pushed value
+    i = 0
+    last_push_value = None
+    last_push_end = -1
+    while i < len(bc) - 1:
+        byte_offset = i // 2
+        if byte_offset >= target_byte_offset:
+            break
+        op = int(bc[i:i+2], 16)
+        if 0x60 <= op <= 0x7f:
+            # PUSH1..PUSH32
+            push_bytes = op - 0x5f
+            data_start = i + 2
+            data_end = data_start + push_bytes * 2
+            if data_end <= len(bc):
+                try:
+                    last_push_value = int(bc[data_start:data_end], 16)
+                    last_push_end = (data_end) // 2  # byte offset after push data
+                except ValueError:
+                    last_push_value = None
+            i = data_end
+        else:
+            i += 2
+    # Only return if the PUSH ended close to the target (within 6 bytes — room
+    # for DUP/SWAP/other stack ops between the PUSH and TIMESTAMP)
+    if last_push_value is not None and target_byte_offset - last_push_end <= 6:
+        return last_push_value
+    return None
+
+
 def detect_timestamp_activation(bytecode_hex: str) -> tuple[bool, str]:
     """
     Time-lock delayed activation. TIMESTAMP/NUMBER -> GT/LT -> ISZERO -> JUMPI -> REVERT.
     Contract allows transfers freely until a specific block/timestamp, then restricts.
+
+    Also extracts the activation timestamp/block value from the preceding PUSH instruction.
     """
     has_transfer = SEL_TRANSFER in bytecode_hex or SEL_TRANSFER_FROM in bytecode_hex
     if not has_transfer:
@@ -349,10 +388,25 @@ def detect_timestamp_activation(bytecode_hex: str) -> tuple[bool, str]:
                         revert_offsets = _find_all_offsets(bytecode_hex, OP_REVERT)
                         for r in revert_offsets:
                             if 0 < r - j <= 50:
+                                # Extract the comparison value from preceding PUSH
+                                push_val = _extract_push_before(bytecode_hex, time_off)
+                                activation_info = ""
+                                if push_val is not None:
+                                    if time_name == "TIMESTAMP":
+                                        # Sanity: Unix timestamps 2024-2030 = 1704067200 to 1893456000
+                                        if 1_700_000_000 <= push_val <= 1_900_000_000:
+                                            from datetime import datetime, timezone
+                                            dt = datetime.fromtimestamp(push_val, tz=timezone.utc)
+                                            activation_info = f" activation_timestamp={push_val} ({dt.strftime('%Y-%m-%d %H:%M UTC')})"
+                                        else:
+                                            activation_info = f" push_value={push_val} (not a valid timestamp)"
+                                    else:  # NUMBER
+                                        activation_info = f" activation_block={push_val}"
                                 return True, (
                                     f"{time_name} at 0x{time_off:x} -> {cmp_name} at 0x{cmp_off:x} -> "
                                     f"JUMPI at 0x{j:x} -> REVERT at 0x{r:x}: "
                                     f"time-locked activation trap in transfer context"
+                                    f"{activation_info}"
                                 )
     return False, ""
 

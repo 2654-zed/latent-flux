@@ -65,33 +65,29 @@ def scan_for_timelocks(conn: sqlite3.Connection) -> dict:
     for c in candidates:
         notes = c["bytecode_pattern_notes"] or ""
 
-        # Try to extract timestamp values from the bytecode notes
-        # Look for patterns like: TIMESTAMP at 0xNNN -> LT/GT at 0xNNN
-        # The comparison value would be pushed before the TIMESTAMP opcode
-        # Common pattern: PUSH4 <timestamp> TIMESTAMP LT/GT JUMPI
-
-        # Extract any 10-digit numbers that look like Unix timestamps (2024-2030 range)
-        # Unix timestamps for 2024-2030: 1704067200 to 1893456000
-        timestamp_candidates = re.findall(r'\b(1[7-8][0-9]{8})\b', notes)
-
-        # Also check for block numbers (could be block-gated instead of time-gated)
-        # Arbitrum blocks ~250M-500M range, Base blocks ~10M-100M range
-        block_candidates = re.findall(r'\b([1-9][0-9]{7,8})\b', notes)
+        # Extract activation_timestamp=NNNN from enhanced bytecode notes
+        # The classifier now embeds the PUSH value: "activation_timestamp=1712345678 (2026-04-05 ...)"
+        ts_match = re.search(r'activation_timestamp=(\d+)', notes)
+        block_match = re.search(r'activation_block=(\d+)', notes)
 
         activation_ts = None
         activation_block = None
 
-        for ts_str in timestamp_candidates:
-            ts = int(ts_str)
-            # Sanity check: should be in the future or recent past
-            if now_ts - 86400 * 90 < ts < now_ts + 86400 * 365:
+        if ts_match:
+            ts = int(ts_match.group(1))
+            if 1_700_000_000 <= ts <= 1_900_000_000:
                 activation_ts = ts
-                break
 
-        if not activation_ts and c["detection_block"]:
-            # If we can't find a timestamp, use the detection block as a reference
-            # but don't set an activation time
-            pass
+        if block_match:
+            activation_block = int(block_match.group(1))
+
+        # Fallback: scan notes for any 10-digit number in valid timestamp range
+        if not activation_ts and not block_match:
+            for m in re.findall(r'\b(1[7-8][0-9]{8})\b', notes):
+                ts = int(m)
+                if now_ts - 86400 * 90 < ts < now_ts + 86400 * 365:
+                    activation_ts = ts
+                    break
 
         if activation_ts:
             act_iso = datetime.fromtimestamp(activation_ts, tz=timezone.utc).isoformat()
