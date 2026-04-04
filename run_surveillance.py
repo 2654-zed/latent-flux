@@ -6,6 +6,13 @@ import sys
 import threading
 from datetime import datetime, timedelta, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
+import multiprocessing
+# Use 'spawn' start method to avoid fork-related issues
+# (inheriting HTTP server sockets, DB connections, etc.)
+try:
+    multiprocessing.set_start_method('spawn', force=True)
+except RuntimeError:
+    pass  # Already set
 from multiprocessing import Process, Queue as MPQueue
 
 import asyncio
@@ -21,7 +28,11 @@ ETH_HTTP = _eth_wss.replace("wss://", "https://") if _eth_wss else ""
 
 def _ro_connect(timeout=10):
     """Open a read-only SQLite connection for stats/dump queries."""
-    return sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=timeout)
+    try:
+        return sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=timeout)
+    except Exception:
+        # Fallback: DB may not exist yet or mode=ro not supported
+        return sqlite3.connect(DB_PATH, timeout=timeout)
 
 
 def _query(sql, fetchone=False):
@@ -544,6 +555,10 @@ class StatsHandler(BaseHTTPRequestHandler):
                 "pair_creation_events", "cex_deposit_candidates",
                 "org_transfer_events", "watchlist", "watchlist_hits",
                 "self_test_traps", "approval_watchlist",
+                "dormant_activations", "timelock_countdowns", "sload_patterns",
+                "permit_events", "proxy_implementations", "api_keys",
+                "api_watches", "approval_values", "contract_balances",
+                "external_benchmarks",
             ]
             if table not in valid_tables:
                 self._json(400, {"error": f"table required, valid: {valid_tables}"})
@@ -1302,8 +1317,8 @@ except Exception as e:
 # WAL checkpoint is handled by the writer (trivial — single writer, no contention).
 
 from surveillance.db_writer import run as _db_writer_run
-from surveillance.deployment_monitor import run_monitor as _run_monitor
-from surveillance.routing_monitor import run_routing_monitor as _run_routing
+from surveillance.process_entries import monitor_entry as _monitor_entry
+from surveillance.process_entries import routing_entry as _routing_entry
 
 _write_queue = MPQueue()
 
@@ -1316,32 +1331,6 @@ _writer_proc = Process(
 )
 _writer_proc.start()
 print(f"DB writer process started (pid={_writer_proc.pid})", flush=True)
-
-
-def _monitor_entry(chain, rpc_url, write_queue):
-    """Entry point for chain monitor subprocess."""
-    import logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format=f"%(asctime)s [{chain}:%(name)s] %(levelname)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    from surveillance.bytecode_classifier import classify
-    asyncio.run(_run_monitor(
-        rpc_url, None, classifier=classify, chain=chain,
-        write_queue=write_queue,
-    ))
-
-
-def _routing_entry(api_key, write_queue):
-    """Entry point for routing monitor subprocess."""
-    import logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [routing:%(name)s] %(levelname)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    asyncio.run(_run_routing(api_key, None, write_queue=write_queue))
 
 
 # Start surveillance components
