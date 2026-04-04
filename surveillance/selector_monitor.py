@@ -39,6 +39,12 @@ MAX_UINT256 = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 # transferFrom selector for drain detection
 SEL_TRANSFER_FROM = "23b872dd"
 
+# Permit selectors (EIP-2612 gasless approvals) — high-value detection
+PERMIT_SELECTORS = {
+    "d505accf": "permit_eip2612",
+    "8fcbaf0c": "permit_dai",
+}
+
 # Static gas thresholds (exact round gwei values)
 STATIC_GAS_VALUES = {0.0, 0.01, 0.1, 1.0, 2.0, 5.0, 10.0}
 
@@ -226,6 +232,22 @@ class SelectorMonitor:
                     from_lower[:18] + "...", contract_address[:18] + "...",
                     selector, bot_tag, gas_pattern, is_reverted,
                 )
+
+            # Permit signature detection (EIP-2612 gasless approvals)
+            if selector in PERMIT_SELECTORS:
+                try:
+                    self.conn.execute("""
+                        INSERT OR IGNORE INTO permit_events
+                        (contract_address, chain, caller, timestamp, tx_hash, function_selector)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (contract_address, None, from_lower, timestamp_iso, tx_hash, selector))
+                    logger.warning(
+                        "PERMIT DETECTED: %s -> %s type=%s tx=%s",
+                        from_lower[:18] + "...", contract_address[:18] + "...",
+                        PERMIT_SELECTORS[selector], tx_hash[:18] + "...",
+                    )
+                except Exception:
+                    pass
 
             # If reverted, check for behavioral trap confirmation
             if is_reverted:

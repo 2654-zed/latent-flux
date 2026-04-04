@@ -407,6 +407,17 @@ class DeploymentMonitor:
                 except Exception as e:
                     logger.warning("Timelock scan failed: %s", e)
 
+            # SLOAD spike detection every 360 heartbeats (~6 hours)
+            if heartbeat_count % 360 == 200:
+                try:
+                    from surveillance.blindspot_remediation import detect_sload_spikes
+                    result = detect_sload_spikes(self.conn)
+                    if result["spikes"] > 0:
+                        logger.warning("SLOAD SPIKE: %d contracts with activity surge", result["spikes"])
+                    self.conn.commit()
+                except Exception as e:
+                    logger.debug("SLOAD spike check failed: %s", e)
+
             # Proxy upgrade watcher every 1440 heartbeats (~24 hours)
             # Requires RPC calls so runs infrequently
             if heartbeat_count % 1440 == 100:
