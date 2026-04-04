@@ -500,6 +500,9 @@ def _alert_severity(alert_type: str) -> str:
     return {
         "TRAP_CONFIRMED": "CRITICAL",
         "APPROVAL_DRAIN": "CRITICAL",
+        "PROXY_UPGRADE": "CRITICAL",
+        "TIMELOCK_IMMINENT": "CRITICAL",
+        "DORMANT_ACTIVATION": "HIGH",
         "HIGH_VELOCITY_DEPLOYER": "HIGH",
         "WATCHLIST_HIT": "HIGH",
     }.get(alert_type or "", "INFO")

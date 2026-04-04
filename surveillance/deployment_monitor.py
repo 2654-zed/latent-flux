@@ -379,6 +379,52 @@ class DeploymentMonitor:
                 except Exception as e:
                     logger.warning("Approval drain scan failed: %s", e)
 
+            # Dormant fleet activation monitor every 30 heartbeats (~30 min)
+            if heartbeat_count % 30 == 15:  # offset from approval scan
+                try:
+                    from surveillance.dormant_activation_monitor import scan as dormant_scan
+                    result = dormant_scan(self.conn)
+                    if result["new_activations"] > 0:
+                        logger.warning(
+                            "DORMANT ACTIVATION: %d contracts in %d fleets woke up",
+                            result["new_activations"], result["fleets_activated"],
+                        )
+                        self.conn.commit()
+                except Exception as e:
+                    logger.warning("Dormant activation scan failed: %s", e)
+
+            # Time-lock countdown check every 60 heartbeats (~1 hour)
+            if heartbeat_count % 60 == 25:
+                try:
+                    from surveillance.timelock_monitor import scan_for_timelocks, check_countdowns
+                    r1 = scan_for_timelocks(self.conn)
+                    r2 = check_countdowns(self.conn)
+                    if r1["new_timelocks"] > 0:
+                        logger.info("Timelock scan: %d new time-locked contracts", r1["new_timelocks"])
+                    if r2["imminent_alerts"] > 0:
+                        logger.warning("TIMELOCK IMMINENT: %d contracts activating within 24h!", r2["imminent_alerts"])
+                    self.conn.commit()
+                except Exception as e:
+                    logger.warning("Timelock scan failed: %s", e)
+
+            # Proxy upgrade watcher every 1440 heartbeats (~24 hours)
+            # Requires RPC calls so runs infrequently
+            if heartbeat_count % 1440 == 100:
+                try:
+                    from surveillance.proxy_upgrade_watcher import scan_proxies
+                    if self._w3:
+                        result = await scan_proxies(self.conn, self._w3, self.chain, limit=50)
+                        if result["changes"] > 0:
+                            logger.warning(
+                                "PROXY UPGRADE: %d implementation changes detected!",
+                                result["changes"],
+                            )
+                        elif result["checked"] > 0:
+                            logger.info("Proxy scan: %d checked, 0 changes", result["checked"])
+                        self.conn.commit()
+                except Exception as e:
+                    logger.warning("Proxy upgrade scan failed: %s", e)
+
             await asyncio.sleep(60)
 
     def stop(self) -> None:
