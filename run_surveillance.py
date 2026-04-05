@@ -7,10 +7,11 @@ import threading
 from datetime import datetime, timedelta, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 import multiprocessing
-# Use 'spawn' start method to avoid fork-related issues
-# (inheriting HTTP server sockets, DB connections, etc.)
+# Use 'fork' on Linux (Railway). 'spawn' causes infinite re-import of this
+# module-level code in child processes. 'fork' inherits the parent's state
+# without re-executing module-level code.
 try:
-    multiprocessing.set_start_method('spawn', force=True)
+    multiprocessing.set_start_method('fork', force=True)
 except RuntimeError:
     pass  # Already set
 from multiprocessing import Process, Queue as MPQueue
