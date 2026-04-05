@@ -94,6 +94,22 @@ async def scan_proxies(conn: sqlite3.Connection, w3, chain: str, limit: int = 10
             if impl_addr and impl_addr == "0x" + "0" * 40:
                 impl_addr = None
 
+            # EOA check: if impl has zero code, verify it's a destroyed contract
+            # not just an EOA. An EOA never had code; a destroyed contract did.
+            if impl_addr:
+                impl_code = await w3.eth.get_code(impl_addr)
+                if len(impl_code) == 0:
+                    # Zero code could be EOA or destroyed contract.
+                    # Check if it has ever sent transactions (EOA indicator).
+                    nonce = await w3.eth.get_transaction_count(impl_addr)
+                    if nonce > 0:
+                        # Has outgoing tx = likely EOA, not destroyed contract
+                        logger.info(
+                            "Proxy %s impl %s has 0 code but nonce=%d — likely EOA, not destroyed contract",
+                            addr[:18], impl_addr[:18], nonce,
+                        )
+                        impl_addr = None  # Treat as no implementation
+
             # Read admin slot
             admin_raw = await w3.eth.get_storage_at(addr, EIP1967_ADMIN_SLOT)
             admin_addr = "0x" + admin_raw.hex()[-40:] if admin_raw else None
