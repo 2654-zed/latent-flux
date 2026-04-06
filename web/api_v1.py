@@ -377,13 +377,122 @@ def _build_risk(conn: sqlite3.Connection, row: dict) -> dict:
             "family_deployers": fam_size[1] if fam_size else None,
         }
 
-    # NOTE: No GoPlus comparison field. GoPlus benchmark must be stored in
-    # a goplus_results table before we reference it in API responses.
-    # TODO: Rerun GoPlus benchmark when their API is accessible and persist
-    # results to goplus_results table. Then add goplus_risk field here.
-    #
-    # NOTE: No trust_amplification field. The trust_amplification table must
-    # have data before we include it. Omitted until analysis is rerun and persisted.
+    # GoPlus comparison: stored results from prior benchmarks
+    goplus = None
+    try:
+        gp_row = conn.execute(
+            "SELECT risk_level, risk_score, is_honeypot, goplus_status, match, checked_at "
+            "FROM goplus_results WHERE address = ? ORDER BY checked_at DESC LIMIT 1",
+            (addr,),
+        ).fetchone()
+        if gp_row:
+            goplus = {
+                "risk_level": gp_row["risk_level"],
+                "risk_score": gp_row["risk_score"],
+                "is_honeypot": gp_row["is_honeypot"],
+                "goplus_status": gp_row["goplus_status"],
+                "match_vs_layer3": gp_row["match"],
+                "checked_at": gp_row["checked_at"],
+            }
+    except Exception:
+        pass
+
+    # Trust amplification (router traffic vs family baseline)
+    trust_amp = None
+    try:
+        ta_row = conn.execute(
+            "SELECT total_callers, router_percentage, callers_per_day, "
+            "amplification_factor, family_avg_callers_per_day, alert_level "
+            "FROM trust_amplification WHERE contract_address = ?",
+            (addr,),
+        ).fetchone()
+        if ta_row:
+            trust_amp = {
+                "total_callers": ta_row["total_callers"],
+                "router_percentage": ta_row["router_percentage"],
+                "callers_per_day": ta_row["callers_per_day"],
+                "amplification_factor": ta_row["amplification_factor"],
+                "family_avg_callers_per_day": ta_row["family_avg_callers_per_day"],
+                "alert_level": ta_row["alert_level"],
+            }
+    except Exception:
+        pass
+
+    # Diamond model — formal adversary profile if org is known
+    diamond = None
+    if attribution.get("org_id"):
+        try:
+            dm_row = conn.execute(
+                "SELECT adversary_type, adversary_timezone, adversary_operational_pattern, "
+                "capability_trap_mechanisms, capability_camouflage_rating, "
+                "capability_anti_forensic, infrastructure_chains, infrastructure_exit_channels, "
+                "victim_count, victim_type, victim_return_rate, confidence "
+                "FROM diamond_model WHERE case_id = ?",
+                (attribution["org_id"],),
+            ).fetchone()
+            if dm_row:
+                diamond = dict(dm_row)
+                # Parse JSON fields
+                for k in ("capability_trap_mechanisms", "capability_anti_forensic",
+                          "infrastructure_chains", "infrastructure_exit_channels"):
+                    if diamond.get(k):
+                        try:
+                            diamond[k] = json.loads(diamond[k])
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+        except Exception:
+            pass
+
+    # Extraction events (if this contract is mentioned in documented extractions)
+    extraction = None
+    try:
+        ext_row = conn.execute(
+            "SELECT event_id, event_type, observed_at, summary "
+            "FROM extraction_events WHERE raw_transactions LIKE ? OR summary LIKE ? LIMIT 1",
+            (f"%{addr}%", f"%{addr[:18]}%"),
+        ).fetchone()
+        if ext_row:
+            extraction = dict(ext_row)
+    except Exception:
+        pass
+
+    # Detector precision (measured false positive rate per detector that fired)
+    detector_prec = None
+    if sigs:
+        try:
+            # Map signature names to detector names
+            sig_to_detector = {
+                "asymmetric_transfer": "asymmetric_transfer",
+                "conditional_revert": "blacklist_check",
+                "blacklist_check": "blacklist_check",
+                "unusual_fee_structure": "obfuscated_fee",
+                "selfdestruct_in_token": "selfdestruct",
+                "delegatecall": "delegatecall_in_token",
+            }
+            detector_names = list(set(sig_to_detector.get(s, s) for s in sigs))
+            placeholders = ",".join("?" * len(detector_names))
+            prec_rows = conn.execute(
+                f"SELECT detector_name, precision, total_fired FROM detector_precision "
+                f"WHERE detector_name IN ({placeholders}) "
+                f"ORDER BY date DESC",
+                detector_names,
+            ).fetchall()
+            if prec_rows:
+                # Take the most recent precision per detector
+                seen = set()
+                precs = []
+                for pr in prec_rows:
+                    if pr["detector_name"] not in seen:
+                        precs.append(dict(pr))
+                        seen.add(pr["detector_name"])
+                if precs:
+                    avg_precision = sum(p["precision"] for p in precs) / len(precs)
+                    detector_prec = {
+                        "average_precision": round(avg_precision, 4),
+                        "detectors": precs,
+                    }
+        except Exception:
+            pass
 
     return {
         "address": addr,
@@ -397,6 +506,7 @@ def _build_risk(conn: sqlite3.Connection, row: dict) -> dict:
             "signature_count": len(sigs),
             "behavioral_confirmed": row["confidence_tier"] == "confirmed",
             "confirmed_at": row.get("confirmation_timestamp"),
+            "detector_precision": detector_prec,
         },
         "impact": {
             "unique_victims": victims,
@@ -407,6 +517,10 @@ def _build_risk(conn: sqlite3.Connection, row: dict) -> dict:
         "attribution": attribution,
         "approval_exposure": approval_data,
         "bytecode_family": family_data,
+        "trust_amplification": trust_amp,
+        "diamond_model": diamond,
+        "extraction_event": extraction,
+        "external_benchmark": {"goplus": goplus} if goplus else None,
         "context": {
             "first_seen": row.get("detection_timestamp"),
             "last_updated": row.get("last_updated"),
