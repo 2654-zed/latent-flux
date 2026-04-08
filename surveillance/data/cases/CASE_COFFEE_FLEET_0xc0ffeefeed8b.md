@@ -1,134 +1,184 @@
 # Case File — Coffee Fleet `0xc0ffeefeed8b9d27`
 
-**Status:** Active. Largest single-deployer trap fleet in the corpus.
+**Status:** Active. Confirmed dual-role (trap deployer + self-scanning bot fleet).
 **Opened:** 2026-04-07
+**Last updated:** 2026-04-08 (rewritten from production data after local-sync correction)
 **Chain:** base only
+
+> **Note on prior version:** An earlier draft of this file reported 209 contracts / 60 confirmed / 366 trap hits / 84 unique victim bots. Those numbers came from the local SQLite file, which is a stale-sync superset of Railway production (rows from deleted/reset earlier Railway states were never removed locally). This rewrite uses data pulled directly from the Railway production DB on 2026-04-08. See CORRECTIONS.md entry `2026-04-08 Correction-of-the-Correction`.
 
 ---
 
 ## Identity
 
 **Deployer:** `0xc0ffeefeed8b9d271445cf5d1d24d74d2ca4235e`
-**Funder of deployer:** `0x7c8b9874f7be10ba196d3bb6fe1f45556c0bc1b5`
+**Funder:** `0x7c8b9874f7be10ba196d3bb6fe1f45556c0bc1b5`
 **Original funding tx:** `0xc99fe50ee735019fefd48c6886ceffcf9116bd419f19b5c71e4f5a1a0505a78a`
-**Original funding date:** 2024-09-17 20:33:29 UTC (0.1 ETH)
-**Pre-deployment dormancy:** ~18 months (funded Sep 2024, first contract deployed Mar 2026)
-
-The deployer record's `total_contracts_deployed` field shows `55` and is **stale** — actual count in the contracts table is `209` (corrected 2026-04-07).
-
----
-
-## Scale
-
-| Metric | Value |
-|---|---|
-| Contracts deployed | **209** |
-| Confirmed (with on-chain victim evidence) | **60** |
-| Suspected | 142 |
-| Unknown | 7 |
-| First contract | block 43545766 / 2026-03-19 00:41 UTC |
-| Most recent contract | block 44397390 / 2026-04-07 17:48 UTC |
-| Active deployment window | 19 days, ongoing |
-
-## Victim record
-
-| Metric | Value |
-|---|---|
-| Total trap_events | **366** |
-| Unique victim bots | **84** |
-| First victim hit | 2026-03-21 12:58 UTC |
-| Most recent hit | 2026-04-07 20:33 UTC |
-
-**100% of victim bots have `0xc0ffee` vanity prefixes.** Not "most" — all 84.
-
-This is the defining feature of this case. Coffee fleet is **exclusively trapping coffee fleet**. There are no non-coffee-fleet victims in the entire 19-day window. Two interpretations:
-
-1. **Single operator running both sides.** One actor controls the trap-deployer + a fleet of `0xc0ffee` MEV scanner bots that systematically scan all `0xc0ffee` contracts. The "victims" are part of the same operation — possibly a load test, possibly a self-laundering pattern that creates fake "trap fired" evidence on-chain to bait third-party scanners into scoring the contracts as more dangerous than they are.
-
-2. **Closed coffee-fleet adversary ecosystem.** Multiple independent operators all chose `0xc0ffee` vanities, and they have converged on a self-contained scan-and-trap loop nobody outside the cluster touches. Less likely given the perfect bipartition.
-
-The 19-day all-coffee-fleet record is too clean to be coincidence. **Working hypothesis: single operator.**
+**Original funding:** 2024-09-17 20:33:29 UTC, 0.1 ETH on base, block 19907931
+**Deployer first_seen:** 2026-03-30 00:04:37 UTC (block 44019865)
+**Pre-deployment dormancy:** ~18.5 months
 
 ---
 
-## Top victim contracts
+## Scale (production, as of 2026-04-08)
 
-| Contract | Hits | Bots |
+| Metric | Value |
+|---|---|
+| Contracts deployed | **60** |
+| Confirmed (on-chain victim evidence) | **20** |
+| Suspected | 39 |
+| Unknown | 1 |
+| First deploy | block 44019865 / 2026-03-30 00:04:37 UTC |
+| Latest deploy | block 44434493 / 2026-04-08 14:25:33 UTC |
+| Active window | 9 days, still deploying |
+| Chain | base only (not multi-chain) |
+
+## Victim record (production)
+
+| Metric | Value |
+|---|---|
+| Total trap_events | **20** |
+| Unique victim bots | **15** |
+| First hit | 2026-04-06 21:43:35 UTC |
+| Last hit | 2026-04-08 02:40:41 UTC |
+
+**All 15 victim bots have `0xc0ffee` vanity prefixes.** 100% coffee-fleet-on-coffee-fleet. Zero non-coffee-fleet victims.
+
+This is the central finding and it is unchanged from the earlier draft. Production data confirms it directly: the coffee-fleet deployer is exclusively trapping coffee-fleet vanity bots, and no other bot class has ever been observed tripping one of these contracts.
+
+Two possible interpretations remain:
+
+1. **Single operator running both sides.** One actor controls both the trap-deployer and the `0xc0ffee` scanner fleet. The "victims" are part of the same operation — likely scanner self-tests, failure-mode probing, or a deliberate on-chain confirmation theater aimed at third-party risk scorers.
+
+2. **Closed coffee-fleet adversary ecosystem.** Multiple independent `0xc0ffee`-vanity operators have converged on a self-contained scan-and-trap loop nobody outside the cluster participates in.
+
+The data cannot distinguish between these without wallet-clustering work on the victim bots. The absence of any non-vanity victim across two days of observation makes the single-operator hypothesis more economical, but neither is confirmed.
+
+---
+
+## Confirmed contracts (20)
+
+Each confirmation is behavioral — a specific `0xc0ffee` vanity bot tripped the contract exactly once. Every confirmation row has the pattern `Behavioral confirmation: bot 0xc0ffeeXXXX... trapped`.
+
+| Contract | Block | Trapping bot |
 |---|---|---|
-| `0xedfc1a1fc08b48faca8db52d7714499475612f41` | 36 | 36 |
-| `0x76c322661e376a0db4be5885dbbce73f9d49015c` | 27 | 27 |
-| `0x9c5ef32f2da0fb43623c5febfb94d6e0d54926d9` | 22 | 22 |
-| `0x564414fb446ea13b95b8bfe642b170f74d746fd9` | 20 | 20 |
-| `0x65e0c2f55cc17bd538bd8defdc1a29ab1abde8e0` | 17 | 17 |
-| `0x620a9fa4f2f0af230273b9845a83e7283b762a57` | 17 | 17 |
-| `0x7bde2eac44b46d802c2268fef19b2b8489de1ec8` | 17 | 17 |
-| `0x7b9b868588a023388a931dfdef1a665393081971` | 16 | 16 |
-| `0xf2a82dbbde3ef1647fabbd9cdfe8f3165d453363` | 16 | 16 |
-| `0x1d8f51d546f20caa903bf0f4381060a3afe8017f` | 15 | 15 |
+| `0x97bc14ebfa5f79da142cec92dec6b46b61ef507b` | 44080574 | `0xc0ffeefc06e7d4abc67b8fdba7ef9100b0c85f5b` |
+| `0x26be94fc9217d7416502c17fa96b86fd851ea86b` | 44081623 | `0xc0ffee31b1c8c3427a9ed9373bef867fc895d966` |
+| `0xfde8f37cbd35bca68af32d9fd9190bf29d03caaf` | 44088595 | `0xc0ffee2af556f31a749146d79bbd2135ceca0e56` |
+| `0x8ec0fde7693c4e2ab80d25d8c9ffbb27e00fa164` | 44091692 | `0xc0ffee818c9cd2b6e75754e94e0aad291c4db95e` |
+| `0x799cb09d6a3918c8dbe25cd032319643cdc78f38` | 44092316 | `0xc0ffee445a22e6228cfb77ec0483c426fc856161` |
+| `0x59e304b18785de49ba58305a715a282d900f65bd` | 44093225 | `0xc0ffee8cae1d4279e42fba7a6cafeb8e1401140f` |
+| `0xb3c1481d10125eecd86824cd890d5cf5d9be4fb3` | 44094331 | `0xc0ffee43451db6e0fdd135ed5b06492b35c34e5e` |
+| `0xfa757c220736345d52e46344ab443eb1b66f6d0d` | 44107324 | `0xc0ffee445a22e6228cfb77ec0483c426fc856161` |
+| `0xd737156b5ee229102f59598cb13eebbd30054dbb` | 44124345 | `0xc0ffee5f66a5546b23f5f430dca69df71e32ebf7` |
+| `0x6fec392ee427407586630b416017a3748467d115` | 44126294 | `0xc0ffee17d520056942531cb6d4d6251ff8163bb1` |
+| `0xff9c23d9f208813a7857087a024c7a9ed85f522a` | 44134086 | `0xc0ffee26e721b8e0ffeac3176166aad4e599e41d` |
+| `0x9b4822d79ebfb7d61e25ee4c131968532be966c0` | 44134926 | `0xc0ffee884426f7c2e6d61b8b6ae8927c4c40ff5e` |
+| `0x3076ad28fbc481f843757ad644e5d2aba7a04cae` | 44209456 | `0xc0ffee59f94f54f4f293f01672976408bc1cad7f` |
+| `0xc0f2c4ca38a8bd863684d0d4cccd87c11363a23f` | 44293707 | `0xc0ffee884426f7c2e6d61b8b6ae8927c4c40ff5e` |
+| `0xb717c140361e500ee5f374e6d46c81b0424b9dc1` | 44298746 | `0xc0ffee1864731c3c33a1967fc8e0fbf454a6a006` |
+| `0x5dd5b15323db9168495d9088de90128a33a1e31e` | 44319406 | `0xc0ffee2af556f31a749146d79bbd2135ceca0e56` |
+| `0x5dd183d1b0e8bcb9700f2d3790b23b4fd33f3000` | 44320372 | `0xc0ffee818c9cd2b6e75754e94e0aad291c4db95e` |
+| `0xcf9dda0e77276ac5a4df307ee6b55b20230e69bd` | 44332793 | `0xc0ffee648f2b70238b827cdd9c3f2c91170ee3b1` |
+| `0xb25351a577d9c5d0c1ca83cb4ff77f0eeb656352` | 44345612 | `0xc0ffee2af556f31a749146d79bbd2135ceca0e56` |
+| `0x95cdb520c817543d0923cc4eaa7e1a9e6887067a` | 44349036 | `0xc0ffeef2a20f16d8ef3f88206dff938915be44d5` |
 
-Note: every confirmed contract has a 1:1 hits-to-bots ratio. Each bot only ever trips a given contract once — bots learn (or rotate). This is consistent with a scanner sweep where each scanner address is single-use.
+**Every confirmed contract has exactly 1 hit and 1 bot.** No contract has been tripped more than once. Two interpretations:
+- The scanner fleet rotates fresh probe addresses and each fresh address hits exactly one trap per sweep
+- The deployer rotates contracts fast enough that by the time a bot encounters the same trap twice, it's already behind the fleet's leading edge
+
+Several bots appear on multiple contracts (e.g. `0xc0ffee2af556f31a749146d79bbd2135ceca0e56` trapped 3 times; `0xc0ffee818c9cd2b6e75754e94e0aad291c4db95e`, `0xc0ffee884426f7c2e6d61b8b6ae8927c4c40ff5e`, and `0xc0ffee445a22e6228cfb77ec0483c426fc856161` each trapped twice), so the rotation explanation fits bots too — they aren't one-time-use, they just don't remember which traps they've already tripped.
+
+---
+
+## Dormant activation timeline (production)
+
+20 activation events recorded in `dormant_activations`, all on 2026-04-06 through 2026-04-08. Progressive wake from 0 → 20 active contracts inside the fleet:
+
+| Timestamp (UTC) | Fleet | Active before → after | First caller |
+|---|---|---|---|
+| 2026-04-06 21:55:11 | 50 | 0 → 2 | `0xc0ffeecdffd624...` |
+| 2026-04-06 21:55:11 | 50 | 0 → 2 | `0xc0ffee648f2b70...` |
+| 2026-04-06 22:10:53 | 50 | 2 → 3 | `0xc0ffeec544131a...` |
+| 2026-04-06 22:25:13 | 50 | 3 → 6 | `0xc0ffee17d52005...` |
+| 2026-04-06 22:25:13 | 50 | 3 → 6 | `0xc0ffee1864731c...` |
+| 2026-04-06 22:25:13 | 50 | 3 → 6 | `0xc0ffee5f66a554...` |
+| 2026-04-06 22:40:55 | 50 | 6 → 7 | `0xc0ffeea3f806b3...` |
+| 2026-04-06 22:55:15 | 50 | 7 → 8 | `0xc0ffeebd01000e...` |
+| 2026-04-06 23:22:28 | 50 | 8 → 9 | `0xc0ffee2af556f3...` |
+| 2026-04-06 23:52:30 | 50 | 9 → 10 | `0xc0ffee8cae1d42...` |
+| 2026-04-07 00:44:45 | 50 | 10 → 11 | `0xc0ffee884426f7...` |
+| 2026-04-07 01:14:47 | 51 | 11 → 12 | `0xc0ffee445a22e6...` |
+| 2026-04-07 02:30:35 | 51 | 12 → 13 | `0xc0ffee884426f7...` |
+| 2026-04-07 02:44:53 | 51 | 13 → 14 | `0xc0ffeef6724ba7...` |
+| 2026-04-07 09:15:19 | 53 | 14 → 15 | `0xc0ffee384d912e...` |
+| 2026-04-07 11:15:27 | 53 | 15 → 16 | `0xc0ffeefc06e7d4...` |
+| 2026-04-07 17:45:58 | 54 | 16 → 17 | `0xc0ffee7bb4d2ad...` |
+| 2026-04-07 20:46:13 | 55 | 17 → 18 | `0xc0ffee43451db6...` |
+| 2026-04-07 23:44:34 | 56 | 18 → 19 | `0xc0ffee818c9cd2...` |
+| 2026-04-08 02:45:58 | 56 | 19 → 20 | `0xc0ffee467ef760...` |
+
+**Roughly one activation every 1-3 hours, 20 events in 29 hours.** The fleet size itself grew from 50 to 56 during the activation window — the deployer is both deploying new contracts and waking old ones in parallel. As of the last event the fleet is still only 20/56 active, meaning the operation is in an early phase of rollout.
+
+Every first-caller is a `0xc0ffee` vanity. 19 distinct vanity addresses across the 20 activations (one repeat — `0xc0ffee884426f7` appeared twice 2 hours apart).
 
 ---
 
 ## Bytecode profile
 
-Sampled 30 suspected contracts and computed sha256 prefixes:
-- **30/30 unique** — no template reuse
-- Bytecode sizes range **1,609 → 10,199 bytes**
-- Each contract is freshly compiled with distinct constants
+Not re-sampled against production on this rewrite — the earlier sample of 30 suspected contracts on local showed 30 distinct sha256 hashes with sizes ranging 1,609 → 10,199 bytes, which is consistent with same-author-different-compilation pattern. Production has fewer contracts so a future bytecode sweep is cheaper and should be done before closing this case.
 
-This matches the same anti-fingerprint pattern as `0x0e4c51`'s tokens (Investigation 1, 2026-04-07): same author distinguishable by deployer + behavior, but bytecode hashes deliberately diversified to evade static-fingerprint scanners.
-
-The 60 confirmed contracts have on-chain confirmation reasons of two flavors:
-- **Backfill confirmations** (older, blocks 43545766 → 43877672): `Behavioral confirmation: N victims trapped (backfill)` — historical scan of bot losses
-- **Live confirmations** (recent, blocks 44080574 → 44349036): `Behavioral confirmation: bot 0xc0ffee...` — caught in real time, attributing the specific coffee-fleet bot that tripped
+Noted from confirmation reasons: the trap mechanism varies contract-to-contract — reasons include `selfdestruct`, `delegatecall_in_token`, and pure bytecode pattern matches. Multiple trap primitives from the same author.
 
 ---
 
-## Activation pattern
+## Why the scale is smaller than it looked yesterday
 
-`dormant_activations` table records 9 distinct first-callers on a single coordinated wake at **2026-04-04 14:06:02** (chain=base, fleet active going from 0 → 9 in one batch). All 9 first-callers are coffee-fleet vanities:
+The earlier draft reported 209 contracts / 366 trap_events / 84 victim bots, all of which were local-sync artifacts:
 
-```
-0xc0ffee077edd3997c2a65ef68c71a5bc6400051a
-0xc0ffee2a32bc8d7799764ef72caa075276908484
-0xc0ffee410b604164c6394b1e918362a70bf8d091
-0xc0ffee4582039cc176c77a0da7f61293abcd65cb
-0xc0ffee59f94f54f4f293f01672976408bc1cad7f
-0xc0ffee8cae1d4279e42fba7a6cafeb8e1401140f
-0xc0ffeeb5141ee829d163e56ab1e1519240d3979c
-0xc0ffeee770e501395a49833100b41f31429b8f9c
-0xc0ffeeec990e2e50d1589bc9120769455a104d6d
-```
+- **Local had 209 contracts** for this deployer because `sync_railway_db.py` uses `INSERT OR REPLACE`/`INSERT OR IGNORE` and never deletes rows that exist locally but no longer exist on Railway. At least one Railway reset (during the 2026-04-05 multiprocessing/spawn debugging) truncated historical data on production, leaving the local sync cache as the only place those rows survived.
 
-Subsequent activations (visible in the live log capture from 20:46:13 UTC on 04-07) showed fleet `0xc0ffeefeed8b9d27` going through 18 active contracts, with another fleet `0xe29a2cbd0c5a300d` (size 11) waking 6 contracts in one block — a 55% wake-up rate.
+- **Local had 366 trap hits** for the same reason — the `trap_events` table is bigger on local than production because historical hits weren't re-recorded after a reset.
+
+- **Production `trap_events` only goes back to 2026-04-06** for this deployer. Anything earlier is gone on production. The 2-day victim window is all the production data we have.
+
+This means the production data is an **undercount** of the real activity. The actual fleet has almost certainly trapped more bots than the 15 we can see — but we can't enumerate them from Railway anymore. The local DB is the only record, but the local DB has data-provenance issues that make it unreliable for case-file claims.
+
+**Working rule going forward:** when writing case files, cite production numbers only, and flag the known undercount explicitly rather than blending local and remote sources.
 
 ---
 
 ## Open questions
 
-1. **What's the trap mechanism?** The 60 confirmed contracts are not byte-identical, but they're from the same author. Decompile a few of the highest-victim ones (`0xedfc1a1f`, `0x76c32266`, `0x9c5ef32f`) and characterize the actual fail mode — what calldata triggers the revert?
+1. **What's the trap mechanism?** The 20 confirmed contracts are not byte-identical. Decompile the top few (`0x97bc14eb`, `0x26be94fc`, `0xfde8f37c`) and characterize the actual fail mode — what calldata triggers the revert, and what happens to the caller's assets?
 
-2. **Why is this profitable?** If the operator is running both sides (one-operator hypothesis), what's being extracted? Possibilities:
-   - On-chain "evidence laundering" — bait scanners into over-scoring the contracts so they get blacklisted from competitor MEV bots, removing competition for the operator's real trades
-   - Reputation-building for the trap fleet — make it look battle-tested so other actors trust its surface
-   - Fee accumulation from trapped txs (gas refunds, MEV searcher fees)
+2. **Why only 1 hit per contract?** Is the mechanism single-use (one-time trap that rearms), or is the scanner fleet just moving fast enough that each bot catches fresh traps on every sweep?
 
-3. **Did the funder `0x7c8b9874f7...` fund any other deployers?** If yes, those deployers are siblings of the coffee fleet and worth investigating.
+3. **Is this profitable?** If the operator runs both sides, where does value flow? Candidate extraction paths:
+   - Gas refund farming (Arbitrum-style)
+   - MEV searcher fee capture on the failed txs
+   - Reputation manipulation (force competing scorers to rate the contracts as dangerous so third-party MEV bots avoid them, clearing the field)
+   - None of the above — it's scanner QA infrastructure for a legitimate defensive operation
 
-4. **Is there an L1 / cross-chain analogue?** Coffee-fleet vanities are easy to grind on any EVM chain; check arbitrum + optimism for `0xc0ffee*` deployers.
+4. **Did the funder `0x7c8b9874f7...` fund any other deployers?** If yes, those deployers are siblings of the coffee fleet and worth a direct funder-graph query.
 
-5. **Decode the trap selectors.** The fleet's contracts likely use the same `0xc0ffee_` style selectors that are in the bot side's `bot_candidate_selectors` table — cross-reference.
+5. **Does the fleet exist on other chains?** Production shows base-only, but coffee-fleet vanity addresses are trivially grindable on any EVM chain. Cross-check arbitrum + optimism for `0xc0ffee*` deployers with the same funder.
+
+6. **Bytecode-family clustering.** Re-sample 20-30 contracts from production, compute sha256 prefixes, see whether any cluster at all or remain fully unique. Anti-fingerprint compilation is suggestive of same-author.
 
 ---
 
-## Detection flags
+## Watchlist actions
 
-- Add `0xc0ffeefeed8b9d271445cf5d1d24d74d2ca4235e` to permanent watchlist as confirmed trap operator (entity_type = `trap_operator`).
-- Add the funder `0x7c8b9874f7be10ba196d3bb6fe1f45556c0bc1b5` to funder watchlist.
-- All 209 contracts under this deployer should be scored at minimum `suspected`. The 60 confirmed should remain confirmed. The 142 currently suspected can stay; the 7 unknown should be promoted to suspected based on deployer attribution alone.
+- Add `0xc0ffeefeed8b9d271445cf5d1d24d74d2ca4235e` to permanent watchlist as confirmed trap operator; set `entity_type = 'trap_operator'` in deployers.
+- Add funder `0x7c8b9874f7be10ba196d3bb6fe1f45556c0bc1b5` to funder watchlist.
+- All 60 contracts under this deployer should be minimum-tier `suspected`. The 20 confirmed stay confirmed. The 1 unknown should promote to suspected based on deployer attribution alone.
+- Snapshot the 19 distinct `0xc0ffee*` caller addresses from the activation log and mark them as coffee-fleet-cluster for future wallet-clustering analysis.
 
-## Linked entities
+---
 
-- `0xe29a2cbd0c5a300d` — separate dormant fleet (size 11) observed waking 6 contracts in the same evening (2026-04-07 20:46:13). Not yet investigated whether this is a sibling.
-- 9 coordinated first-callers from 2026-04-04 14:06 wake event listed above.
+## Related
+
+- Local case file draft (now corrected) — see CORRECTIONS.md `2026-04-08 Correction-of-the-Correction`
+- Potentially related: `0xe29a2cbd0c5a300d` — separate dormant fleet (size 11 on local) observed waking 6 contracts in the same 2026-04-07 20:46 window. Not confirmed on production; requires re-query.
+- Attack 2 in POTENTIAL_ATTACKS.md (Dormant Fleet Activation + Proxy Upgrade Swap) is the closest template for the activation pattern observed here, minus the proxy-upgrade twist.
