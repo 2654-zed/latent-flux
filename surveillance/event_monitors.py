@@ -91,6 +91,28 @@ STARGATE_BASE = "0x27a16dc786820b16e5c9028b75b99f6f604b5d26"
 
 BRIDGE_CONTRACTS = {ARB_BRIDGE, BASE_BRIDGE, STARGATE_ARB, STARGATE_BASE}
 
+# ERC-20 token contracts to monitor for org-wallet outbound transfers.
+# Keyed by lowercase contract address -> (symbol, decimals, chain).
+# Closes the observability gap where org funds exit as USDC/WETH rather
+# than native ETH (discovered 2026-04-08 via 0xe69f81b8 trace: 90M USDC
+# cycled through an org-adjacent EOA while our ETH-only scanner saw
+# nothing).
+ERC20_TOKENS = {
+    # USDC
+    "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": ("USDC", 6,  "base"),
+    "0xaf88d065e77c8cc2239327c5edb3a432268e5831": ("USDC", 6,  "arbitrum"),
+    "0x0b2c639c533813f4aa9d7837caf62653d097ff85": ("USDC", 6,  "optimism"),
+    # WETH
+    "0x4200000000000000000000000000000000000006": ("WETH", 18, "base/optimism"),
+    "0x82af49447d8a07e3bd95bd0d56f35241523fbab1": ("WETH", 18, "arbitrum"),
+    # USDT
+    "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2": ("USDT", 6,  "base"),
+    "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9": ("USDT", 6,  "arbitrum"),
+    "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": ("USDT", 6,  "optimism"),
+    # cbBTC (base native wrapped BTC by Coinbase)
+    "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf": ("cbBTC", 8, "base"),
+}
+
 # Bridge name lookup for logging / alerting.
 BRIDGE_NAMES = {
     BASE_BRIDGE:   "L2StandardBridge",
@@ -129,6 +151,44 @@ LIQUIDITY_SELECTORS = {
 
 # PairCreated event topic
 PAIR_CREATED_TOPIC = "0x0d3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e9"
+
+
+def _decode_erc20_transfer(selector: str, calldata: str) -> Optional[tuple[str, int]]:
+    """Decode ERC-20 transfer / transferFrom calldata.
+
+    Returns (recipient_address, raw_amount_as_int) or None on malformed
+    input. Caller must apply token decimals separately.
+
+    transfer(address _to, uint256 _value):
+        selector a9059cbb + 32B _to + 32B _value
+    transferFrom(address _from, address _to, uint256 _value):
+        selector 23b872dd + 32B _from + 32B _to + 32B _value
+    """
+    if not calldata or len(calldata) < 10:
+        return None
+    params = calldata[10:] if calldata.startswith("0x") else calldata[8:]
+
+    def _word(i: int) -> Optional[str]:
+        start = i * 64
+        w = params[start:start + 64]
+        return w if len(w) == 64 else None
+
+    try:
+        if selector == "a9059cbb":  # transfer(to, value)
+            w_to = _word(0)
+            w_val = _word(1)
+            if not w_to or not w_val:
+                return None
+            return ("0x" + w_to[-40:], int(w_val, 16))
+        if selector == "23b872dd":  # transferFrom(from, to, value)
+            w_to = _word(1)
+            w_val = _word(2)
+            if not w_to or not w_val:
+                return None
+            return ("0x" + w_to[-40:], int(w_val, 16))
+    except Exception:
+        return None
+    return None
 
 
 def _decode_bridge_l1_recipient(selector: str, calldata: str,
@@ -290,6 +350,17 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
         except sqlite3.OperationalError:
             pass  # column already exists
 
+    # Idempotent columns for ERC-20 org transfers (USDC/WETH/USDT/cbBTC).
+    for col, col_type in (
+        ("token_contract", "TEXT"),
+        ("token_symbol",   "TEXT"),
+        ("token_value",    "REAL"),
+    ):
+        try:
+            conn.execute(f"ALTER TABLE org_transfer_events ADD COLUMN {col} {col_type}")
+        except sqlite3.OperationalError:
+            pass
+
 
 class EventMonitors:
     """
@@ -404,7 +475,6 @@ class EventMonitors:
 
             # 6. Org wallet outbound transfers — capture where exit ramp money goes
             if from_addr in self._org_wallets and to_addr and to_addr != from_addr:
-                value_eth = int(value) / 1e18 if value else 0
                 org_role = None
                 try:
                     r = self.conn.execute(
@@ -414,6 +484,27 @@ class EventMonitors:
                     org_role = r[0] if r else None
                 except Exception:
                     pass
+
+                # 6a. ERC-20 transfer / transferFrom to a monitored token
+                # contract: decode recipient + amount from calldata and
+                # record with token metadata. Prevents the $90M USDC
+                # observability gap observed on 2026-04-08.
+                if (to_addr in ERC20_TOKENS
+                        and selector in ("a9059cbb", "23b872dd")):
+                    decoded = _decode_erc20_transfer(selector, input_data)
+                    if decoded:
+                        recipient, raw_amount = decoded
+                        symbol, decimals, _ = ERC20_TOKENS[to_addr]
+                        token_value = raw_amount / (10 ** decimals)
+                        self._handle_org_erc20_transfer(
+                            tx_hash, block_number, timestamp_iso,
+                            from_addr, recipient, to_addr, symbol,
+                            token_value, selector, org_role,
+                        )
+                        continue  # don't also record as raw ETH event
+
+                # 6b. Native ETH transfer (tx.value > 0) or other call
+                value_eth = int(value) / 1e18 if value else 0
                 self._handle_org_transfer(
                     tx_hash, block_number, timestamp_iso,
                     from_addr, to_addr, value_eth, selector, org_role,
@@ -598,6 +689,43 @@ class EventMonitors:
             self.events_logged += 1
         except Exception as e:
             logger.debug("Bridge event insert failed: %s", e)
+
+    def _handle_org_erc20_transfer(self, tx_hash: str, block: int, ts: str,
+                                   from_addr: str, recipient: str,
+                                   token_contract: str, symbol: str,
+                                   token_value: float, selector: str,
+                                   from_role: Optional[str]) -> None:
+        """Record an ERC-20 transfer out of an org wallet to a real
+        recipient. Writes to org_transfer_events with token metadata
+        populated and value_eth=0.
+        """
+        org_id = None
+        if from_role:
+            if "org_002" in from_role:
+                org_id = "org_002"
+            elif from_role not in ("unknown", "mev_bot_factory", "protocol"):
+                org_id = "org_001"
+        try:
+            self.conn.execute(
+                """INSERT INTO org_transfer_events
+                   (tx_hash, block_number, timestamp, chain, from_address, to_address,
+                    value_eth, token, org_id, from_role, selector,
+                    token_contract, token_symbol, token_value)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (tx_hash, block, ts, self.chain, from_addr, recipient,
+                 0.0, symbol, org_id, from_role, selector,
+                 token_contract, symbol, token_value),
+            )
+            self.conn.commit()
+            self.events_logged += 1
+            if token_value > 1000:
+                logger.info(
+                    "ORG_ERC20: %s (%s) -> %s  %.2f %s",
+                    from_addr[:14], from_role or "?", recipient[:14],
+                    token_value, symbol,
+                )
+        except Exception as e:
+            logger.debug("Org ERC20 transfer insert failed: %s", e)
 
     def _handle_org_transfer(self, tx_hash: str, block: int, ts: str,
                              from_addr: str, to_addr: str, value_eth: float,
