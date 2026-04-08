@@ -135,13 +135,16 @@ def _decode_bridge_l1_recipient(selector: str, calldata: str,
                                 sender: str) -> Optional[str]:
     """Extract the L1 destination from bridge withdrawal calldata.
 
-    For `withdraw(...)`, the L1 recipient is the msg.sender on L1, which
-    is the same EOA — we return the sender itself to make it explicit.
+    L2StandardBridge on Base/Optimism exposes:
+      withdraw(address _l2Token, uint256 _amount, uint32 _l1Gas, bytes _data)
+          — L1 recipient == msg.sender (same EOA on L1), no arg
+      withdrawTo(address _l2Token, address _to, uint256 _amount,
+                 uint32 _l1Gas, bytes _data)
+          — L1 recipient is the 2nd arg (`_to`)
 
-    For `withdrawTo(_l2Token, _amount, _minGasLimit, _extraData, _to)` the
-    5th word is the explicit L1 recipient.
-
-    For `withdrawEth(destination)` the 1st word is the L1 recipient.
+    ArbSys on Arbitrum exposes:
+      withdrawEth(address destination)
+          — L1 recipient is the 1st arg
 
     Returns None for unknown selectors or malformed calldata.
     """
@@ -156,18 +159,17 @@ def _decode_bridge_l1_recipient(selector: str, calldata: str,
             return None
         return w
 
-    if selector == "32b7006d":  # withdraw(l2Token, amount, minGas, extraData)
+    if selector == "32b7006d":  # withdraw(l2Token, amount, l1Gas, data)
         return sender  # L1 recipient == sender (same EOA on L1)
 
-    if selector == "a3a79548":  # withdrawTo(l2Token, amount, minGas, extraData, to)
-        # ABI offset: args 0..3 are static, args after bytes have an offset word.
-        # The `_to` at position 4 may be the 5th fixed word (160 bytes in).
-        w = _word(4)
+    if selector == "a3a79548":  # withdrawTo(l2Token, _to, amount, l1Gas, data)
+        # L2StandardBridge ABI: _to is the 2nd fixed-width word
+        w = _word(1)
         if w:
             return "0x" + w[-40:]
         return None
 
-    if selector == "25e16063":  # withdrawEth(destination)
+    if selector == "25e16063":  # withdrawEth(destination) — ArbSys
         w = _word(0)
         if w:
             return "0x" + w[-40:]
