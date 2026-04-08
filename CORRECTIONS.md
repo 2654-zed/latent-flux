@@ -143,6 +143,29 @@ A living record of claims made, errors found, and how they were fixed. Every ent
 - **Discovery:** Joining `contracts WHERE deployer_address=?` while writing the case file. Counted directly instead of trusting the deployer record's stale field.
 - **Fix:** Case file `surveillance/data/cases/CASE_COFFEE_FLEET_0xc0ffeefeed8b.md` documents the correct number. Need a periodic background job to refresh `deployers.total_contracts_deployed` from the contracts table — currently only gets updated at deployer-creation time.
 - **Severity:** MEDIUM — under-counted the largest single trap fleet in the corpus by 4x in any report that referenced the deployer record.
+- **LATER UPDATE (2026-04-08):** See next entry — the 209 figure itself was a local-only artifact and production actually had ~56 the whole time. The original "55" was essentially correct for production. This entry is kept as-is for audit purposes but is superseded below.
+
+## 2026-04-08 Correction-of-the-Correction: Coffee Fleet Was Never 209
+
+- **Previous claim:** "Coffee fleet actually has 209 contracts, not 55 — the deployers table was stale" (entry dated 2026-04-07, above)
+- **Reality:** The 209 count was from the **local** SQLite file, not production. When `surveillance.refresh_deployer_counts` was run against Railway production via `railway ssh`, it reported only **3 stale deployer records** fleet-wide — and those 3 were *-1 deltas* (counts overstated by 1). Production coffee fleet was 55 and is now 56, essentially matching the deployer record. Local contract count for the same deployer was 209, ~3.7x higher than production, because the local DB accumulated contracts from multiple sync sessions across earlier Railway states that have since been pruned or lost in Railway resets.
+- **Root cause:** `sync_railway_db.py` uses `INSERT OR REPLACE`/`INSERT OR IGNORE` to pull rows from Railway's `/dump` endpoint. Rows that exist locally but no longer exist on Railway (because Railway was reset at some point, which I know happened at least once during the multiprocessing/spawn debugging period) are never removed from local. So the local DB is a *superset* of production state, not a mirror.
+- **Discovery:** Running `refresh_deployer_counts` on Railway via `railway ssh` on 2026-04-08 and seeing only 3 stale records instead of the ~4,015 seen locally. Cross-checked with a direct `SELECT COUNT(*) FROM contracts WHERE deployer_address=?` on production which returned 56.
+- **Fix:** Kept the refresh module (it's a cheap safety net that executed in <1s against 17,954 production deployers). Added this correction entry. **The case file `CASE_COFFEE_FLEET_0xc0ffeefeed8b.md` still reflects the 209 number and is wrong for production** — it should be re-written with production data, or explicitly marked as a local-only historical snapshot. For now, noting here: coffee fleet on production is currently ~56 contracts deployed by `0xc0ffeefeed8b9d271445cf5d1d24d74d2ca4235e`, first_block 44019865, last_block 44404815.
+- **Severity:** MEDIUM — entire yesterday's case file conclusion ("largest single-deployer trap fleet in the corpus") is potentially invalidated. Production may well have a larger fleet-by-single-deployer than 56; haven't checked. The "all 84 victims are coffee-fleet vanities" finding needs re-verification against production data.
+- **Process lesson:** Before writing any case file or correction entry again, verify the data source is production, not the local sync cache. Either sync fresh or query the Railway API directly.
+
+## 2026-04-08 Railway Production Runs
+
+Three maintenance scripts ran successfully against Railway production via `railway ssh`:
+
+1. **`refresh_deployer_counts`** — 17,954 deployers evaluated, 3 stale counts fixed (all -1 deltas), 7 stale last_seen fixed. Production counts were essentially correct.
+
+2. **`backfill_self_loops`** — 67 contracts promoted across 14 unique dual-role operators. Production confirmed tier went from 191 → 258. Top operator `0xc0dec76000f6c2d3` promoted 27 contracts. 67 `BACKFILL: Self-loop` rows now live on production.
+
+3. **Bridge scanner schema migration + live backfill** — `bridge_events` table extended with 5 new columns via the idempotent `ALTER TABLE` block in `_ensure_tables`. Expanded `_org_wallets` set verified at 258 addresses on production (the 19k ETH recipient `0xe69f81b8...` is now in the set). Real-world 19k ETH case backfilled into production via direct `_handle_bridge` call; production `bridge_events` has 1 row with correctly decoded selector, function name, value_eth, L1 recipient, and bridge name, plus 1 corresponding `BRIDGE_WITHDRAWAL` alert at critical level.
+
+EventMonitors live on production as of 2026-04-08 05:18 UTC heartbeat. Bridge scanner is now active and any org-wallet → bridge call ≥10 ETH will auto-populate `bridge_events` and `alerts`.
 
 ## 2026-04-07 Self-Loop Trap Operator Was Logged But Never Promoted
 
@@ -183,8 +206,9 @@ A living record of claims made, errors found, and how they were fixed. Every ent
 | "Anti-forensic implementation destruction" | It was an EOA | FIXED in report + proxy watcher |
 | "Drain dollar exposure = $211K" (parasite event) | Correct for parasite, but NOT total | Available for specific contracts with extraction_event data |
 | "Infrastructure-layer extraction confirmed" | Architecturally valid, unconfirmed | FIXED in report |
-| "Coffee fleet size 55" | Actual: 209 contracts (60 confirmed) | FIXED in case file 2026-04-07 |
+| "Coffee fleet size 55" | Local: 209. **Production: 56.** Local was stale-sync superset | CORRECTED 2026-04-08, case file needs rewrite |
 | "Pipeline is down" (2026-04-07) | Pipeline was healthy; local DB was stale | FIXED via sync 2026-04-07 |
+| "4,015 stale deployer counts" (2026-04-07) | Local artifact. Production had 3 stale, all -1 deltas | CORRECTED 2026-04-08 via `railway ssh refresh` |
 
 ---
 
