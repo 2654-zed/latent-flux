@@ -91,6 +91,25 @@ STARGATE_BASE = "0x27a16dc786820b16e5c9028b75b99f6f604b5d26"
 
 BRIDGE_CONTRACTS = {ARB_BRIDGE, BASE_BRIDGE, STARGATE_ARB, STARGATE_BASE}
 
+# Bridge name lookup for logging / alerting.
+BRIDGE_NAMES = {
+    BASE_BRIDGE:   "L2StandardBridge",
+    ARB_BRIDGE:    "ArbSys",
+    STARGATE_ARB:  "StargateArbitrum",
+    STARGATE_BASE: "StargateBase",
+}
+
+# Known bridge withdraw selectors.
+BRIDGE_SELECTORS = {
+    "32b7006d": "withdraw(address,uint256,uint32,bytes)",
+    "a3a79548": "withdrawTo(address,uint256,uint32,bytes,address)",
+    "25e16063": "withdrawEth(address)",
+}
+
+# Alert thresholds in ETH for bridge withdrawals.
+BRIDGE_ALERT_ETH_MEDIUM = 10.0
+BRIDGE_ALERT_ETH_HIGH   = 100.0
+
 # Function selectors
 SEL_ADD_LIQUIDITY = "e8e33700"        # addLiquidity(address,address,uint,uint,uint,uint,address,uint)
 SEL_ADD_LIQUIDITY_ETH = "f305d719"    # addLiquidityETH(address,uint,uint,uint,address,uint)
@@ -110,6 +129,51 @@ LIQUIDITY_SELECTORS = {
 
 # PairCreated event topic
 PAIR_CREATED_TOPIC = "0x0d3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e9"
+
+
+def _decode_bridge_l1_recipient(selector: str, calldata: str,
+                                sender: str) -> Optional[str]:
+    """Extract the L1 destination from bridge withdrawal calldata.
+
+    For `withdraw(...)`, the L1 recipient is the msg.sender on L1, which
+    is the same EOA — we return the sender itself to make it explicit.
+
+    For `withdrawTo(_l2Token, _amount, _minGasLimit, _extraData, _to)` the
+    5th word is the explicit L1 recipient.
+
+    For `withdrawEth(destination)` the 1st word is the L1 recipient.
+
+    Returns None for unknown selectors or malformed calldata.
+    """
+    if not calldata or len(calldata) < 10:
+        return None
+    params = calldata[10:]  # strip 0x + selector
+
+    def _word(i: int) -> Optional[str]:
+        start = i * 64
+        w = params[start:start + 64]
+        if len(w) != 64:
+            return None
+        return w
+
+    if selector == "32b7006d":  # withdraw(l2Token, amount, minGas, extraData)
+        return sender  # L1 recipient == sender (same EOA on L1)
+
+    if selector == "a3a79548":  # withdrawTo(l2Token, amount, minGas, extraData, to)
+        # ABI offset: args 0..3 are static, args after bytes have an offset word.
+        # The `_to` at position 4 may be the 5th fixed word (160 bytes in).
+        w = _word(4)
+        if w:
+            return "0x" + w[-40:]
+        return None
+
+    if selector == "25e16063":  # withdrawEth(destination)
+        w = _word(0)
+        if w:
+            return "0x" + w[-40:]
+        return None
+
+    return None
 
 
 def _ensure_tables(conn: sqlite3.Connection) -> None:
@@ -144,16 +208,21 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
         );
 
         CREATE TABLE IF NOT EXISTS bridge_events (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            tx_hash         TEXT NOT NULL,
-            block_number    INTEGER NOT NULL,
-            timestamp       TEXT NOT NULL,
-            chain           TEXT NOT NULL,
-            bridge_contract TEXT NOT NULL,
-            sender          TEXT NOT NULL,
-            value_wei       TEXT,
-            org_link        TEXT,
-            alert_level     TEXT DEFAULT 'info'
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            tx_hash               TEXT NOT NULL,
+            block_number          INTEGER NOT NULL,
+            timestamp             TEXT NOT NULL,
+            chain                 TEXT NOT NULL,
+            bridge_contract       TEXT NOT NULL,
+            sender                TEXT NOT NULL,
+            value_wei             TEXT,
+            org_link              TEXT,
+            alert_level           TEXT DEFAULT 'info',
+            selector              TEXT,
+            function_name         TEXT,
+            value_eth             REAL,
+            decoded_l1_recipient  TEXT,
+            bridge_name           TEXT
         );
 
         CREATE TABLE IF NOT EXISTS pair_creation_events (
@@ -205,6 +274,20 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_pair_creation_ts ON pair_creation_events(timestamp);
     """)
 
+    # Idempotent column additions for older databases where bridge_events
+    # was created before the scanner enhancements landed.
+    for col, col_type in (
+        ("selector",             "TEXT"),
+        ("function_name",        "TEXT"),
+        ("value_eth",            "REAL"),
+        ("decoded_l1_recipient", "TEXT"),
+        ("bridge_name",          "TEXT"),
+    ):
+        try:
+            conn.execute(f"ALTER TABLE bridge_events ADD COLUMN {col} {col_type}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+
 
 class EventMonitors:
     """
@@ -234,11 +317,42 @@ class EventMonitors:
                     "SELECT deployer_address FROM deployers"
                 ).fetchall()
             )
-            self._org_wallets = set(
+
+            # Primary org wallets: deployers with a non-generic entity_type.
+            primary = set(
                 r[0].lower() for r in self.conn.execute(
-                    "SELECT deployer_address FROM deployers WHERE entity_type NOT IN ('unknown', 'mev_bot_factory', 'protocol')"
+                    "SELECT deployer_address FROM deployers "
+                    "WHERE entity_type NOT IN ('unknown', 'mev_bot_factory', 'protocol')"
                 ).fetchall()
             )
+
+            # Additional: addresses explicitly classified to an org.
+            try:
+                classified = set(
+                    r[0].lower() for r in self.conn.execute(
+                        "SELECT address FROM entity_classification WHERE org_id IS NOT NULL"
+                    ).fetchall()
+                )
+            except sqlite3.Error:
+                classified = set()
+
+            # Secondary org wallets: EOAs that received >= 100 ETH from primary
+            # org wallets (gas-station splash zone). These are where org funds
+            # get parked before being bridged / swept off-chain. Closes the
+            # 2026-04-07 19k ETH coverage gap where an unlabeled EOA received
+            # org funds then immediately withdrew via L2StandardBridge.
+            try:
+                secondary = set(
+                    r[0].lower() for r in self.conn.execute(
+                        "SELECT to_address FROM org_transfer_events "
+                        "WHERE org_id IS NOT NULL AND value_eth >= 100"
+                    ).fetchall()
+                )
+            except sqlite3.Error:
+                secondary = set()
+
+            self._org_wallets = primary | classified | secondary
+
             self._suspected_contracts = set(
                 r[0].lower() for r in self.conn.execute(
                     "SELECT contract_address FROM contracts WHERE confidence_tier IN ('suspected', 'confirmed')"
@@ -280,7 +394,7 @@ class EventMonitors:
             # 3. Bridge Activity from org wallets
             if to_addr in BRIDGE_CONTRACTS and from_addr in self._org_wallets:
                 self._handle_bridge(tx_hash, block_number, timestamp_iso,
-                                    to_addr, from_addr, value)
+                                    to_addr, from_addr, value, input_data)
 
             # 5. CEX Deposit Pattern — track inflow/outflow ratios
             if value and int(value) > 0:
@@ -392,8 +506,14 @@ class EventMonitors:
             logger.debug("Approval event insert failed: %s", e)
 
     def _handle_bridge(self, tx_hash: str, block: int, ts: str,
-                       bridge: str, sender: str, value: int) -> None:
-        """Record a bridge event from an org wallet."""
+                       bridge: str, sender: str, value: int,
+                       input_data: str) -> None:
+        """Record a bridge event from an org wallet.
+
+        Decodes the function selector and (where possible) the L1
+        recipient, writes a row to bridge_events, and generates an
+        alerts row if the ETH value crosses MEDIUM/HIGH thresholds.
+        """
         # Find org link
         org_link = None
         try:
@@ -403,23 +523,75 @@ class EventMonitors:
             ).fetchone()
             if r:
                 org_link = r[0]
+            if not org_link:
+                r = self.conn.execute(
+                    "SELECT org_id FROM entity_classification WHERE address = ?",
+                    (sender,),
+                ).fetchone()
+                if r and r[0]:
+                    org_link = r[0]
         except Exception:
             pass
 
+        # Normalize input
+        calldata = input_data or "0x"
+        if not calldata.startswith("0x"):
+            calldata = "0x" + calldata
+        selector = calldata[2:10] if len(calldata) >= 10 else ""
+        function_name = BRIDGE_SELECTORS.get(selector)
+        l1_recipient = _decode_bridge_l1_recipient(selector, calldata, sender)
+
+        try:
+            value_int = int(value) if value else 0
+        except (TypeError, ValueError):
+            value_int = 0
+        value_eth = value_int / 1e18
+
+        bridge_name = BRIDGE_NAMES.get(bridge, "unknown")
+
+        # Alert level from value
+        if value_eth >= BRIDGE_ALERT_ETH_HIGH:
+            alert_level = "critical"
+        elif value_eth >= BRIDGE_ALERT_ETH_MEDIUM:
+            alert_level = "warning"
+        else:
+            alert_level = "info"
+
         logger.warning(
-            "BRIDGE: Org wallet %s (%s) sent %s wei to bridge %s",
-            sender[:14], org_link or "?", value, bridge[:14]
+            "BRIDGE_WITHDRAWAL: %s (%s) -> %s %s (%s) value=%.4f ETH l1=%s",
+            sender[:14], org_link or "?", bridge[:14], bridge_name,
+            function_name or selector or "?", value_eth,
+            (l1_recipient or "same")[:14],
         )
 
         try:
             self.conn.execute(
                 """INSERT INTO bridge_events
                    (tx_hash, block_number, timestamp, chain, bridge_contract,
-                    sender, value_wei, org_link, alert_level)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    sender, value_wei, org_link, alert_level,
+                    selector, function_name, value_eth, decoded_l1_recipient,
+                    bridge_name)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (tx_hash, block, ts, self.chain, bridge, sender,
-                 str(value), org_link, "critical"),
+                 str(value_int), org_link, alert_level,
+                 selector, function_name, value_eth, l1_recipient,
+                 bridge_name),
             )
+            # Also generate an alerts row for MEDIUM+ withdrawals so the
+            # alert feed surfaces them alongside other high-severity events.
+            if alert_level in ("warning", "critical"):
+                payload = (
+                    f"{bridge_name} {function_name or selector} "
+                    f"value={value_eth:.4f} ETH "
+                    f"l1_recipient={l1_recipient or 'same EOA'} "
+                    f"org_link={org_link or 'unknown'}"
+                )
+                self.conn.execute(
+                    """INSERT INTO alerts
+                       (alert_type, address, tx_hash, block_number, timestamp, payload, false_positive)
+                       VALUES (?, ?, ?, ?, ?, ?, 0)""",
+                    ("BRIDGE_WITHDRAWAL", sender, tx_hash, block, ts, payload),
+                )
             self.conn.commit()
             self.events_logged += 1
         except Exception as e:
