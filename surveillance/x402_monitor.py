@@ -612,6 +612,13 @@ class X402Monitor:
     SYNC_EVERY_BLOCKS = 200
     CACHE_REFRESH_BLOCKS = 500
 
+    # Drain-detection threshold in raw token units. 100 * 10^6 = 100 USDC
+    # (or 100 USDT, EURC — all 6-decimal). This is well above the
+    # ~$0.001-$0.01 x402 micropayment range and below the smallest
+    # observed drain ($585 USDC) so live sweeps fire reliably without
+    # lighting up micropayment traffic.
+    DRAIN_AMOUNT_THRESHOLD = 100 * 10**6
+
     def __init__(self, conn: sqlite3.Connection, chain: str = "base"):
         self.conn = conn
         self.chain = chain
@@ -621,6 +628,7 @@ class X402Monitor:
 
         # Caches
         self._known_facilitators: Set[str] = set()
+        self._rogue_facilitators: Set[str] = set()
         self._exposed_owners: Set[str] = set()  # payers with active Permit2 allowances
         self._refresh_caches()
 
@@ -628,21 +636,27 @@ class X402Monitor:
         self.exposures_added = 0
         self.alerts_generated = 0
         logger.info(
-            "X402Monitor initialized for %s  known_facilitators=%d  exposed_owners=%d",
-            chain, len(self._known_facilitators), len(self._exposed_owners),
+            "X402Monitor initialized for %s  known_facilitators=%d  "
+            "rogue_facilitators=%d  exposed_owners=%d",
+            chain, len(self._known_facilitators),
+            len(self._rogue_facilitators), len(self._exposed_owners),
         )
 
     # ------------------------------------------------------------------
     # Cache management
     # ------------------------------------------------------------------
     def _refresh_caches(self) -> None:
-        """Reload known-facilitator and exposed-owner sets."""
+        """Reload known-facilitator, rogue-facilitator, and exposed-owner sets."""
         try:
             rows = self.conn.execute(
-                "SELECT address FROM x402_facilitators "
-                "WHERE classification = 'known'"
+                "SELECT address, classification FROM x402_facilitators"
             ).fetchall()
-            self._known_facilitators = {r[0].lower() for r in rows}
+            self._known_facilitators = {
+                r[0].lower() for r in rows if r[1] == "known"
+            }
+            self._rogue_facilitators = {
+                r[0].lower() for r in rows if r[1] == "rogue"
+            }
         except sqlite3.Error as e:
             logger.warning("facilitator cache refresh failed: %s", e)
 
@@ -846,9 +860,50 @@ class X402Monitor:
                 },
             )
 
-        # Drain check: Permit2 transferFrom from an address we track
+        # ------------------------------------------------------------------
+        # X402_AGENT_DRAIN detection. Two independent fire paths:
+        #
+        # (A) Tracked-exposure path (original Phase 3 rule):
+        #     Permit2.transferFrom with decoded payer in
+        #     x402_permit2_exposure. Requires we'd previously observed
+        #     the payer granting a Permit2 allowance on a monitored
+        #     token. Narrow but high-confidence.
+        #
+        # (B) Rogue-facilitator self-settlement path (added 2026-04-09
+        #     after the drainer operation case file):
+        #     Permit2.transferFrom where tx.from == decoded.to AND the
+        #     amount is at or above DRAIN_AMOUNT_THRESHOLD AND the
+        #     facilitator is classified 'rogue'. This catches sweeps
+        #     from drainers we've already forensically verified, even
+        #     when the victim was never previously tracked in our
+        #     exposure set (which was the gap that let all 6 production
+        #     drains fire only X402_FACILITATOR_UNKNOWN instead of
+        #     X402_AGENT_DRAIN on 2026-04-09).
+        #
+        # The three-condition filter in path (B) — self-settlement shape,
+        # amount threshold, rogue classification — is narrow enough to
+        # avoid false positives on legitimate aggregator settlements.
+        # Any one condition being absent skips the alert.
+        # ------------------------------------------------------------------
         if selector == SEL_PERMIT2_TRANSFER_FROM and payer:
+            fire_drain = False
+            drain_reason = None
+
+            # Path A: tracked payer exposure
             if payer.lower() in self._exposed_owners:
+                fire_drain = True
+                drain_reason = "tracked_exposure"
+
+            # Path B: rogue-facilitator self-settlement
+            elif (from_addr.lower() == (payee or "").lower()
+                  and amount is not None
+                  and amount >= self.DRAIN_AMOUNT_THRESHOLD
+                  and (facilitator or "").lower() in self._rogue_facilitators):
+                fire_drain = True
+                drain_reason = "rogue_facilitator_self_settlement"
+
+            if fire_drain:
+                amount_norm = amount / 1e6 if amount else 0
                 self._alert(
                     "X402_AGENT_DRAIN",
                     payer,
@@ -858,11 +913,16 @@ class X402Monitor:
                         "payee": payee,
                         "token": token_contract,
                         "amount": amount,
+                        "amount_normalized_6dec": amount_norm,
                         "facilitator": facilitator,
                         "chain": self.chain,
+                        "detection_path": drain_reason,
                         "message": (
-                            f"Permit2.transferFrom pulled from exposed payer "
-                            f"{payer[:18]}... on {self.chain}"
+                            f"X402_AGENT_DRAIN [{drain_reason}]: "
+                            f"Permit2.transferFrom pulled "
+                            f"{amount_norm:,.2f} from payer "
+                            f"{payer[:18]}... via facilitator "
+                            f"{(facilitator or '?')[:18]}... on {self.chain}"
                         ),
                     },
                 )
