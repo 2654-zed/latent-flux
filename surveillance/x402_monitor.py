@@ -895,6 +895,290 @@ class X402Monitor:
             logger.debug("alert insert failed: %s", e)
 
 
+# ---------------------------------------------------------------------
+# Phase 4: Trust amplification analysis
+# ---------------------------------------------------------------------
+#
+# Mirrors the methodology in surveillance.trust_amplification.py but
+# applied to x402 payer flow instead of Uniswap-router caller flow.
+#
+# For each contract that appears in x402_events as a payee, compute:
+#   x402_callers_per_day = distinct_payers / span_days
+#
+# Compare to the bytecode-family average callers/day (same helper as
+# trust_amplification.py — we replicate it here rather than importing
+# to keep the two modules independent, per the spec invariant to not
+# modify trust_amplification.py).
+#
+# amplification_factor = x402_callers_per_day / family_avg_callers_per_day
+#
+# If factor > 2.0, emit X402_TRUST_AMPLIFICATION alert. Sample-size
+# warnings are returned in the report so downstream consumers can
+# apply their own confidence filters.
+#
+# Insufficient-data path: if x402_events has < MIN_EVENTS_FOR_ANALYSIS
+# rows total, return {"status": "insufficient_data"} without computing
+# per-contract statistics. This is the expected baseline behavior when
+# no live facilitator settlements have been captured yet.
+
+MIN_EVENTS_FOR_ANALYSIS = 10
+MIN_EVENTS_PER_CONTRACT = 5
+AMPLIFICATION_ALERT_THRESHOLD = 2.0
+
+
+def _get_family_avg_callers_per_day(
+    conn: sqlite3.Connection, contract_address: str,
+) -> Optional[float]:
+    """Return the average callers/day across sibling contracts in the
+    same bytecode family, or None if the contract has no family or
+    the family has no comparable activity.
+
+    Replicated from surveillance.trust_amplification.py:_get_family_avg.
+    The two modules are deliberately kept independent.
+    """
+    fam = conn.execute(
+        "SELECT family_id FROM bytecode_family_members "
+        "WHERE contract_address = ?",
+        (contract_address,),
+    ).fetchone()
+    if not fam:
+        return None
+
+    siblings = conn.execute(
+        "SELECT bfm.contract_address "
+        "FROM bytecode_family_members bfm WHERE bfm.family_id = ?",
+        (fam[0],),
+    ).fetchall()
+    if not siblings:
+        return None
+
+    total_cpd = 0.0
+    count = 0
+    for s in siblings:
+        row = conn.execute(
+            """SELECT COUNT(DISTINCT interacting_address) AS callers,
+                      JULIANDAY(MAX(timestamp)) - JULIANDAY(MIN(timestamp))
+                        AS span_days
+               FROM transaction_events
+               WHERE contract_address = ?""",
+            (s[0],),
+        ).fetchone()
+        if row and row[0] and row[1] and row[1] > 0:
+            total_cpd += row[0] / row[1]
+            count += 1
+
+    return (total_cpd / count) if count else None
+
+
+def amplification(conn: sqlite3.Connection,
+                  emit_alerts: bool = True) -> dict:
+    """Compute x402 trust amplification for contracts that have
+    received at least MIN_EVENTS_PER_CONTRACT x402 events.
+
+    Returns a structured report. Emits X402_TRUST_AMPLIFICATION
+    alerts when the per-contract factor exceeds the threshold.
+
+    Zero RPC, pure SQLite.
+    """
+    _ensure_tables(conn)
+
+    total_events = conn.execute(
+        "SELECT COUNT(*) FROM x402_events"
+    ).fetchone()[0] or 0
+    distinct_payees = conn.execute(
+        "SELECT COUNT(DISTINCT payee_address) FROM x402_events "
+        "WHERE payee_address IS NOT NULL"
+    ).fetchone()[0] or 0
+
+    report: dict = {
+        "status": "ok",
+        "x402_events_total": total_events,
+        "distinct_payees": distinct_payees,
+        "threshold": AMPLIFICATION_ALERT_THRESHOLD,
+        "min_events_per_contract": MIN_EVENTS_PER_CONTRACT,
+        "min_events_for_analysis": MIN_EVENTS_FOR_ANALYSIS,
+        "results": [],
+        "alerts_emitted": 0,
+        "warnings": [],
+    }
+
+    if total_events < MIN_EVENTS_FOR_ANALYSIS:
+        report["status"] = "insufficient_data"
+        report["message"] = (
+            f"Only {total_events} x402_events in the corpus "
+            f"(minimum {MIN_EVENTS_FOR_ANALYSIS} required for analysis). "
+            "The detector is active and will start producing amplification "
+            "results the moment facilitator settlements are captured. "
+            "No amplification comparison performed."
+        )
+        return report
+
+    # Find payee contracts with enough x402 events to analyze
+    rows = conn.execute(
+        """SELECT payee_address,
+                  COUNT(*)                           AS events,
+                  COUNT(DISTINCT payer_address)      AS payers,
+                  JULIANDAY(MAX(timestamp))
+                    - JULIANDAY(MIN(timestamp))      AS span_days,
+                  MIN(timestamp)                     AS first_seen,
+                  MAX(timestamp)                     AS last_seen,
+                  SUM(CASE WHEN confidence = 'confirmed' THEN 1 ELSE 0 END)
+                    AS confirmed_events
+           FROM x402_events
+           WHERE payee_address IS NOT NULL
+             AND confidence IN ('confirmed','suspected')
+           GROUP BY payee_address
+           HAVING events >= ?
+           ORDER BY payers DESC""",
+        (MIN_EVENTS_PER_CONTRACT,),
+    ).fetchall()
+
+    if not rows:
+        report["warnings"].append(
+            f"No payee contracts have reached {MIN_EVENTS_PER_CONTRACT} "
+            "x402 events yet. Amplification analysis skipped."
+        )
+        return report
+
+    for r in rows:
+        addr = r["payee_address"]
+        events = r["events"]
+        payers = r["payers"]
+        span = max(r["span_days"] or 1.0 / 24.0, 1.0 / 24.0)  # >= 1 hour
+        x402_cpd = round(payers / span, 3)
+
+        family_avg = _get_family_avg_callers_per_day(conn, addr)
+        if family_avg and family_avg > 0:
+            factor = round(x402_cpd / family_avg, 2)
+            comparator_status = "ok"
+        else:
+            factor = None
+            comparator_status = "no_family_baseline"
+
+        # Sample-size warning
+        sample_warning = None
+        if events < 20:
+            sample_warning = f"small_sample (events={events})"
+
+        result = {
+            "payee_address": addr,
+            "x402_events": events,
+            "confirmed_events": r["confirmed_events"],
+            "distinct_payers": payers,
+            "span_days": round(span, 3),
+            "x402_callers_per_day": x402_cpd,
+            "family_avg_callers_per_day": (
+                round(family_avg, 3) if family_avg is not None else None
+            ),
+            "amplification_factor": factor,
+            "comparator_status": comparator_status,
+            "first_seen": r["first_seen"],
+            "last_seen": r["last_seen"],
+            "sample_warning": sample_warning,
+        }
+        report["results"].append(result)
+
+        # Alert
+        if emit_alerts and factor is not None and factor > AMPLIFICATION_ALERT_THRESHOLD:
+            try:
+                payload = {
+                    "payee_address": addr,
+                    "x402_events": events,
+                    "distinct_payers": payers,
+                    "x402_callers_per_day": x402_cpd,
+                    "family_avg_callers_per_day": round(family_avg, 3),
+                    "amplification_factor": factor,
+                    "threshold": AMPLIFICATION_ALERT_THRESHOLD,
+                    "sample_warning": sample_warning,
+                    "message": (
+                        f"x402 trust amplification: {addr[:18]}... receives "
+                        f"{x402_cpd:.2f} x402 payers/day vs family baseline "
+                        f"{family_avg:.2f}/day (factor={factor}x)"
+                    ),
+                }
+                conn.execute(
+                    """INSERT INTO alerts
+                       (alert_type, address, tx_hash, block_number,
+                        timestamp, payload, false_positive)
+                       VALUES ('X402_TRUST_AMPLIFICATION', ?, NULL, NULL,
+                               ?, ?, 0)""",
+                    (addr, _now_iso(), json.dumps(payload)),
+                )
+                report["alerts_emitted"] += 1
+            except sqlite3.Error as e:
+                logger.debug("amplification alert insert failed: %s", e)
+
+    try:
+        conn.commit()
+    except Exception:
+        pass
+
+    return report
+
+
+def _print_amplification_report(report: dict) -> None:
+    print("=" * 72)
+    print("x402 monitor -- Phase 4 trust amplification analysis")
+    print("=" * 72)
+    print(f"Total x402 events in corpus:   {report['x402_events_total']:,}")
+    print(f"Distinct payee contracts:      {report['distinct_payees']:,}")
+    print(f"Analysis minimum:              {report['min_events_for_analysis']} "
+          f"events total, {report['min_events_per_contract']} per contract")
+    print(f"Alert threshold:               {report['threshold']}x")
+    print()
+
+    if report["status"] == "insufficient_data":
+        print("STATUS: insufficient data")
+        print()
+        print(f"  {report['message']}")
+        print()
+        print("  This is the expected baseline. The x402 monitor is wired")
+        print("  into the live block loop. On the next deploy, any x402")
+        print("  settlement captured will start accumulating into x402_events,")
+        print("  and this analysis will produce real amplification factors.")
+        print()
+        return
+
+    if not report["results"]:
+        print("STATUS: no qualifying contracts")
+        for w in report["warnings"]:
+            print(f"  {w}")
+        print()
+        return
+
+    print(f"STATUS: ok  ({len(report['results'])} contracts analyzed, "
+          f"{report['alerts_emitted']} alerts emitted)")
+    print()
+    print("Per-contract results:")
+    print(f"  {'payee':<44} {'events':>7} {'payers':>7} {'x402/d':>8} "
+          f"{'fam/d':>8} {'factor':>7}")
+    for r in report["results"]:
+        payee = r["payee_address"] or "?"
+        payee = payee[:42]
+        fam = (f"{r['family_avg_callers_per_day']:>8.2f}"
+               if r["family_avg_callers_per_day"] is not None
+               else f"{'n/a':>8}")
+        fac = (f"{r['amplification_factor']:>7.2f}"
+               if r["amplification_factor"] is not None
+               else f"{'n/a':>7}")
+        warn_marker = " !" if r["sample_warning"] else ""
+        print(f"  {payee:<44} {r['x402_events']:>7} {r['distinct_payers']:>7} "
+              f"{r['x402_callers_per_day']:>8.2f} {fam} {fac}{warn_marker}")
+
+    # Comparator coverage
+    no_family = sum(1 for r in report["results"]
+                    if r["comparator_status"] == "no_family_baseline")
+    if no_family:
+        print()
+        print(f"  ! {no_family} contract(s) have no bytecode family "
+              "baseline (payee may be an EOA or novel contract).")
+    small = sum(1 for r in report["results"] if r["sample_warning"])
+    if small:
+        print(f"  ! {small} contract(s) flagged with small-sample warning "
+              f"(events < 20)")
+    print()
+
+
 def backfill(conn: sqlite3.Connection, chain: str = "base") -> dict:
     """Phase 3 backfill: populate x402_permit2_exposure from the
     existing approval_events rows where spender = canonical Permit2.
@@ -1476,6 +1760,12 @@ def main() -> int:
              "approval_events (Permit2 spender). Idempotent, zero RPC.",
     )
     parser.add_argument(
+        "--amplification", action="store_true",
+        help="Phase 4: compute x402 trust amplification for payee "
+             "contracts vs bytecode-family baselines. Reports "
+             "insufficient-data when x402_events is empty.",
+    )
+    parser.add_argument(
         "--chain", default="base",
         help="Chain label for backfilled rows (default: base)",
     )
@@ -1501,6 +1791,10 @@ def main() -> int:
         if args.backfill:
             summary = backfill(conn, chain=args.chain)
             _print_backfill_summary(summary)
+            return 0
+        if args.amplification:
+            report = amplification(conn)
+            _print_amplification_report(report)
             return 0
         if args.recon:
             report = recon(conn)
