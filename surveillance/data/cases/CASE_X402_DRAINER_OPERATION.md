@@ -113,6 +113,110 @@ The drainers are using `Permit2.transferFrom` because it's the cleanest programm
 
 ---
 
+## Outflow trace (2026-04-09, second session)
+
+Traced the top 1000 outbound ERC-20 and external transfers from each
+of the 4 drainers via Alchemy asset transfers. Matched destinations
+against `fund_tracer.py` registries (CEX hot wallets, bridges, mixers,
+DEX routers, ORG_WALLETS).
+
+### Registry match: zero hits
+
+**No outflows to any labeled CEX, bridge, mixer, DEX router, or known
+org wallet.** All 693-896 distinct destinations per drainer are
+unlabeled addresses. The cashout path does not use any of:
+- Top 10 CEX hot wallets (Binance, Coinbase, OKX, Kraken, Bybit)
+- Canonical bridges (ArbSys, L2StandardBridge, Stargate)
+- Tornado Cash / Railgun
+- Uniswap / Sushi / Aerodrome / Camelot / Paraswap / 1inch / 0x
+- Existing tracked ORG_WALLETS from org_001/org_002/org_003
+
+This is a **fifth independent operation** — it does not connect to any
+previously-catalogued Layer 3 entity.
+
+### Current balances are huge and sitting idle
+
+| Location | Chain | Token | Current balance |
+|---|---|---|---|
+| **CE5E vanity sink #1** `0xbec87a77...` | arbitrum | USDC | **$3,630,347** |
+| A7B9 drainer | base | USDC | $333,266 |
+| E717 drainer | arbitrum | USDT | $226,269 |
+| E717 drainer | arbitrum | USDC | $115,047 |
+| E3B2 drainer | base | USDC | $95,071 |
+| CE5E drainer | arbitrum | USDT | $86,204 |
+| CE5E drainer | arbitrum | USDC | $27,231 |
+| **TOTAL** | | | **~$4,513,437** |
+
+**~$4.5M is currently held on-chain** across these 6 addresses. The
+operation is actively accumulating but has not yet cashed out. This
+makes the funds **recoverable** if frozen by a compliance-cooperating
+exchange OR if the operator is identified before the sweep.
+
+The CE5E vanity sink #1 alone holds **80% of the current balance**.
+Freezing that one address protects $3.63M.
+
+### Vanity sink pattern
+
+CE5E concentrates its outflows into a small set of vanity-generated
+sinks sharing a distinctive address pattern:
+
+- `0xbec87a77b19797bbe9b920ec521f3716c3725d22` — $4M received, 7 outbound txs, $3.63M held
+- `0xbec8721e796b0ce7705d317a73f110693d895d22` — $2.5M received, nonce 621, currently $0 (cycles back to CE5E)
+
+Both start with `0xbec8` and end with `d22` — programmatically
+grind-generated vanity addresses. CE5E is a **consolidation operator**:
+drain proceeds funnel through a small set of known sinks instead of
+the fan-out pattern the other 3 drainers use.
+
+The other 3 drainers (A7B9, E3B2, E717) fan out across 306-896
+distinct destinations per drainer, suggesting per-victim forwarding
+or sub-wallet rotation rather than concentrated consolidation.
+
+### Cross-drainer destination overlap (ambiguous signal)
+
+34 destinations were hit by 2+ drainers across chains. Most shared
+pairs are A7B9 (base) + E717 (arbitrum) — same hex address on two
+different chains.
+
+Hop-2 analysis on the top shared destination `0x621db24cdb8c1a2ba1e7b5703d203e9ce0a7abb3`:
+- On base: 23-byte contract, nonce 3794, 0.20 ETH — active proxy contract
+- On arbitrum: EOA, nonce 3 — barely-used wallet
+
+The same hex address being a contract on one chain and an EOA on the
+other could be either (a) an operator CREATE2-deployed a proxy on
+base with the same salt as a disposable EOA they also control on arb,
+or (b) coincidence. The 34-shared-address count makes coincidence
+statistically unlikely but doesn't prove single-operator cross-chain.
+
+### Secondary vanity patterns discovered
+
+Hop-2 trace on hop-1 destinations revealed additional vanity families:
+- `0xe888...` prefix on CE5E sink #1's outflows ($243k chunks)
+- `0x676d...` prefix on CE5E sink #1's outflows ($120k chunks)
+- `0xa219...` prefix on E717 USDT destinations
+- `0xda29...` prefix on E717 USDT destinations
+
+The vanity prefixes are consistent within each drainer's outflow
+topology. Each drainer uses its own vanity family. This is strong
+evidence of automated address-generation infrastructure — not hand-
+crafted wallets.
+
+### What hasn't happened yet
+
+- No CEX deposits detected (either the operator is avoiding top-10
+  exchanges or using smaller/regional venues not in our registry)
+- No bridge crossings detected (operator is keeping funds on L2)
+- No mixer usage detected
+- The $3.63M in CE5E vanity sink #1 has not moved since accumulation
+
+The absence of a cashout path in 1000+ outbound transfers per drainer
+is itself a meaningful finding. Either the cashout path is intentionally
+slow/patient, or it uses addresses outside any registry I have. OTC
+settlement or un-listed CEX deposit addresses are the remaining
+candidates.
+
+---
+
 ## Open questions
 
 1. **Who operates these wallets?** A7B9 + E717 have industrial nonces (80k-96k) and ETH balances (272 + 125 ETH). This is not a hobbyist. Either a single well-funded drain operator running multiple chains, or multiple independent drain operators converging on the same tactic.
