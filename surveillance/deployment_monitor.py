@@ -108,19 +108,22 @@ class DeploymentMonitor:
         self._revert_detector = None
         self._event_monitors = None
         self._funder_tracer = None
+        self._x402_monitor = None
 
     def _init_sub_monitors(self) -> None:
-        """Initialize selector monitor, revert detector, event monitors, and funder tracer."""
+        """Initialize selector monitor, revert detector, event monitors, funder tracer, x402 monitor."""
         if self._selector_monitor is None:
             from surveillance.selector_monitor import SelectorMonitor
             from surveillance.revert_cluster_detector import RevertClusterDetector
             from surveillance.event_monitors import EventMonitors
             from surveillance.auto_funder_tracer import AutoFunderTracer
+            from surveillance.x402_monitor import X402Monitor
             self._selector_monitor = SelectorMonitor(self.conn)
             self._revert_detector = RevertClusterDetector(self.conn)
             self._event_monitors = EventMonitors(self.conn, self.chain)
             self._funder_tracer = AutoFunderTracer(self.conn, self.chain)
-            logger.info("Sub-monitors initialized: selector_monitor, revert_cluster_detector, event_monitors, auto_funder_tracer")
+            self._x402_monitor = X402Monitor(self.conn, self.chain)
+            logger.info("Sub-monitors initialized: selector_monitor, revert_cluster_detector, event_monitors, auto_funder_tracer, x402_monitor")
 
     async def start(self, max_retries: int = 0) -> None:
         """Connect to WebSocket and begin monitoring blocks.
@@ -573,6 +576,7 @@ class DeploymentMonitor:
             await self._selector_monitor.process_block(w3, block, timestamp_iso)
             await self._revert_detector.process_block(w3, block, timestamp_iso)
             await self._event_monitors.process_block(w3, block, timestamp_iso)
+            await self._x402_monitor.process_block(w3, block, timestamp_iso)
             # Flag CEX candidates every 500 blocks
             if block_number % 500 == 0:
                 self._event_monitors.flag_cex_candidates()

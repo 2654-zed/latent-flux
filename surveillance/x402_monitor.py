@@ -32,14 +32,20 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sqlite3
 import sys
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Set
 
 logger = logging.getLogger("surveillance.x402_monitor")
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 # ---------------------------------------------------------------------
 # Canonical constants (hardcoded — do not discover at runtime)
@@ -331,6 +337,629 @@ def _print_init_summary(summary: dict) -> None:
     print("known_selectors rows (x402):")
     for row in summary["selector_rows"]:
         print(f"  0x{row['function_selector']}  {row['tag']:<8} {row['decoded_name']}")
+    print()
+
+
+# ---------------------------------------------------------------------
+# Phase 3: Calldata decoders
+# ---------------------------------------------------------------------
+
+def _word(params: str, i: int) -> Optional[str]:
+    start = i * 64
+    w = params[start:start + 64]
+    return w if len(w) == 64 else None
+
+
+def _addr_from_word(w: Optional[str]) -> Optional[str]:
+    if not w:
+        return None
+    return "0x" + w[-40:]
+
+
+def _uint_from_word(w: Optional[str]) -> Optional[int]:
+    if not w:
+        return None
+    try:
+        return int(w, 16)
+    except ValueError:
+        return None
+
+
+def decode_eip3009(calldata: str) -> Optional[dict]:
+    """Decode EIP-3009 transferWithAuthorization / receiveWithAuthorization.
+
+    Signature (both variants share the same layout for the first 3 args):
+        fn(address from, address to, uint256 value,
+           uint256 validAfter, uint256 validBefore,
+           bytes32 nonce, uint8 v, bytes32 r, bytes32 s)
+
+    Returns {"from", "to", "value"} or None on malformed input.
+    """
+    if not calldata or len(calldata) < 10:
+        return None
+    params = calldata[10:] if calldata.startswith("0x") else calldata[8:]
+    w_from = _word(params, 0)
+    w_to = _word(params, 1)
+    w_val = _word(params, 2)
+    if not w_from or not w_to or not w_val:
+        return None
+    return {
+        "from": _addr_from_word(w_from),
+        "to": _addr_from_word(w_to),
+        "value": _uint_from_word(w_val),
+    }
+
+
+def decode_permit2_transfer_from(calldata: str) -> Optional[dict]:
+    """Decode Permit2.transferFrom(from, to, amount, token).
+
+    Returns {"from", "to", "amount", "token"} or None.
+    """
+    if not calldata or len(calldata) < 10:
+        return None
+    params = calldata[10:] if calldata.startswith("0x") else calldata[8:]
+    w_from = _word(params, 0)
+    w_to = _word(params, 1)
+    w_amt = _word(params, 2)
+    w_tok = _word(params, 3)
+    if not all((w_from, w_to, w_amt, w_tok)):
+        return None
+    return {
+        "from": _addr_from_word(w_from),
+        "to": _addr_from_word(w_to),
+        "amount": _uint_from_word(w_amt),
+        "token": _addr_from_word(w_tok),
+    }
+
+
+def decode_permit2_permit_single(calldata: str) -> Optional[dict]:
+    """Decode Permit2.permit(owner, PermitSingle, sig) best-effort.
+
+    Signature:
+        permit(address owner,
+               ((address token, uint160 amount, uint48 expiration, uint48 nonce),
+                address spender,
+                uint256 sigDeadline),
+               bytes signature)
+
+    ABI layout (all fixed):
+        word 0  : owner
+        word 1  : details.token
+        word 2  : details.amount | expiration | nonce  (packed uint160/uint48/uint48 — amount in upper bits)
+        word 3  : spender
+        word 4  : sigDeadline
+        word 5  : offset to bytes signature
+
+    Returns {"owner", "token", "amount", "expiration", "nonce", "spender"} or None.
+    """
+    if not calldata or len(calldata) < 10:
+        return None
+    params = calldata[10:] if calldata.startswith("0x") else calldata[8:]
+    w_owner = _word(params, 0)
+    w_token = _word(params, 1)
+    w_packed = _word(params, 2)
+    w_spender = _word(params, 3)
+    if not all((w_owner, w_token, w_packed, w_spender)):
+        return None
+    try:
+        packed = int(w_packed, 16)
+        # Lower 48 bits = nonce, next 48 = expiration, upper 160 = amount
+        nonce = packed & ((1 << 48) - 1)
+        expiration = (packed >> 48) & ((1 << 48) - 1)
+        amount = packed >> 96
+    except ValueError:
+        return None
+    return {
+        "owner": _addr_from_word(w_owner),
+        "token": _addr_from_word(w_token),
+        "amount": amount,
+        "expiration": expiration,
+        "nonce": nonce,
+        "spender": _addr_from_word(w_spender),
+    }
+
+
+# ---------------------------------------------------------------------
+# Phase 3: Live monitor
+# ---------------------------------------------------------------------
+
+class X402Monitor:
+    """
+    Live x402 activity monitor. Attaches to the deployment_monitor block
+    processing loop via process_block(w3, block, timestamp_iso).
+
+    For each transaction in a block, checks:
+
+      (a) tx.to = known facilitator contract (x402ExactPermit2Proxy)
+          AND selector is an x402 settlement selector
+          -> record confirmed x402_event
+
+      (b) tx.to = canonical Permit2 address
+          AND selector is a Permit2 consumption/permit selector
+          -> record suspected x402_event; if unknown facilitator EOA
+             is calling it, emit X402_FACILITATOR_UNKNOWN
+
+      (c) selector = EIP-3009 transferWithAuthorization / receiveWithAuthorization
+          (tx.to = token contract)
+          -> decode; record suspected x402_event; tx.from is the
+             facilitator EOA candidate
+
+      (d) Permit2 transferFrom with decoded payer in x402_permit2_exposure
+          -> emit X402_AGENT_DRAIN
+
+    Also periodically syncs x402_permit2_exposure from approval_events
+    so stored-potential tracking stays current without duplicating
+    decode logic across monitors.
+    """
+
+    # Periodic sync / cache refresh cadence
+    SYNC_EVERY_BLOCKS = 200
+    CACHE_REFRESH_BLOCKS = 500
+
+    def __init__(self, conn: sqlite3.Connection, chain: str = "base"):
+        self.conn = conn
+        self.chain = chain
+        _ensure_tables(conn)
+        _seed_facilitators(conn)
+        _seed_known_selectors(conn)
+
+        # Caches
+        self._known_facilitators: Set[str] = set()
+        self._exposed_owners: Set[str] = set()  # payers with active Permit2 allowances
+        self._refresh_caches()
+
+        self.events_logged = 0
+        self.exposures_added = 0
+        self.alerts_generated = 0
+        logger.info(
+            "X402Monitor initialized for %s  known_facilitators=%d  exposed_owners=%d",
+            chain, len(self._known_facilitators), len(self._exposed_owners),
+        )
+
+    # ------------------------------------------------------------------
+    # Cache management
+    # ------------------------------------------------------------------
+    def _refresh_caches(self) -> None:
+        """Reload known-facilitator and exposed-owner sets."""
+        try:
+            rows = self.conn.execute(
+                "SELECT address FROM x402_facilitators "
+                "WHERE classification = 'known'"
+            ).fetchall()
+            self._known_facilitators = {r[0].lower() for r in rows}
+        except sqlite3.Error as e:
+            logger.warning("facilitator cache refresh failed: %s", e)
+
+        try:
+            rows = self.conn.execute(
+                "SELECT DISTINCT owner_address FROM x402_permit2_exposure"
+            ).fetchall()
+            self._exposed_owners = {r[0].lower() for r in rows}
+        except sqlite3.Error as e:
+            logger.warning("exposure cache refresh failed: %s", e)
+
+    # ------------------------------------------------------------------
+    # Block processing
+    # ------------------------------------------------------------------
+    async def process_block(self, w3, block: dict, timestamp_iso: str) -> None:
+        """Scan every tx in the block for x402-relevant calldata."""
+        block_number = block["number"]
+
+        # Periodic sync / cache refresh
+        if block_number % self.SYNC_EVERY_BLOCKS == 0:
+            try:
+                added = self.sync_exposure_from_approvals()
+                if added:
+                    logger.info(
+                        "x402: synced %d new Permit2 exposures from approval_events",
+                        added,
+                    )
+            except Exception as e:
+                logger.warning("x402 exposure sync failed: %s", e)
+
+        if block_number % self.CACHE_REFRESH_BLOCKS == 0:
+            self._refresh_caches()
+
+        for tx in block.get("transactions", []):
+            to_addr = (tx.get("to") or "").lower()
+            from_addr = (tx.get("from") or "").lower()
+            if not to_addr or not from_addr:
+                continue
+
+            input_data = tx.get("input") or "0x"
+            if isinstance(input_data, bytes):
+                input_data = "0x" + input_data.hex()
+            if len(input_data) < 10:
+                continue
+            selector = input_data[2:10].lower()
+
+            if selector not in X402_SELECTORS:
+                continue
+
+            tx_hash = tx.get("hash")
+            if hasattr(tx_hash, "hex"):
+                tx_hash = tx_hash.hex()
+            elif isinstance(tx_hash, bytes):
+                tx_hash = tx_hash.hex()
+            else:
+                tx_hash = str(tx_hash or "")
+            if tx_hash and not tx_hash.startswith("0x"):
+                tx_hash = "0x" + tx_hash
+
+            self._handle_x402_tx(
+                tx_hash=tx_hash,
+                block_number=block_number,
+                timestamp_iso=timestamp_iso,
+                from_addr=from_addr,
+                to_addr=to_addr,
+                selector=selector,
+                input_data=input_data,
+            )
+
+    def _handle_x402_tx(self, *, tx_hash: str, block_number: int,
+                        timestamp_iso: str, from_addr: str, to_addr: str,
+                        selector: str, input_data: str) -> None:
+        """Classify and record a single x402-selector transaction."""
+        # Determine facilitator and confidence
+        facilitator = None
+        confidence = "suspected"
+        unknown_facilitator = False
+
+        if to_addr in self._known_facilitators:
+            facilitator = to_addr
+            confidence = "confirmed"
+        elif to_addr == PERMIT2_ADDRESS:
+            # Permit2 call — facilitator is tx.from (EOA)
+            facilitator = from_addr
+            confidence = "suspected"
+            if from_addr not in self._known_facilitators:
+                unknown_facilitator = True
+        else:
+            # Token contract being hit with an EIP-3009 selector — the
+            # facilitator is tx.from; to_addr is the token.
+            if selector in EIP3009_SELECTORS:
+                facilitator = from_addr
+                confidence = "suspected"
+                if from_addr not in self._known_facilitators:
+                    unknown_facilitator = True
+            else:
+                # Permit2 selector to an unrelated contract — anomalous.
+                facilitator = from_addr
+                confidence = "suspected"
+                unknown_facilitator = True
+
+        # Decode payer / payee / token / amount
+        payer = None
+        payee = None
+        token_contract = None
+        amount = None
+        x402_type = "permit2"
+
+        if selector in EIP3009_SELECTORS:
+            x402_type = "eip3009"
+            d = decode_eip3009(input_data)
+            if d:
+                payer = d["from"]
+                payee = d["to"]
+                amount = d["value"]
+                token_contract = to_addr  # tx.to is the token for EIP-3009
+        elif selector == SEL_PERMIT2_TRANSFER_FROM:
+            d = decode_permit2_transfer_from(input_data)
+            if d:
+                payer = d["from"]
+                payee = d["to"]
+                amount = d["amount"]
+                token_contract = d["token"]
+        elif selector == SEL_PERMIT2_PERMIT_SINGLE:
+            d = decode_permit2_permit_single(input_data)
+            if d:
+                payer = d["owner"]
+                payee = d["spender"]
+                token_contract = d["token"]
+                amount = d["amount"]
+                # A permit call = adding stored potential. Write to
+                # x402_permit2_exposure as well as x402_events.
+                self._upsert_exposure(
+                    owner=d["owner"], spender=d["spender"],
+                    token=d["token"], chain=self.chain,
+                    allowance=str(d["amount"]) if d["amount"] is not None else None,
+                    expiration=d["expiration"], ts=timestamp_iso,
+                )
+
+        # Insert x402_event row
+        try:
+            self.conn.execute(
+                """INSERT INTO x402_events
+                   (chain, tx_hash, block_number, timestamp,
+                    facilitator_address, payer_address, payee_address,
+                    token_contract, token_symbol, amount,
+                    x402_type, confidence, selector, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (self.chain, tx_hash, block_number, timestamp_iso,
+                 facilitator, payer, payee,
+                 token_contract, None, amount,
+                 x402_type, confidence, selector, _now_iso()),
+            )
+            self.events_logged += 1
+        except Exception as e:
+            logger.debug("x402_events insert failed: %s", e)
+            return
+
+        # Bump facilitator stats
+        if facilitator:
+            try:
+                self.conn.execute(
+                    """UPDATE x402_facilitators
+                       SET tx_count   = tx_count + 1,
+                           last_seen  = ?,
+                           first_seen = COALESCE(first_seen, ?)
+                       WHERE address = ? AND chain = ?""",
+                    (timestamp_iso, timestamp_iso, facilitator, self.chain),
+                )
+                # If facilitator was unknown, record it as such
+                if unknown_facilitator:
+                    self.conn.execute(
+                        """INSERT OR IGNORE INTO x402_facilitators
+                           (address, chain, name, classification, source,
+                            first_seen, last_seen, tx_count, total_volume, created_at)
+                           VALUES (?, ?, ?, 'unknown', 'observed',
+                                   ?, ?, 1, 0, ?)""",
+                        (facilitator, self.chain, None,
+                         timestamp_iso, timestamp_iso, _now_iso()),
+                    )
+            except Exception:
+                pass
+
+        # Alerts
+        if unknown_facilitator:
+            self._alert(
+                "X402_FACILITATOR_UNKNOWN",
+                facilitator or to_addr,
+                tx_hash, block_number, timestamp_iso,
+                {
+                    "facilitator": facilitator,
+                    "selector": selector,
+                    "selector_name": X402_SELECTORS.get(selector),
+                    "tx_to": to_addr,
+                    "payer": payer,
+                    "chain": self.chain,
+                    "message": (
+                        f"Unknown facilitator {facilitator} called "
+                        f"{X402_SELECTORS.get(selector, selector)} on {self.chain}"
+                    ),
+                },
+            )
+
+        # Drain check: Permit2 transferFrom from an address we track
+        if selector == SEL_PERMIT2_TRANSFER_FROM and payer:
+            if payer.lower() in self._exposed_owners:
+                self._alert(
+                    "X402_AGENT_DRAIN",
+                    payer,
+                    tx_hash, block_number, timestamp_iso,
+                    {
+                        "payer": payer,
+                        "payee": payee,
+                        "token": token_contract,
+                        "amount": amount,
+                        "facilitator": facilitator,
+                        "chain": self.chain,
+                        "message": (
+                            f"Permit2.transferFrom pulled from exposed payer "
+                            f"{payer[:18]}... on {self.chain}"
+                        ),
+                    },
+                )
+
+        try:
+            self.conn.commit()
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
+    # Exposure management
+    # ------------------------------------------------------------------
+    def _upsert_exposure(self, *, owner: str, spender: str, token: str,
+                         chain: str, allowance: Optional[str],
+                         expiration: Optional[int], ts: str) -> bool:
+        """Insert or update a row in x402_permit2_exposure.
+        Returns True if a new row was inserted (not a last_seen update).
+        """
+        if not owner or not spender or not token:
+            return False
+        try:
+            cur = self.conn.execute(
+                """INSERT INTO x402_permit2_exposure
+                   (owner_address, spender_address, token_contract, chain,
+                    allowance_amount, expiration,
+                    first_seen, last_seen, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(owner_address, spender_address, token_contract, chain)
+                   DO UPDATE SET
+                       last_seen = excluded.last_seen,
+                       allowance_amount = COALESCE(excluded.allowance_amount, allowance_amount),
+                       expiration = COALESCE(excluded.expiration, expiration)""",
+                (owner.lower(), spender.lower(), token.lower(), chain,
+                 allowance, expiration, ts, ts, _now_iso()),
+            )
+            inserted = cur.rowcount > 0
+            if inserted:
+                self.exposures_added += 1
+                self._exposed_owners.add(owner.lower())
+                # First-time exposure alert
+                self._alert(
+                    "X402_PERMIT2_EXPOSURE", owner, None, None, ts,
+                    {
+                        "owner": owner,
+                        "spender": spender,
+                        "token": token,
+                        "chain": chain,
+                        "message": (
+                            f"New Permit2 exposure: {owner[:18]}... granted "
+                            f"allowance on {token[:18]}... to spender "
+                            f"{spender[:18]}... on {chain}"
+                        ),
+                    },
+                )
+            return inserted
+        except sqlite3.Error as e:
+            logger.debug("exposure upsert failed: %s", e)
+            return False
+
+    def sync_exposure_from_approvals(self) -> int:
+        """Pull any Permit2 approvals from approval_events into
+        x402_permit2_exposure. Idempotent via UNIQUE constraint.
+
+        This is the bridge between the existing approval_events stream
+        (written by event_monitors.py when a suspected token gets an
+        approve() call) and the x402-specific exposure table. We do NOT
+        duplicate the decode logic — approval_events is already correct,
+        we just project the rows where spender = Permit2.
+
+        Used for both historical backfill (--backfill CLI) and periodic
+        live sync from process_block.
+
+        Returns count of new rows inserted.
+        """
+        try:
+            rows = self.conn.execute(
+                """SELECT chain, token_contract, approver, spender,
+                          MIN(timestamp) AS first_ts,
+                          MAX(timestamp) AS last_ts
+                   FROM approval_events
+                   WHERE spender = ?
+                   GROUP BY chain, token_contract, approver""",
+                (PERMIT2_ADDRESS,),
+            ).fetchall()
+        except sqlite3.Error as e:
+            logger.warning("approval_events query failed: %s", e)
+            return 0
+
+        added = 0
+        for r in rows:
+            chain = r[0] or self.chain
+            token = r[1]
+            owner = r[2]
+            spender = r[3]
+            first_ts = r[4]
+            last_ts = r[5]
+            if not token or not owner or not spender:
+                continue
+            try:
+                cur = self.conn.execute(
+                    """INSERT INTO x402_permit2_exposure
+                       (owner_address, spender_address, token_contract, chain,
+                        allowance_amount, expiration,
+                        first_seen, last_seen, created_at)
+                       VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?)
+                       ON CONFLICT(owner_address, spender_address, token_contract, chain)
+                       DO UPDATE SET
+                           last_seen = CASE
+                               WHEN excluded.last_seen > last_seen
+                               THEN excluded.last_seen
+                               ELSE last_seen
+                           END""",
+                    (owner.lower(), spender.lower(), token.lower(), chain,
+                     first_ts, last_ts, _now_iso()),
+                )
+                if cur.rowcount > 0:
+                    added += 1
+                    self.exposures_added += 1
+                    self._exposed_owners.add(owner.lower())
+            except sqlite3.Error:
+                continue
+        try:
+            self.conn.commit()
+        except Exception:
+            pass
+        return added
+
+    # ------------------------------------------------------------------
+    # Alerts
+    # ------------------------------------------------------------------
+    def _alert(self, alert_type: str, address: Optional[str],
+               tx_hash: Optional[str], block_number: Optional[int],
+               timestamp: str, payload: dict) -> None:
+        try:
+            self.conn.execute(
+                """INSERT INTO alerts
+                   (alert_type, address, tx_hash, block_number, timestamp,
+                    payload, false_positive)
+                   VALUES (?, ?, ?, ?, ?, ?, 0)""",
+                (alert_type, address or "", tx_hash, block_number,
+                 timestamp, json.dumps(payload)),
+            )
+            self.alerts_generated += 1
+            logger.warning("ALERT: %s %s", alert_type, (address or "")[:18])
+        except sqlite3.Error as e:
+            logger.debug("alert insert failed: %s", e)
+
+
+def backfill(conn: sqlite3.Connection, chain: str = "base") -> dict:
+    """Phase 3 backfill: populate x402_permit2_exposure from the
+    existing approval_events rows where spender = canonical Permit2.
+
+    Zero RPC. Idempotent.
+    """
+    _ensure_tables(conn)
+    monitor = X402Monitor(conn, chain=chain)
+
+    # Count how many exposure rows exist before
+    before = conn.execute(
+        "SELECT COUNT(*) FROM x402_permit2_exposure"
+    ).fetchone()[0] or 0
+    # sync uses INSERT ... ON CONFLICT DO UPDATE which inflates rowcount
+    # (both inserts and updates report rowcount=1). Use the table-count
+    # delta instead for an accurate new-row measurement.
+    monitor.sync_exposure_from_approvals()
+    after = conn.execute(
+        "SELECT COUNT(*) FROM x402_permit2_exposure"
+    ).fetchone()[0] or 0
+    added = max(0, after - before)
+
+    summary = {
+        "approval_events_with_permit2_spender": conn.execute(
+            "SELECT COUNT(*) FROM approval_events WHERE spender = ?",
+            (PERMIT2_ADDRESS,),
+        ).fetchone()[0] or 0,
+        "distinct_exposures_before": before,
+        "new_exposures_inserted": added,
+        "distinct_exposures_after": after,
+        "distinct_owners": conn.execute(
+            "SELECT COUNT(DISTINCT owner_address) FROM x402_permit2_exposure"
+        ).fetchone()[0] or 0,
+        "distinct_tokens": conn.execute(
+            "SELECT COUNT(DISTINCT token_contract) FROM x402_permit2_exposure"
+        ).fetchone()[0] or 0,
+        "by_chain": [
+            dict(r) for r in conn.execute(
+                """SELECT chain,
+                          COUNT(*) AS rows,
+                          COUNT(DISTINCT owner_address) AS owners,
+                          COUNT(DISTINCT token_contract) AS tokens
+                   FROM x402_permit2_exposure GROUP BY chain"""
+            ).fetchall()
+        ],
+    }
+    return summary
+
+
+def _print_backfill_summary(summary: dict) -> None:
+    print("=" * 72)
+    print("x402 monitor -- Phase 3 backfill (approval_events -> x402_permit2_exposure)")
+    print("=" * 72)
+    print(f"approval_events rows with Permit2 spender: "
+          f"{summary['approval_events_with_permit2_spender']:,}")
+    print(f"Exposures before:        {summary['distinct_exposures_before']:,}")
+    print(f"New exposures inserted:  {summary['new_exposures_inserted']:,}")
+    print(f"Exposures after:         {summary['distinct_exposures_after']:,}")
+    print(f"Distinct owners:         {summary['distinct_owners']:,}")
+    print(f"Distinct tokens:         {summary['distinct_tokens']}")
+    print()
+    print("By chain:")
+    for row in summary["by_chain"]:
+        print(f"  {row['chain']:<10} rows={row['rows']:>5} "
+              f"owners={row['owners']:>5} tokens={row['tokens']:>4}")
     print()
 
 
@@ -842,6 +1471,15 @@ def main() -> int:
              "registries. Idempotent.",
     )
     parser.add_argument(
+        "--backfill", action="store_true",
+        help="Phase 3: populate x402_permit2_exposure from existing "
+             "approval_events (Permit2 spender). Idempotent, zero RPC.",
+    )
+    parser.add_argument(
+        "--chain", default="base",
+        help="Chain label for backfilled rows (default: base)",
+    )
+    parser.add_argument(
         "--db", default=None,
         help="Path to SQLite DB (default: surveillance/data/surveillance.db)",
     )
@@ -859,6 +1497,10 @@ def main() -> int:
         if args.init_schema:
             summary = init_schema(conn)
             _print_init_summary(summary)
+            return 0
+        if args.backfill:
+            summary = backfill(conn, chain=args.chain)
+            _print_backfill_summary(summary)
             return 0
         if args.recon:
             report = recon(conn)
