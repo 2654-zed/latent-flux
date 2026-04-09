@@ -109,6 +109,232 @@ KNOWN_FACILITATOR_EOAS: dict[str, dict] = {}
 
 
 # ---------------------------------------------------------------------
+# Phase 2: Schema + classification seeding
+# ---------------------------------------------------------------------
+
+# Chains the monitor is active on. x402 proxy is CREATE2-deterministic
+# so the same address appears on every EVM chain.
+SEEDED_CHAINS = ("base", "arbitrum", "optimism")
+
+
+def _ensure_tables(conn: sqlite3.Connection) -> None:
+    """Create x402 tables if missing. Idempotent — safe to call on every
+    monitor startup.
+
+    All three tables are owned by this module. We do not extend db.py.
+    Entity classification taxonomy values (x402_facilitator, x402_agent,
+    x402_resource_server) are data-only additions to the existing
+    entity_classification table — no schema change required.
+    """
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS x402_events (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            chain               TEXT    NOT NULL,
+            tx_hash             TEXT    NOT NULL,
+            block_number        INTEGER NOT NULL,
+            timestamp           TEXT    NOT NULL,
+            facilitator_address TEXT,
+            payer_address       TEXT,
+            payee_address       TEXT,
+            token_contract      TEXT,
+            token_symbol        TEXT,
+            amount              REAL,
+            x402_type           TEXT CHECK (x402_type IN ('eip3009', 'permit2')),
+            confidence          TEXT CHECK (confidence IN ('confirmed', 'suspected')),
+            selector            TEXT,
+            created_at          TEXT    NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_x402_events_facilitator
+            ON x402_events(facilitator_address);
+        CREATE INDEX IF NOT EXISTS idx_x402_events_payer
+            ON x402_events(payer_address);
+        CREATE INDEX IF NOT EXISTS idx_x402_events_chain_ts
+            ON x402_events(chain, timestamp);
+        CREATE INDEX IF NOT EXISTS idx_x402_events_tx_hash
+            ON x402_events(tx_hash);
+
+        CREATE TABLE IF NOT EXISTS x402_facilitators (
+            address         TEXT    NOT NULL,
+            chain           TEXT    NOT NULL,
+            name            TEXT,
+            classification  TEXT CHECK (classification IN ('known', 'unknown', 'rogue')),
+            source          TEXT,
+            first_seen      TEXT,
+            last_seen       TEXT,
+            tx_count        INTEGER NOT NULL DEFAULT 0,
+            total_volume    REAL    NOT NULL DEFAULT 0,
+            created_at      TEXT    NOT NULL,
+            PRIMARY KEY (address, chain)
+        );
+        CREATE INDEX IF NOT EXISTS idx_x402_facilitators_classification
+            ON x402_facilitators(classification);
+
+        CREATE TABLE IF NOT EXISTS x402_permit2_exposure (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_address       TEXT    NOT NULL,
+            spender_address     TEXT    NOT NULL,
+            token_contract      TEXT    NOT NULL,
+            chain               TEXT    NOT NULL,
+            allowance_amount    TEXT,
+            expiration          INTEGER,
+            first_seen          TEXT    NOT NULL,
+            last_seen           TEXT    NOT NULL,
+            created_at          TEXT    NOT NULL,
+            UNIQUE(owner_address, spender_address, token_contract, chain)
+        );
+        CREATE INDEX IF NOT EXISTS idx_x402_exposure_owner
+            ON x402_permit2_exposure(owner_address);
+        CREATE INDEX IF NOT EXISTS idx_x402_exposure_spender
+            ON x402_permit2_exposure(spender_address);
+        CREATE INDEX IF NOT EXISTS idx_x402_exposure_token
+            ON x402_permit2_exposure(token_contract);
+    """)
+    conn.commit()
+
+
+def _seed_facilitators(conn: sqlite3.Connection) -> int:
+    """Seed the x402_facilitators registry from KNOWN_FACILITATORS.
+    Returns number of rows inserted (idempotent via INSERT OR IGNORE).
+    """
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    inserted = 0
+    for addr, meta in KNOWN_FACILITATORS.items():
+        for chain in SEEDED_CHAINS:
+            cur = conn.execute(
+                """INSERT OR IGNORE INTO x402_facilitators
+                   (address, chain, name, classification, source,
+                    first_seen, last_seen, tx_count, total_volume, created_at)
+                   VALUES (?, ?, ?, ?, ?, NULL, NULL, 0, 0, ?)""",
+                (addr, chain, meta["name"], meta["classification"],
+                 meta["source"], now),
+            )
+            if cur.rowcount:
+                inserted += 1
+    conn.commit()
+    return inserted
+
+
+def _seed_known_selectors(conn: sqlite3.Connection) -> int:
+    """Register the 5 x402 selectors in the known_selectors reference
+    table. Idempotent via INSERT OR IGNORE. Returns rows inserted.
+    """
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    entries = [
+        (SEL_EIP3009_TRANSFER_AUTH,
+         "x402",
+         "transferWithAuthorization(address,address,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)",
+         "EIP-3009 authorization transfer. Used by USDC/EURC for gasless "
+         "off-chain-signed payments. Primary settlement path for x402 when "
+         "the payment token implements EIP-3009."),
+        (SEL_EIP3009_RECEIVE_AUTH,
+         "x402",
+         "receiveWithAuthorization(address,address,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)",
+         "EIP-3009 receiver-pulls-authorization variant. Less common than "
+         "transferWithAuthorization but valid x402 settlement selector."),
+        (SEL_PERMIT2_PERMIT_SINGLE,
+         "permit2",
+         "permit(address,((address,uint160,uint48,uint48),address,uint256),bytes)",
+         "Uniswap Permit2 PermitSingle. Used by x402 for non-EIP-3009 "
+         "tokens via the Permit2 universal approval contract. Signed "
+         "off-chain by the owner, submitted on-chain by the facilitator."),
+        (SEL_PERMIT2_PERMIT_BATCH,
+         "permit2",
+         "permit(address,((address,uint160,uint48,uint48)[],address,uint256),bytes)",
+         "Uniswap Permit2 PermitBatch. Multi-token variant. Same x402 role "
+         "as PermitSingle but authorizes several tokens in one call."),
+        (SEL_PERMIT2_TRANSFER_FROM,
+         "permit2",
+         "transferFrom(address,address,uint160,address)",
+         "Uniswap Permit2 signature-based transferFrom. This is the "
+         "consumption selector — facilitators call this to actually move "
+         "funds after a Permit2 allowance has been granted. Seeing this "
+         "selector with a monitored owner address is the direct x402 "
+         "drain signal."),
+    ]
+    inserted = 0
+    for sel, tag, decoded, notes in entries:
+        cur = conn.execute(
+            """INSERT OR IGNORE INTO known_selectors
+               (function_selector, tag, decoded_name, notes, created)
+               VALUES (?, ?, ?, ?, ?)""",
+            (sel, tag, decoded, notes, now),
+        )
+        if cur.rowcount:
+            inserted += 1
+    conn.commit()
+    return inserted
+
+
+def init_schema(conn: sqlite3.Connection) -> dict:
+    """Run all Phase 2 setup steps. Idempotent. Returns a summary."""
+    _ensure_tables(conn)
+    facilitators_inserted = _seed_facilitators(conn)
+    selectors_inserted = _seed_known_selectors(conn)
+
+    # Collect verification data
+    summary: dict = {
+        "tables": {},
+        "facilitators_inserted": facilitators_inserted,
+        "selectors_inserted": selectors_inserted,
+    }
+
+    for table in ("x402_events", "x402_facilitators", "x402_permit2_exposure"):
+        cols = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        summary["tables"][table] = {
+            "columns": [(c[1], c[2]) for c in cols],
+            "row_count": count,
+        }
+
+    # Dump facilitator rows and seeded selector rows for verification
+    fac_rows = conn.execute(
+        """SELECT address, chain, name, classification, source
+           FROM x402_facilitators ORDER BY chain"""
+    ).fetchall()
+    summary["facilitator_rows"] = [dict(r) for r in fac_rows]
+
+    sel_rows = conn.execute(
+        """SELECT function_selector, tag, decoded_name
+           FROM known_selectors
+           WHERE function_selector IN (?, ?, ?, ?, ?)
+           ORDER BY function_selector""",
+        (SEL_EIP3009_TRANSFER_AUTH, SEL_EIP3009_RECEIVE_AUTH,
+         SEL_PERMIT2_PERMIT_SINGLE, SEL_PERMIT2_PERMIT_BATCH,
+         SEL_PERMIT2_TRANSFER_FROM),
+    ).fetchall()
+    summary["selector_rows"] = [dict(r) for r in sel_rows]
+
+    return summary
+
+
+def _print_init_summary(summary: dict) -> None:
+    print("=" * 72)
+    print("x402 monitor — Phase 2 schema + classification seed")
+    print("=" * 72)
+    print()
+    for table, info in summary["tables"].items():
+        print(f"TABLE {table}  (rows={info['row_count']})")
+        for name, col_type in info["columns"]:
+            print(f"    {name:<22} {col_type}")
+        print()
+    print(f"Facilitators inserted this run: {summary['facilitators_inserted']}")
+    print(f"Selectors inserted this run:    {summary['selectors_inserted']}")
+    print()
+    print("x402_facilitators rows (seeded):")
+    for row in summary["facilitator_rows"]:
+        print(f"  {row['chain']:<10} {row['address']}  [{row['classification']}]")
+        print(f"              name={row['name']}")
+        print(f"              source={row['source']}")
+    print()
+    print("known_selectors rows (x402):")
+    for row in summary["selector_rows"]:
+        print(f"  0x{row['function_selector']}  {row['tag']:<8} {row['decoded_name']}")
+    print()
+
+
+# ---------------------------------------------------------------------
 # Phase 1: Reconnaissance
 # ---------------------------------------------------------------------
 
@@ -611,6 +837,11 @@ def main() -> int:
              "Zero writes, zero RPC.",
     )
     parser.add_argument(
+        "--init-schema", action="store_true",
+        help="Phase 2: create x402 tables and seed facilitator + selector "
+             "registries. Idempotent.",
+    )
+    parser.add_argument(
         "--db", default=None,
         help="Path to SQLite DB (default: surveillance/data/surveillance.db)",
     )
@@ -625,13 +856,16 @@ def main() -> int:
     conn = _get_conn(db_path)
 
     try:
+        if args.init_schema:
+            summary = init_schema(conn)
+            _print_init_summary(summary)
+            return 0
         if args.recon:
             report = recon(conn)
             _print_report(report)
             return 0
-        else:
-            parser.print_help()
-            return 1
+        parser.print_help()
+        return 1
     finally:
         conn.close()
 
