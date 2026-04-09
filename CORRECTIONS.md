@@ -194,6 +194,19 @@ A living record of claims made, errors found, and how they were fixed. Every ent
 - **Interpretation:** Multi-venue arb bot with per-token strategies. ZORA and AIXBT have dedicated pool targets (likely single-venue arb), while USDC/cbBTC are traded across many venues (multi-DEX routing). Updated the `0x51c72848` entry in working notes: not a sink, a trading contract. org_001 is clearly running an active MEV operation as part of its infrastructure, not just on-chain laundering.
 - **Severity note:** This is a reclassification, not an error. No CORRECTIONS.md-tracked claim was broken — the `0x51c72848` description was first published in an analysis report on 2026-04-07 and updated here on 2026-04-08 as more data came in.
 
+## 2026-04-09 Two Permit2 "Self-Settlements" Were Confirmed Drains
+
+- **Earlier claim (Phase 4 final report, 2026-04-09):** "2 Permit2 transferFrom events where facilitator is also payee — could be legitimate batch-settlement or a drain, inconclusive."
+- **Reality:** Forensic investigation confirmed both events and 4 more are **confirmed stablecoin drains** by 4 rogue facilitator EOAs. None of the 4 are in `facilitators.x402.watch`. All spot-checked victims have unlimited never-expiring Permit2 allowances (`amount=MAX_UINT160, expiration=MAX_UINT48`) and zero current token balance.
+- **Discovery:** Read `Permit2.allowance(owner, token, spender)` directly via eth_call on both chains for each sender, then measured total stablecoin inflow per facilitator via alchemy_getAssetTransfers.
+- **Scale:** 4 rogue facilitators, **$3,885,831 in USD stablecoin inflows** across **1,955 distinct senders** in recent 1000-tx windows per facilitator. Individual victim losses up to **$256,321** confirmed. Lifetime total is larger because RPC queries are capped at 1000 events each; A7B9 and E717 have nonces 96k and 80k respectively indicating weeks of operation at industrial scale.
+- **Fix applied to production:**
+  - Reclassified the 4 drainers as `classification='rogue'` in `x402_facilitators`
+  - Inserted 6 `X402_AGENT_DRAIN` alerts for the monitor-captured Permit2.transferFrom events (previously they only fired the weaker `X402_FACILITATOR_UNKNOWN` alert)
+  - Created `surveillance/data/cases/CASE_X402_DRAINER_OPERATION.md` documenting the full forensic trail
+- **Detector gap (logged, not yet fixed):** `X402_AGENT_DRAIN` fires only when the payer is in `x402_permit2_exposure`, which is scoped to Permit2 approvals on trap tokens. These 6 drains targeted canonical USDC/USDT, not trap tokens, so the payers were never tracked and the drain alert never fired live. The fix is to widen the drain trigger to include any Permit2.transferFrom where facilitator == payee AND amount >= threshold AND post-state balance is zero. Filed as follow-up.
+- **Severity:** CRITICAL — the "inconclusive" framing in Phase 4 understated an active multi-million-dollar drain operation that our monitor had captured but failed to classify correctly.
+
 ## 2026-04-08 Railway Production Runs
 
 Three maintenance scripts ran successfully against Railway production via `railway ssh`:
