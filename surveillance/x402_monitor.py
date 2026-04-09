@@ -630,6 +630,11 @@ class X402Monitor:
         self._known_facilitators: Set[str] = set()
         self._rogue_facilitators: Set[str] = set()
         self._exposed_owners: Set[str] = set()  # payers with active Permit2 allowances
+        # Dedup: only fire X402_FACILITATOR_UNKNOWN once per facilitator
+        # address within a cache-refresh window (~500 blocks). Cleared
+        # every _refresh_caches() cycle. Reduces alert volume from ~45k/day
+        # (one per event) to ~N/day (one per distinct facilitator per window).
+        self._alerted_unknown_facilitators: Set[str] = set()
         self._refresh_caches()
 
         self.events_logged = 0
@@ -667,6 +672,10 @@ class X402Monitor:
             self._exposed_owners = {r[0].lower() for r in rows}
         except sqlite3.Error as e:
             logger.warning("exposure cache refresh failed: %s", e)
+
+        # Reset alert dedup so each facilitator gets at most one
+        # X402_FACILITATOR_UNKNOWN alert per refresh window.
+        self._alerted_unknown_facilitators.clear()
 
     # ------------------------------------------------------------------
     # Block processing
@@ -840,8 +849,12 @@ class X402Monitor:
             except Exception:
                 pass
 
-        # Alerts
-        if unknown_facilitator:
+        # Alerts — deduped per facilitator per cache-refresh window
+        facilitator_key = (facilitator or to_addr or "").lower()
+        if (unknown_facilitator
+                and facilitator_key
+                and facilitator_key not in self._alerted_unknown_facilitators):
+            self._alerted_unknown_facilitators.add(facilitator_key)
             self._alert(
                 "X402_FACILITATOR_UNKNOWN",
                 facilitator or to_addr,
