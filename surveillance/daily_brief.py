@@ -120,7 +120,8 @@ def generate_brief(target_date: str = None) -> Path:
     md += "\n"
 
     # Trust amplification alerts
-    md += "## Trust Amplification Alerts\n\n"
+    md += "## Trust Amplification Alerts\n"
+    md += "*Epistemic: MIXED — amplification factor is arithmetic (D), bytecode family baseline is inferential (I)*\n\n"
     alerts = conn.execute("SELECT * FROM trust_amplification WHERE alert_level IN ('CRITICAL','WARNING') ORDER BY amplification_factor DESC LIMIT 5").fetchall()
     if alerts:
         md += "| Contract | Callers | Router % | Amplification | Alert |\n|---|---|---|---|---|\n"
@@ -131,7 +132,8 @@ def generate_brief(target_date: str = None) -> Path:
     md += "\n"
 
     # Camouflage watch
-    md += "## Camouflage Watch\n\n"
+    md += "## Camouflage Watch\n"
+    md += "*Epistemic: DEDUCTIVE — revert rates computed from on-chain receipts. 10% threshold is a policy choice (4.5x victim multiplier empirical).*\n\n"
     camo = conn.execute("SELECT * FROM camouflage_metrics WHERE date = ? AND chain IS NULL", (day,)).fetchone()
     if not camo:
         camo = conn.execute("SELECT * FROM camouflage_metrics ORDER BY date DESC LIMIT 1").fetchone()
@@ -199,7 +201,8 @@ def generate_brief(target_date: str = None) -> Path:
     md += "\n"
 
     # Diamond model summary
-    md += "## Diamond Model Index\n\n"
+    md += "## Diamond Model Index\n"
+    md += "*Epistemic: INFERENTIAL — organizational attribution via funding-chain + behavioral pattern matching.*\n\n"
     diamonds = conn.execute("SELECT case_id, adversary_type, infrastructure_delivery, victim_count, confidence FROM diamond_model ORDER BY victim_count DESC").fetchall()
     if diamonds:
         md += "| Case | Adversary | Delivery | Victims | Confidence |\n|---|---|---|---|---|\n"
@@ -216,7 +219,8 @@ def generate_brief(target_date: str = None) -> Path:
     md += f"- Connection gaps today: {gaps}\n"
 
     # Strategy lifecycle monitor
-    md += "## Strategy Lifecycle Monitor\n\n"
+    md += "## Strategy Lifecycle Monitor\n"
+    md += "*Epistemic: INFERENTIAL — strategy classification is rule-based selector matching; lifecycle stage is a model prediction.*\n\n"
     try:
         lifecycle = conn.execute("SELECT * FROM strategy_lifecycle ORDER BY saturation_index DESC").fetchall()
         if lifecycle:
@@ -269,7 +273,8 @@ def generate_brief(target_date: str = None) -> Path:
     md += "\n"
 
     # Self-test trap early warning
-    md += "## Zero-Day Trap Watch (Self-Test Detection)\n\n"
+    md += "## Zero-Day Trap Watch (Self-Test Detection)\n"
+    md += "*Epistemic: MIXED — self-test detection is deductive (deployer is sole caller, on-chain fact). \"Zero-day\" label implies future activation intent (inferential).*\n\n"
     try:
         self_tests = conn.execute("""
             SELECT st.*,
@@ -299,7 +304,8 @@ def generate_brief(target_date: str = None) -> Path:
     md += "\n"
 
     # Approval drain watchlist
-    md += "## Approval Drain Watchlist\n\n"
+    md += "## Approval Drain Watchlist\n"
+    md += "*Epistemic: MIXED — approval counts and drain detections are deductive (on-chain tx evidence). \"Pending drain\" framing implies future action (predictive).*\n\n"
     try:
         aw_total = conn.execute("SELECT COUNT(*) FROM approval_watchlist").fetchone()[0]
         aw_pending = conn.execute("SELECT COUNT(*) FROM approval_watchlist WHERE drain_detected=0").fetchone()[0]

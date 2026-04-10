@@ -367,14 +367,25 @@ def _build_risk(conn: sqlite3.Connection, row: dict) -> dict:
     family_data = None
     if family:
         fam_size = conn.execute(
-            "SELECT member_count, unique_deployers FROM bytecode_families WHERE family_id = ?",
+            "SELECT member_count, unique_deployers, detection_tier FROM bytecode_families WHERE family_id = ?",
             (family[0],),
         ).fetchone()
+        clustering_method = "unknown"
+        if fam_size and fam_size[2]:
+            if "T1" in fam_size[2]:
+                clustering_method = "Tier 1: first 100 chars of bytecode_pattern_notes prefix match"
+            elif "T2" in fam_size[2]:
+                clustering_method = "Tier 2: flag combination match (asymmetric_transfer + conditional_revert + unusual_fee_structure)"
         family_data = {
             "family_id": family[0],
             "family_name": family[1],
             "family_size": fam_size[0] if fam_size else None,
             "family_deployers": fam_size[1] if fam_size else None,
+            "clustering_method": clustering_method,
+            "epistemic_note": (
+                "Family membership is INFERENTIAL. Different prefix lengths "
+                "or similarity metrics would produce different families."
+            ),
         }
 
     # GoPlus comparison: stored results from prior benchmarks
@@ -1225,3 +1236,99 @@ async def api_docs():
     if docs_path.exists():
         return JSONResponse({"status": "ok", "data": {"docs": docs_path.read_text(encoding="utf-8")}})
     return JSONResponse({"status": "ok", "data": {"docs": "API documentation coming soon."}})
+
+
+@router.get("/methodology/confidence")
+async def methodology_confidence():
+    """Published confidence score algorithm. Allows independent
+    reproduction. Added per COMMERCIAL_EPISTEMIC_AUDIT.md Priority 2a."""
+    return JSONResponse({"status": "ok", "data": {
+        "description": (
+            "Confidence scoring algorithm for Layer 3 contract risk "
+            "profiles. Deterministic given inputs. Inputs include one "
+            "inferential component (confidence_tier assignment)."
+        ),
+        "algorithm": {
+            "confirmed_tier": {
+                "base_score": 0.90,
+                "victim_bonus": "min(victim_count / 1000, 0.09)",
+                "range": "0.90 - 0.99",
+                "trigger": (
+                    "External caller (not deployer) reverted on this "
+                    "contract. Requires trap_events row with tx_hash."
+                ),
+                "epistemic": "D (revert is on-chain) + I (interpreting revert as trap)",
+            },
+            "suspected_tier": {
+                "3_plus_signatures": {
+                    "formula": "0.70 + signature_count * 0.05",
+                    "range": "0.85",
+                },
+                "1_to_2_signatures": {
+                    "formula": "0.50 + signature_count * 0.08",
+                    "range": "0.58 - 0.66",
+                },
+                "0_signatures_deployer_history": {
+                    "score": 0.35,
+                    "note": "Deployer-history-only detection, no bytecode evidence",
+                },
+                "signature_fields": [
+                    "has_asymmetric_transfer",
+                    "has_conditional_revert",
+                    "has_unusual_fee_structure",
+                ],
+                "epistemic": (
+                    "I — suspected tier assignment is a policy decision "
+                    "(MIN_PATTERNS_FOR_SUSPECTED=1). Signature detection "
+                    "is deductive (bytecode pattern at cited offset)."
+                ),
+            },
+            "unknown_tier": {
+                "score": None,
+                "note": "No confidence score assigned for unknown-tier contracts",
+            },
+        },
+        "risk_level_mapping": {
+            "CRITICAL": "confirmed tier (any confidence score)",
+            "HIGH": "confidence >= 0.70",
+            "MEDIUM": "confidence >= 0.50",
+            "LOW": "confidence >= 0.30",
+            "UNKNOWN": "confidence < 0.30 or None",
+        },
+        "epistemic_note": (
+            "The confidence score is INFERENTIAL. It is computed from a "
+            "deterministic formula, but the primary input (confidence_tier) "
+            "is itself a classification decision. A customer can verify the "
+            "deductive inputs (bytecode patterns, revert counts) but cannot "
+            "independently reproduce the score without the same threshold "
+            "policy. This is by design: the score is our assessment, not a "
+            "measurement."
+        ),
+    }})
+
+
+@router.get("/methodology/camouflage")
+async def methodology_camouflage():
+    """Published camouflage ratio methodology. Priority 2b."""
+    return JSONResponse({"status": "ok", "data": {
+        "metric": "camouflage_ratio",
+        "definition": (
+            "Fraction of contracts with 10+ interactions that maintain "
+            "revert rates below 10%."
+        ),
+        "threshold_justification": (
+            "10% was chosen because contracts below this threshold "
+            "attract 4.5x more unique victims than overt traps (>50% "
+            "revert rate). Empirical from two-week assessment: "
+            "camouflaged contracts averaged 66 victims vs 15 for overt. "
+            "The multiplier is stable across chains (Base 4.2x, "
+            "Arbitrum 4.8x) and weeks (W1 4.3x, W2 4.7x)."
+        ),
+        "current_value": "79.2% (production, stable across 23 days)",
+        "epistemic": (
+            "MIXED — the revert rate computation is deductive (arithmetic "
+            "on on-chain receipts). The 10% threshold is a policy choice "
+            "informed by empirical data but not the only defensible "
+            "boundary. The 4.5x multiplier is a measured observation."
+        ),
+    }})
