@@ -24,6 +24,26 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# Epistemic classification per alert type.
+# Added per COMMERCIAL_EPISTEMIC_AUDIT.md (2026-04-09).
+# provable  = trigger is an on-chain event, independently verifiable
+# assessed  = trigger involves behavioral interpretation or classification
+# predictive = trigger involves forward-looking inference
+ALERT_EPISTEMIC_TAGS = {
+    "TRAP_CONFIRMED":           "provable",   # external revert with tx_hash
+    "HIGH_VELOCITY_DEPLOYER":   "provable",   # N deployments counted on-chain
+    "WATCHLIST_HIT":            "provable",   # deterministic address match
+    "BRIDGE_WITHDRAWAL":        "provable",   # direct bridge call with value
+    "X402_AGENT_DRAIN":         "assessed",   # Permit2 call decoded + rogue classification
+    "X402_FACILITATOR_UNKNOWN": "assessed",   # unregistered address calling x402 selectors
+    "X402_PERMIT2_EXPOSURE":    "assessed",   # new allowance on monitored token
+    "X402_TRUST_AMPLIFICATION": "assessed",   # amplification factor vs baseline
+    "DORMANT_ACTIVATION":       "assessed",   # first interaction != malicious activation
+    "APPROVAL_DRAIN":           "assessed",   # temporal sequence interpreted as drain
+    "SELF_LOOP_TRAP":           "provable",   # deployer called own contract (on-chain)
+}
+
+
 def insert_alert(conn: sqlite3.Connection, *,
                  alert_type: str,
                  address: str,
@@ -31,12 +51,20 @@ def insert_alert(conn: sqlite3.Connection, *,
                  block_number: int = None,
                  timestamp: str = None,
                  payload: dict = None) -> None:
-    """Insert an alert into the alerts table."""
+    """Insert an alert into the alerts table.
+
+    Automatically injects epistemic_tag into the payload so feed
+    consumers can filter by provability level.
+    """
+    if payload is None:
+        payload = {}
+    payload["epistemic_tag"] = ALERT_EPISTEMIC_TAGS.get(alert_type, "assessed")
+
     conn.execute(
         """INSERT INTO alerts (alert_type, address, tx_hash, block_number, timestamp, payload)
            VALUES (?, ?, ?, ?, ?, ?)""",
         (alert_type, address, tx_hash, block_number,
-         timestamp or _now_iso(), json.dumps(payload) if payload else None),
+         timestamp or _now_iso(), json.dumps(payload)),
     )
 
 

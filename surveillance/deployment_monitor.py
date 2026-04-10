@@ -410,6 +410,21 @@ class DeploymentMonitor:
                 except Exception as e:
                     logger.warning("Timelock scan failed: %s", e)
 
+            # Deployer count refresh every 360 heartbeats (~6 hours)
+            # Fixes stale total_contracts_deployed on deployers table.
+            # Pure SQLite, zero RPC. Added per COMMERCIAL_EPISTEMIC_AUDIT.md.
+            if heartbeat_count % 360 == 180:
+                try:
+                    from surveillance.refresh_deployer_counts import refresh_deployer_counts
+                    summary = refresh_deployer_counts(self.conn)
+                    if summary["stale_counts_fixed"] > 0:
+                        logger.info(
+                            "Deployer count refresh: %d stale counts fixed",
+                            summary["stale_counts_fixed"],
+                        )
+                except Exception as e:
+                    logger.debug("Deployer count refresh failed: %s", e)
+
             # SLOAD spike detection every 360 heartbeats (~6 hours)
             if heartbeat_count % 360 == 200:
                 try:

@@ -494,18 +494,99 @@ def _build_risk(conn: sqlite3.Connection, row: dict) -> dict:
         except Exception:
             pass
 
+    # ---------------------------------------------------------------
+    # Epistemic status: separate deductive base from inferential
+    # components so customers know what's provable vs assessed.
+    # Added per COMMERCIAL_EPISTEMIC_AUDIT.md (2026-04-09).
+    # ---------------------------------------------------------------
+    deductive_base = [
+        f"bytecode patterns at cited offsets ({len(sigs)} detected)" if sigs else None,
+        f"{stats['revert_rate']:.1%} revert rate on {stats['total']:,} interactions" if stats["total"] else None,
+        f"{victims:,} distinct callers" if victims else None,
+        f"deployer {deployer_addr}" if deployer_addr else None,
+    ]
+    if approval_data:
+        deductive_base.append(
+            f"{approval_data['pending_approvals']} pending approvals, "
+            f"{approval_data['approvals_drained']} drained"
+        )
+    deductive_base = [d for d in deductive_base if d]
+
+    inferential_components = []
+    if row["confidence_tier"] == "suspected":
+        inferential_components.append(
+            "suspected tier: bytecode pattern count >= 1 (policy threshold)"
+        )
+    if conf is not None:
+        inferential_components.append(
+            "confidence score: formula weighting tier + victim count + signal count"
+        )
+    if attribution.get("org_id"):
+        inferential_components.append(
+            f"org attribution ({attribution['org_id']}): funding-chain inference"
+        )
+    if attribution.get("timezone"):
+        inferential_components.append(
+            f"timezone ({attribution['timezone']}): inferred from deployment hour distribution"
+        )
+    if family_data:
+        inferential_components.append(
+            "bytecode family: cluster membership via pattern-prefix similarity"
+        )
+    if trust_amp and trust_amp.get("amplification_factor"):
+        inferential_components.append(
+            "amplification factor: ratio depends on inferential family baseline"
+        )
+
+    if row["confidence_tier"] == "confirmed":
+        epistemic_classification = "confirmed"
+    elif inferential_components:
+        epistemic_classification = "assessed"
+    else:
+        epistemic_classification = "observed"
+
+    # Confirmation evidence tx_hashes (for Tier A /verify consumers)
+    confirmation_evidence = None
+    if row["confidence_tier"] == "confirmed" and row.get("confirmation_tx_hash"):
+        confirmation_evidence = row["confirmation_tx_hash"]
+
+    # Sample tx_hashes backing revert stats (spot-check references)
+    sample_tx_hashes = None
+    try:
+        sample_rows = conn.execute(
+            "SELECT tx_hash FROM transaction_events "
+            "WHERE contract_address = ? AND is_reverted = 1 LIMIT 3",
+            (addr,),
+        ).fetchall()
+        if sample_rows:
+            sample_tx_hashes = [r[0] for r in sample_rows]
+    except Exception:
+        pass
+
     return {
         "address": addr,
         "chain": row["chain"],
         "risk_level": risk,
         "confidence": conf,
         "tier": row["confidence_tier"],
+        "epistemic_status": {
+            "classification": epistemic_classification,
+            "deductive_base": deductive_base,
+            "inferential_components": inferential_components,
+            "verification": (
+                "Deductive base verifiable via eth_getCode (bytecode) + "
+                "block replay (revert stats). Classification methodology "
+                "at /docs#confidence-methodology."
+            ),
+        },
         "detection": {
             "method": row.get("detection_method"),
             "trap_signatures": sigs,
             "signature_count": len(sigs),
+            "bytecode_notes": row.get("bytecode_pattern_notes"),
             "behavioral_confirmed": row["confidence_tier"] == "confirmed",
             "confirmed_at": row.get("confirmation_timestamp"),
+            "confirmation_tx_hash": confirmation_evidence,
             "detector_precision": detector_prec,
         },
         "impact": {
@@ -513,6 +594,12 @@ def _build_risk(conn: sqlite3.Connection, row: dict) -> dict:
             "total_interactions": stats["total"],
             "revert_rate": stats["revert_rate"],
             "camouflaged": stats["revert_rate"] < 0.10 if stats["total"] >= 10 else None,
+            "camouflage_note": (
+                "Camouflaged = revert rate < 10% on 10+ interactions. "
+                "Threshold chosen because contracts below 10% attract 4.5x "
+                "more victims than overt traps (empirical, two-week assessment)."
+            ) if stats["total"] >= 10 else None,
+            "sample_revert_tx_hashes": sample_tx_hashes,
         },
         "attribution": attribution,
         "approval_exposure": approval_data,
@@ -520,13 +607,131 @@ def _build_risk(conn: sqlite3.Connection, row: dict) -> dict:
         "trust_amplification": trust_amp,
         "diamond_model": diamond,
         "extraction_event": extraction,
-        "external_benchmark": {"goplus": goplus} if goplus else None,
+        "external_benchmark": {
+            "goplus": goplus,
+            "comparison_note": (
+                "Different detection methodologies. L3_ONLY means Layer 3 "
+                "flagged and GoPlus did not — may reflect scope differences "
+                "rather than detection failure."
+            ),
+        } if goplus else None,
         "context": {
             "first_seen": row.get("detection_timestamp"),
             "last_updated": row.get("last_updated"),
             "detection_block": row.get("detection_block"),
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Tier A — Deductive-Only Verification Endpoint
+# Returns ONLY on-chain-verifiable facts. No risk_level, no confidence
+# score, no organizational attribution. Pure Tier A output for
+# liability-conscious customers who want to make their own classification
+# decisions from independently verifiable evidence.
+# Added per COMMERCIAL_EPISTEMIC_AUDIT.md (2026-04-09).
+# ---------------------------------------------------------------------------
+
+@router.get("/verify/{chain}/{address}", dependencies=[Depends(require_auth)])
+async def verify(chain: str, address: str):
+    """Deductive-only risk evidence. Every field is independently
+    verifiable via eth_getCode, eth_getTransactionReceipt, or
+    eth_getTransactionByHash. No inferential components."""
+    addr = address.lower()
+    conn = _ro_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM contracts WHERE contract_address = ? AND chain = ?",
+            (addr, chain),
+        ).fetchone()
+        if not row:
+            return _error("NOT_FOUND",
+                          "Address not found in monitored corpus.", 404)
+        row = dict(row)
+        stats = _get_revert_stats(conn, addr)
+
+        # Bytecode patterns with byte offsets (verifiable via eth_getCode)
+        sigs = []
+        if row.get("has_asymmetric_transfer"):
+            sigs.append("asymmetric_transfer")
+        if row.get("has_conditional_revert"):
+            sigs.append("conditional_revert")
+        if row.get("has_unusual_fee_structure"):
+            sigs.append("unusual_fee_structure")
+        notes = row.get("bytecode_pattern_notes") or ""
+        if "SELFDESTRUCT" in notes:
+            sigs.append("selfdestruct")
+        if "delegatecall" in notes.lower():
+            sigs.append("delegatecall")
+
+        # Sample revert tx_hashes for spot-checking
+        revert_hashes = [
+            r[0] for r in conn.execute(
+                "SELECT tx_hash FROM transaction_events "
+                "WHERE contract_address = ? AND is_reverted = 1 LIMIT 5",
+                (addr,),
+            ).fetchall()
+        ]
+
+        # Approval evidence
+        approval_hashes = [
+            {"victim": r[0], "tx_hash": r[1]}
+            for r in conn.execute(
+                "SELECT victim_address, approve_tx_hash "
+                "FROM approval_watchlist WHERE contract_address = ? LIMIT 10",
+                (addr,),
+            ).fetchall()
+        ]
+
+        # Confirmation evidence (if confirmed)
+        confirmation = None
+        if row["confidence_tier"] == "confirmed" and row.get("confirmation_tx_hash"):
+            confirmation = {
+                "tx_hash": row["confirmation_tx_hash"],
+                "block": row.get("confirmation_block"),
+                "timestamp": row.get("confirmation_timestamp"),
+            }
+
+        # Deployer creation tx
+        deployer = row.get("deployer_address")
+        creation_block = row.get("detection_block")
+
+        return JSONResponse(_ok({
+            "address": addr,
+            "chain": chain,
+            "epistemic_tier": "A",
+            "epistemic_note": (
+                "Every field in this response is independently verifiable "
+                "via standard Ethereum RPC calls. No inferential components, "
+                "no risk scores, no organizational attribution."
+            ),
+            "bytecode_evidence": {
+                "patterns_detected": sigs,
+                "pattern_notes": notes if notes else None,
+                "verification": "eth_getCode(address) + disassemble at cited byte offsets",
+            },
+            "revert_evidence": {
+                "total_interactions": stats["total"],
+                "reverts": stats["reverts"],
+                "revert_rate": stats["revert_rate"],
+                "distinct_callers": stats["callers"],
+                "sample_revert_tx_hashes": revert_hashes,
+                "verification": "eth_getTransactionReceipt(tx_hash).status == 0 for each",
+            },
+            "deployment_evidence": {
+                "deployer_address": deployer,
+                "detection_block": creation_block,
+                "verification": "eth_getTransactionByHash at creation block, tx.from == deployer",
+            },
+            "confirmation_evidence": confirmation,
+            "approval_evidence": {
+                "total_approvals_tracked": len(approval_hashes),
+                "sample_approvals": approval_hashes,
+                "verification": "eth_getTransactionByHash(tx_hash) shows approve() calldata",
+            } if approval_hashes else None,
+        }, conn))
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
