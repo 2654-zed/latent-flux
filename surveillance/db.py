@@ -1236,19 +1236,57 @@ def get_open_exposures(conn: sqlite3.Connection) -> list[dict]:
 
 
 def get_exposure_contracts(conn: sqlite3.Connection) -> set[str]:
-    """All contracts with open exposures — for drain monitoring."""
-    rows = conn.execute(
-        "SELECT DISTINCT approved_contract FROM live_exposures WHERE status = 'open'"
-    ).fetchall()
-    return {r[0] for r in rows}
+    """All contracts with open/pending exposures — for drain monitoring.
+
+    Primary source: approval_watchlist (15k+ rows on production).
+    Fallback: live_exposures (deprecated, 0 rows on production).
+    The two tables track the same concept from different code paths.
+    approval_watchlist is the canonical source per audit 2026-04-09.
+    """
+    result: set[str] = set()
+    try:
+        rows = conn.execute(
+            "SELECT DISTINCT contract_address FROM approval_watchlist "
+            "WHERE drain_detected = 0"
+        ).fetchall()
+        result.update(r[0] for r in rows)
+    except Exception:
+        pass
+    try:
+        rows = conn.execute(
+            "SELECT DISTINCT approved_contract FROM live_exposures "
+            "WHERE status = 'open'"
+        ).fetchall()
+        result.update(r[0] for r in rows)
+    except Exception:
+        pass
+    return result
 
 
 def get_exposed_addresses(conn: sqlite3.Connection) -> set[str]:
-    """All addresses with open exposures — for drain monitoring."""
-    rows = conn.execute(
-        "SELECT DISTINCT exposed_address FROM live_exposures WHERE status = 'open'"
-    ).fetchall()
-    return {r[0] for r in rows}
+    """All addresses with open/pending exposures — for drain monitoring.
+
+    Primary source: approval_watchlist (15k+ rows on production).
+    Fallback: live_exposures (deprecated, 0 rows on production).
+    """
+    result: set[str] = set()
+    try:
+        rows = conn.execute(
+            "SELECT DISTINCT victim_address FROM approval_watchlist "
+            "WHERE drain_detected = 0"
+        ).fetchall()
+        result.update(r[0] for r in rows)
+    except Exception:
+        pass
+    try:
+        rows = conn.execute(
+            "SELECT DISTINCT exposed_address FROM live_exposures "
+            "WHERE status = 'open'"
+        ).fetchall()
+        result.update(r[0] for r in rows)
+    except Exception:
+        pass
+    return result
 
 
 def mark_exposure_drained(conn: sqlite3.Connection, exposed_address: str,

@@ -630,10 +630,12 @@ class X402Monitor:
         self._known_facilitators: Set[str] = set()
         self._rogue_facilitators: Set[str] = set()
         self._exposed_owners: Set[str] = set()  # payers with active Permit2 allowances
-        # Dedup: only fire X402_FACILITATOR_UNKNOWN once per facilitator
-        # address within a cache-refresh window (~500 blocks). Cleared
-        # every _refresh_caches() cycle. Reduces alert volume from ~45k/day
-        # (one per event) to ~N/day (one per distinct facilitator per window).
+        # Dedup: only fire X402_FACILITATOR_UNKNOWN on FIRST sighting of
+        # a new facilitator address — not once per window, not once per
+        # event. Subsequent events from the same address are silently
+        # recorded in x402_events but don't fire alerts. The set persists
+        # across cache refreshes and is seeded from x402_facilitators on
+        # init so facilitators discovered in prior sessions don't re-alert.
         self._alerted_unknown_facilitators: Set[str] = set()
         self._refresh_caches()
 
@@ -673,9 +675,20 @@ class X402Monitor:
         except sqlite3.Error as e:
             logger.warning("exposure cache refresh failed: %s", e)
 
-        # Reset alert dedup so each facilitator gets at most one
-        # X402_FACILITATOR_UNKNOWN alert per refresh window.
-        self._alerted_unknown_facilitators.clear()
+        # Seed the alerted set from x402_facilitators so known/rogue
+        # facilitators from prior sessions never re-alert. Unknown
+        # facilitators also seed (they've already been alerted once).
+        # The set is NOT cleared on refresh — first-sighting-only means
+        # once alerted, always suppressed.
+        try:
+            rows = self.conn.execute(
+                "SELECT address FROM x402_facilitators"
+            ).fetchall()
+            self._alerted_unknown_facilitators.update(
+                r[0].lower() for r in rows
+            )
+        except sqlite3.Error:
+            pass
 
     # ------------------------------------------------------------------
     # Block processing

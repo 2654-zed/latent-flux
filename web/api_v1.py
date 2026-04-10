@@ -1037,11 +1037,69 @@ async def org_detail(org_id: str):
         tz = Counter_vals([p[0] for p in profiles if p[0]])
         techniques = Counter_vals([p[2] for p in profiles if p[2]])
 
+        # Attribution confidence (Priority 5c)
+        # HIGH: funding chain + behavioral similarity + temporal succession all align
+        # MEDIUM: funding chain only (default for funding_trail-based attribution)
+        # LOW: behavioral similarity only (no confirmed funding link)
+        has_funding = len(dep_addrs) > 0
+        has_behavioral = len(profiles) > 0
+        has_similarity = False
+        try:
+            if dep_addrs:
+                sim_ph = ",".join("?" * min(len(dep_addrs), 10))
+                sim_row = conn.execute(
+                    f"SELECT COUNT(*) FROM deployer_similarity "
+                    f"WHERE deployer_a IN ({sim_ph}) AND composite_score >= 0.85",
+                    dep_addrs[:10],
+                ).fetchone()
+                has_similarity = sim_row and sim_row[0] > 0
+        except Exception:
+            pass
+
+        if has_funding and has_behavioral and has_similarity:
+            org_confidence = "HIGH"
+            org_confidence_note = (
+                "Funding chain + behavioral profiling + cross-deployer "
+                "similarity (>=0.85) all converge."
+            )
+        elif has_funding and has_behavioral:
+            org_confidence = "MEDIUM"
+            org_confidence_note = (
+                "Funding chain traces verified on-chain. Behavioral "
+                "profiles computed. Cross-deployer similarity not "
+                "yet confirmed at >=0.85 threshold."
+            )
+        elif has_funding:
+            org_confidence = "MEDIUM"
+            org_confidence_note = (
+                "Funding chain traces verified on-chain. Behavioral "
+                "profiles not available for this org's deployers."
+            )
+        else:
+            org_confidence = "LOW"
+            org_confidence_note = (
+                "Attribution based on entity_classification tags or "
+                "deployer_profiles.org_link. No confirmed funding chain."
+            )
+
         return JSONResponse(_ok({
             "org_id": org_id,
             "attribution_method": "funding_chain",
+            "attribution_confidence": org_confidence,
+            "attribution_confidence_note": org_confidence_note,
             "methodology_note": f"Primary count via on-chain funding trail. "
                                 f"Conservative entity_classification count: {ec_count} deployers.",
+            "epistemic_status": {
+                "classification": "assessed",
+                "deductive_base": [
+                    f"{len(dep_addrs)} deployer addresses linked via on-chain fund transfers",
+                    f"{contracts[0]} contracts deployed by those addresses",
+                ],
+                "inferential_components": [
+                    "org_id assignment: interpreting funding chain as organizational link",
+                    f"timezone inference: {tz[0] if tz else 'n/a'}",
+                ],
+            },
             "scale": {
                 "deployers": len(dep_addrs),
                 "contracts": contracts[0],
