@@ -259,7 +259,7 @@ async def main():
             req = urllib.request.Request(
                 "https://spypy.up.railway.app/admin/entity-type",
                 data=data,
-                headers={"Content-Type": "application/json", "Authorization": "Bearer jlfsafjiefnajsf"},
+                headers={"Content-Type": "application/json", "Authorization": "Bearer jfwufhnsuisfj"},
             )
             with urllib.request.urlopen(req, timeout=10) as resp:
                 result = json.loads(resp.read())

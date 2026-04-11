@@ -343,7 +343,7 @@ async def main():
                 "https://spypy.up.railway.app/admin/entity-type",
                 data=data,
                 headers={"Content-Type": "application/json",
-                         "Authorization": "Bearer jlfsafjiefnajsf"},
+                         "Authorization": "Bearer jfwufhnsuisfj"},
             )
             with urllib.request.urlopen(req, timeout=10) as resp:
                 print(f"  Railway {addr[:14]}...: {json.loads(resp.read())}")

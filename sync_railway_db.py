@@ -14,7 +14,9 @@ import urllib.parse
 from pathlib import Path
 
 BASE_URL = os.environ.get("RAILWAY_URL", "https://spypy.up.railway.app")
-TOKEN = os.environ.get("ADMIN_TOKEN", "jlfsafjiefnajsf")
+TOKEN = os.environ.get("ADMIN_TOKEN")
+if not TOKEN:
+    raise RuntimeError("ADMIN_TOKEN environment variable is required. Do not hardcode tokens.")
 LOCAL_DB = Path(__file__).resolve().parent / "surveillance" / "data" / "surveillance.db"
 
 # Tables to sync in dependency order (parents before children)
