@@ -658,6 +658,17 @@ class StatsHandler(BaseHTTPRequestHandler):
         """Write endpoints for remote database updates."""
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length) if content_length else b"{}"
+
+        # Binary upload endpoint — handle before JSON parsing
+        if self.path == "/admin/upload-db":
+            token = os.environ.get("ADMIN_TOKEN", "")
+            auth = self.headers.get("Authorization", "")
+            if not token or auth != f"Bearer {token}":
+                self._json(403, {"error": "forbidden"})
+                return
+            self._handle_upload_db(body)
+            return
+
         try:
             data = json.loads(body)
         except json.JSONDecodeError:
@@ -675,44 +686,7 @@ class StatsHandler(BaseHTTPRequestHandler):
                 self._json(403, {"error": "forbidden"})
                 return
 
-        if self.path == "/admin/upload-db":
-            # Emergency DB replacement — accepts gzipped SQLite DB
-            import gzip
-            try:
-                data_bytes = gzip.decompress(body)
-                tmp_path = DB_PATH + ".new"
-                with open(tmp_path, "wb") as f:
-                    f.write(data_bytes)
-                # Integrity check
-                c = sqlite3.connect(tmp_path)
-                result = c.execute("PRAGMA integrity_check").fetchone()
-                tables = c.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'").fetchone()
-                c.close()
-                if result[0] != "ok":
-                    os.unlink(tmp_path)
-                    self._json(400, {"error": f"integrity failed: {result[0]}"})
-                    return
-                # Replace
-                backup = DB_PATH + ".corrupt"
-                if os.path.exists(DB_PATH):
-                    os.rename(DB_PATH, backup)
-                # Remove WAL/SHM
-                for ext in ["-wal", "-shm"]:
-                    p = DB_PATH + ext
-                    if os.path.exists(p):
-                        os.unlink(p)
-                os.rename(tmp_path, DB_PATH)
-                self._json(200, {
-                    "status": "ok",
-                    "size_bytes": len(data_bytes),
-                    "tables": tables[0],
-                    "note": "DB replaced. Redeploy to restart monitors."
-                })
-            except Exception as e:
-                self._json(500, {"error": str(e)})
-            return
-
-        elif self.path == "/admin/deployer-notes":
+        if self.path == "/admin/deployer-notes":
             # Update deployment_pattern_notes for a deployer
             addr = data.get("address", "").lower()
             notes = data.get("notes", "")
@@ -1280,6 +1254,41 @@ class StatsHandler(BaseHTTPRequestHandler):
 
         else:
             self._json(404, {"error": "unknown admin endpoint"})
+
+    def _handle_upload_db(self, body):
+        """Emergency DB replacement — accepts gzipped SQLite DB."""
+        import gzip
+        try:
+            data_bytes = gzip.decompress(body)
+            tmp_path = DB_PATH + ".new"
+            with open(tmp_path, "wb") as f:
+                f.write(data_bytes)
+            # Integrity check
+            c = sqlite3.connect(tmp_path)
+            result = c.execute("PRAGMA integrity_check").fetchone()
+            tables = c.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'").fetchone()
+            c.close()
+            if result[0] != "ok":
+                os.unlink(tmp_path)
+                self._json(400, {"error": f"integrity failed: {result[0]}"})
+                return
+            # Replace
+            backup = DB_PATH + ".corrupt"
+            if os.path.exists(DB_PATH):
+                os.rename(DB_PATH, backup)
+            for ext in ["-wal", "-shm"]:
+                p = DB_PATH + ext
+                if os.path.exists(p):
+                    os.unlink(p)
+            os.rename(tmp_path, DB_PATH)
+            self._json(200, {
+                "status": "ok",
+                "size_bytes": len(data_bytes),
+                "tables": tables[0],
+                "note": "DB replaced. Redeploy to restart monitors."
+            })
+        except Exception as e:
+            self._json(500, {"error": str(e)})
 
     def _json(self, code, data):
         self.send_response(code)
