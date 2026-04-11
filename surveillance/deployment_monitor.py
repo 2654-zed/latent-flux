@@ -425,6 +425,25 @@ class DeploymentMonitor:
                 except Exception as e:
                     logger.debug("Deployer count refresh failed: %s", e)
 
+            # Trust amplification scan every 360 heartbeats (~6 hours)
+            # Detects contracts where 80%+ of callers arrive via Universal
+            # Router — trusted infrastructure as attack delivery mechanism.
+            # Pure SQLite, zero RPC. Emits TRUST_AMPLIFICATION alerts.
+            if heartbeat_count % 360 == 220:
+                try:
+                    from surveillance.trust_amplification import analyze as ta_analyze
+                    summary = ta_analyze(self.conn, emit_alerts=True, quiet=True)
+                    if summary["router_dominated"] > 0:
+                        logger.info(
+                            "Trust amplification: %d contracts analyzed, "
+                            "%d router-dominated, %d alerts",
+                            summary["contracts_analyzed"],
+                            summary["router_dominated"],
+                            summary["alerts_emitted"],
+                        )
+                except Exception as e:
+                    logger.debug("Trust amplification scan failed: %s", e)
+
             # SLOAD spike detection every 360 heartbeats (~6 hours)
             if heartbeat_count % 360 == 200:
                 try:
