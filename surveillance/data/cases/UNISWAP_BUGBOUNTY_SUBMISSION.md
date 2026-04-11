@@ -103,7 +103,7 @@ In this exploit, the user makes **no trust decision about the malicious contract
 
 ## Scope Applicability — Addressing Potential Exclusions
 
-**"Issues in third-party protocols that integrate with Uniswap (unless caused by Uniswap code)"** — The malicious pool is a third-party contract. However, the vulnerability is not that the pool exists — it's that the Universal Router's `execute()` function selects it as a routing path and delivers user funds to it. The selection is performed by Uniswap code. The 14.2x trust amplification factor (same bytecode, 14x more victims when router-delivered) quantifies the causal contribution of Uniswap's routing logic to the exploit's effectiveness. Without the router, this contract averages 94 victims/day. With the router, 1,338/day. The difference is caused by Uniswap code.
+**"Issues in third-party protocols that integrate with Uniswap (unless caused by Uniswap code)"** — The malicious pool is a third-party contract. However, the vulnerability is not that the pool exists — it's that the Universal Router's `execute()` function selects it as a routing path and delivers user funds to it. The selection is performed by Uniswap code. 96.6% of this contract's 2,910 callers arrived via the Universal Router's `execute()` selector, with 1,332 callers/day. The router IS the delivery mechanism — without it, the contract would need to attract victims independently.
 
 **"MEV strategies that work as intended"** — This is not an MEV strategy. No MEV extraction is occurring. A single attacker deployed a contract that steals 100% of WETH on sell-side swaps. There is no block ordering manipulation, no sandwich attack, no frontrunning. This is a malicious pool that the router treats as legitimate.
 
@@ -215,14 +215,17 @@ The deployer also distributed Unicode impersonation tokens (WETH with Cyrillic c
 
 Compared against 20 contracts with the same bytecode family receiving traffic through traditional channels (direct interaction, not router-delivered):
 
-| Metric | Router-Delivered (this exploit) | Traditional Delivery (same bytecode) |
-|---|---|---|
-| Average victims per contract | 2,542 | 195 |
-| Average victims per day | 1,338 | 94 |
-| Average revert rate | 0.3% | 10.4% |
-| **Trust Amplification Factor** | **14.2x** | baseline |
+| Metric | Router-Delivered (0xd4624228) |
+|---|---|
+| Total callers | 2,910 |
+| Router callers (Universal Router `execute()`) | 2,811 |
+| **Router dominance** | **96.6%** |
+| Callers per day | 1,332 |
+| Revert rate | 0.2% |
 
-The same malicious bytecode produces **14.2 times more victims per day** when delivered through the Universal Router versus discovered independently.
+> **Note (2026-04-11):** The originally published "14.2x amplification factor" compared this contract's 1,338 callers/day to a hand-selected set of 20 traditional contracts averaging 94 callers/day. That comparison set was never persisted by address and the baseline cannot be reproduced from stored data. The 14.2x figure has been retracted (see CORRECTIONS.md). The verified finding is the 96.6% router dominance: virtually all of this contract's victims arrived through Uniswap's routing, not through independent discovery.
+
+96.6% of this contract's callers were delivered by the Universal Router — the router IS the attack delivery mechanism.
 
 ---
 
@@ -296,7 +299,7 @@ The subsequent investigation:
 2. Traced token flows to prove systematic value accumulation
 3. Traced deployer withdrawals to confirm $211K extraction
 4. Analyzed individual transaction receipts to identify the asymmetric buy-not-sell mechanism
-5. Quantified the trust amplification factor (14.2x) through population-level behavioral analysis
+5. Quantified router dominance (96.6% of callers via Universal Router) through population-level behavioral analysis
 
 Standard security tools did not flag this contract because:
 - Transactions succeed (no revert to trigger alerts)

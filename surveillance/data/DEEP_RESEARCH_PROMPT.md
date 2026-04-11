@@ -19,7 +19,7 @@ I operate a blockchain surveillance system called Layer 3 that monitors smart co
 - 2,279 victims returned 2+ times (78% return rate)
 - A comparable contract from the same bytecode family with traditional delivery (not router-delivered) had 1,624 victims over 3.79 days (428 victims/day), revert rate 13.99%
 - Victim overlap between the two: 0 (zero shared callers — completely different populations)
-- **Trust Amplification Factor: 3.1x** against the single best-performing traditional contract, **14.2x** against the average of 20 traditional fee-skimming contracts (average 94 victims/day)
+- **Trust Amplification: 96.6% router dominance** — 2,811 of 2,910 callers arrived via Uniswap's Universal Router. *(Note: the originally published "3.1x / 14.2x" factors compared this to hand-selected comparison sets that were never persisted. The 14.2x is retracted — see CORRECTIONS.md. The 96.6% router dominance is verified.)*
 - Same bytecode, same chain, same time period, the only variable is delivery through trusted infrastructure
 - 576 contracts in the corpus share the same fee-on-transfer bytecode pattern; 339 are currently dormant
 
@@ -74,7 +74,7 @@ Using my empirical data as the foundation, research the following five areas. Fo
 
 ### Research Area 1: Trust Amplification as a Measurable Phenomenon
 
-My 3.1-14.2x trust amplification factor may be the first quantified measurement of how trusted infrastructure amplifies exploitation effectiveness in DeFi. Research:
+My finding that 96.6% of a parasitic contract's callers arrived via Uniswap's Universal Router (1,332 callers/day, 0.2% revert rate) may be the first quantified measurement of how trusted infrastructure amplifies exploitation effectiveness in DeFi. *(Note: the originally published "3.1-14.2x" ratio has been retracted — the comparison baseline was never persisted and cannot be reproduced. The 96.6% router dominance is the verified finding.)* Research:
 - Has anyone measured equivalent amplification factors in other domains? (e.g., Amazon "Fulfilled by" badge effect on counterfeit sales, Google Maps routing effect on fraudulent business traffic, social media algorithm amplification of scam content)
 - What academic literature exists on trust exploitation in platform economics, behavioral finance, or cybersecurity?
 - What frameworks exist for measuring trust as an attack surface?

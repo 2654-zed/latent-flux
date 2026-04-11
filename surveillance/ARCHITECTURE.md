@@ -162,7 +162,7 @@ python3 sync_railway_db.py
 
 ## Key Findings
 
-1. **Trust Amplification Factor: 14.2x** — Same malicious bytecode produces 14x more victims when delivered through Uniswap's Universal Router vs direct interaction
+1. **Trust Amplification: 96.6% router dominance** — The parasite contract `0xd4624228` received 96.6% of its 2,910 callers via Uniswap's Universal Router (selector `3593564c`), averaging 1,332 callers/day. *(Note: the originally claimed "14.2x amplification factor" compared this to a hand-picked set of 20 contracts averaging 94 callers/day. That comparison set was never persisted and the number cannot be reproduced from stored data. See CORRECTIONS.md 2026-04-02. The 96.6% router dominance IS verified.)*
 2. **Trap-as-a-Service:** 229 contracts from 213 deployers share parameterized bytecode templates with anti-forensics offset randomization
 3. **$5.75M MEV Vault** discovered through a "failing" bot's funder network (Bot_A investigation)
 4. **Revert rate trend:** 3% → 34% over 7 days as trap density increases
