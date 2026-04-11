@@ -675,7 +675,44 @@ class StatsHandler(BaseHTTPRequestHandler):
                 self._json(403, {"error": "forbidden"})
                 return
 
-        if self.path == "/admin/deployer-notes":
+        if self.path == "/admin/upload-db":
+            # Emergency DB replacement — accepts gzipped SQLite DB
+            import gzip
+            try:
+                data_bytes = gzip.decompress(body)
+                tmp_path = DB_PATH + ".new"
+                with open(tmp_path, "wb") as f:
+                    f.write(data_bytes)
+                # Integrity check
+                c = sqlite3.connect(tmp_path)
+                result = c.execute("PRAGMA integrity_check").fetchone()
+                tables = c.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'").fetchone()
+                c.close()
+                if result[0] != "ok":
+                    os.unlink(tmp_path)
+                    self._json(400, {"error": f"integrity failed: {result[0]}"})
+                    return
+                # Replace
+                backup = DB_PATH + ".corrupt"
+                if os.path.exists(DB_PATH):
+                    os.rename(DB_PATH, backup)
+                # Remove WAL/SHM
+                for ext in ["-wal", "-shm"]:
+                    p = DB_PATH + ext
+                    if os.path.exists(p):
+                        os.unlink(p)
+                os.rename(tmp_path, DB_PATH)
+                self._json(200, {
+                    "status": "ok",
+                    "size_bytes": len(data_bytes),
+                    "tables": tables[0],
+                    "note": "DB replaced. Redeploy to restart monitors."
+                })
+            except Exception as e:
+                self._json(500, {"error": str(e)})
+            return
+
+        elif self.path == "/admin/deployer-notes":
             # Update deployment_pattern_notes for a deployer
             addr = data.get("address", "").lower()
             notes = data.get("notes", "")
@@ -1265,51 +1302,65 @@ threading.Thread(target=run_stats_server, daemon=True).start()
 
 # ---- Startup DB cleanup (run before monitors start) ----
 print("Running startup DB cleanup...", flush=True)
+_db_ok = False
 try:
-    _cleanup_conn = sqlite3.connect(DB_PATH, timeout=30)
+    # Quick integrity check — skip cleanup entirely if DB is corrupted
+    _test_conn = sqlite3.connect(DB_PATH, timeout=10)
+    _integrity = _test_conn.execute("PRAGMA integrity_check").fetchone()[0]
+    _test_conn.close()
+    if _integrity != "ok":
+        raise sqlite3.DatabaseError(f"DB corrupted: {_integrity}")
+    _db_ok = True
+except Exception as _db_err:
+    print(f"  DB CORRUPTED: {_db_err}", flush=True)
+    print("  Skipping cleanup. Upload a clean DB via POST /admin/upload-db", flush=True)
 
-    # 0. Ensure watchlist tables exist (may be missing on older Railway deploys)
+if _db_ok:
     try:
-        from surveillance.watchlist import ensure_tables as _ensure_wl
-        _ensure_wl(_cleanup_conn)
+        _cleanup_conn = sqlite3.connect(DB_PATH, timeout=30)
+
+        # 0. Ensure watchlist tables exist (may be missing on older Railway deploys)
+        try:
+            from surveillance.watchlist import ensure_tables as _ensure_wl
+            _ensure_wl(_cleanup_conn)
+            _cleanup_conn.commit()
+            print("  Watchlist tables: ensured", flush=True)
+        except Exception as _e:
+            print(f"  Watchlist tables: {_e}", flush=True)
+
+        # 1. Prune bytecode cache — remove ALL unknown entries (not just hit_count=0)
+        _before = _cleanup_conn.execute("SELECT COUNT(*) FROM bytecode_cache").fetchone()[0]
+        _cleanup_conn.execute("""
+            DELETE FROM bytecode_cache WHERE confidence_tier = 'unknown'
+        """)
+        _after = _cleanup_conn.execute("SELECT COUNT(*) FROM bytecode_cache").fetchone()[0]
+        print(f"  Bytecode cache: {_before} -> {_after} ({_before - _after} pruned)", flush=True)
+
+        # 2. Deduplicate alerts table
+        _alert_before = _cleanup_conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+        _cleanup_conn.execute("""
+            DELETE FROM alerts WHERE rowid NOT IN (
+                SELECT MIN(rowid) FROM alerts GROUP BY alert_type, address, tx_hash
+            )
+        """)
+        _alert_after = _cleanup_conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+        print(f"  Alerts: {_alert_before} -> {_alert_after} ({_alert_before - _alert_after} deduped)", flush=True)
+
         _cleanup_conn.commit()
-        print("  Watchlist tables: ensured", flush=True)
-    except Exception as _e:
-        print(f"  Watchlist tables: {_e}", flush=True)
 
-    # 1. Prune bytecode cache — remove ALL unknown entries (not just hit_count=0)
-    _before = _cleanup_conn.execute("SELECT COUNT(*) FROM bytecode_cache").fetchone()[0]
-    _cleanup_conn.execute("""
-        DELETE FROM bytecode_cache WHERE confidence_tier = 'unknown'
-    """)
-    _after = _cleanup_conn.execute("SELECT COUNT(*) FROM bytecode_cache").fetchone()[0]
-    print(f"  Bytecode cache: {_before} -> {_after} ({_before - _after} pruned)", flush=True)
+        # 3. WAL checkpoint + VACUUM to reclaim disk space
+        _cleanup_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        print("  WAL checkpoint: TRUNCATE complete", flush=True)
+        _cleanup_conn.execute("VACUUM")
+        print("  VACUUM complete — disk space reclaimed", flush=True)
 
-    # 2. Deduplicate alerts table
-    _alert_before = _cleanup_conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
-    _cleanup_conn.execute("""
-        DELETE FROM alerts WHERE rowid NOT IN (
-            SELECT MIN(rowid) FROM alerts GROUP BY alert_type, address, tx_hash
-        )
-    """)
-    _alert_after = _cleanup_conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
-    print(f"  Alerts: {_alert_before} -> {_alert_after} ({_alert_before - _alert_after} deduped)", flush=True)
+        # 4. Set WAL auto-checkpoint to smaller threshold (500 pages = ~2MB)
+        _cleanup_conn.execute("PRAGMA wal_autocheckpoint = 500")
 
-    _cleanup_conn.commit()
-
-    # 3. WAL checkpoint + VACUUM to reclaim disk space
-    _cleanup_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-    print("  WAL checkpoint: TRUNCATE complete", flush=True)
-    _cleanup_conn.execute("VACUUM")
-    print("  VACUUM complete — disk space reclaimed", flush=True)
-
-    # 4. Set WAL auto-checkpoint to smaller threshold (500 pages = ~2MB)
-    _cleanup_conn.execute("PRAGMA wal_autocheckpoint = 500")
-
-    _cleanup_conn.close()
-    print("Startup cleanup complete.", flush=True)
-except Exception as e:
-    print(f"Startup cleanup failed (non-fatal): {e}", flush=True)
+        _cleanup_conn.close()
+        print("Startup cleanup complete.", flush=True)
+    except Exception as e:
+        print(f"Startup cleanup failed (non-fatal): {e}", flush=True)
 
 # ---- Single-writer architecture ----
 # One writer process owns the only read-write connection.

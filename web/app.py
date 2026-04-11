@@ -44,9 +44,64 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 
 DB = os.environ.get("DB_PATH", str(BASE_DIR.parent / "surveillance" / "data" / "surveillance.db"))
 
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
+
 
 def conn():
     return get_conn(DB)
+
+
+# ---------------------------------------------------------------
+# Emergency DB upload — TEMPORARY, remove after recovery
+# ---------------------------------------------------------------
+
+@app.put("/admin/upload-db")
+async def upload_db(request: Request):
+    """Accept a gzipped SQLite DB upload to replace the corrupted production DB."""
+    import gzip
+    auth = request.headers.get("Authorization", "")
+    if not ADMIN_TOKEN or auth != f"Bearer {ADMIN_TOKEN}":
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    body = await request.body()
+    if not body:
+        return JSONResponse({"error": "empty body"}, status_code=400)
+
+    db_path = Path(DB)
+    tmp_path = db_path.with_suffix(".db.new")
+    try:
+        # Decompress gzip
+        data = gzip.decompress(body)
+        tmp_path.write_bytes(data)
+
+        # Quick integrity check
+        import sqlite3
+        c = sqlite3.connect(str(tmp_path))
+        result = c.execute("PRAGMA integrity_check").fetchone()
+        tables = c.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'").fetchone()
+        c.close()
+
+        if result[0] != "ok":
+            tmp_path.unlink()
+            return JSONResponse({"error": f"integrity check failed: {result[0]}"}, status_code=400)
+
+        # Replace the corrupted DB
+        backup_path = db_path.with_suffix(".db.corrupt")
+        if db_path.exists():
+            db_path.rename(backup_path)
+        tmp_path.rename(db_path)
+
+        return JSONResponse({
+            "status": "ok",
+            "size_bytes": len(data),
+            "tables": tables[0],
+            "integrity": result[0],
+            "note": "DB replaced. Redeploy to restart monitors with new DB.",
+        })
+    except Exception as e:
+        if tmp_path.exists():
+            tmp_path.unlink()
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 # ---------------------------------------------------------------

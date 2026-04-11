@@ -469,9 +469,12 @@ class EventMonitors:
                 self._handle_bridge(tx_hash, block_number, timestamp_iso,
                                     to_addr, from_addr, value, input_data)
 
-            # 5. CEX Deposit Pattern — track inflow/outflow ratios
-            if value and int(value) > 0:
-                self._update_cex_candidate(to_addr, from_addr, timestamp_iso)
+            # 5. CEX Deposit Pattern — DISABLED 2026-04-11
+            # Root cause of disk-full crisis: wrote 2 rows per value-bearing tx
+            # across all blocks, grew to 4.4M rows / 2GB+ WAL in production.
+            # Re-enable only with rate limiting (e.g. sample 1-in-100 blocks).
+            # if value and int(value) > 0:
+            #     self._update_cex_candidate(to_addr, from_addr, timestamp_iso)
 
             # 6. Org wallet outbound transfers — capture where exit ramp money goes
             if from_addr in self._org_wallets and to_addr and to_addr != from_addr:
