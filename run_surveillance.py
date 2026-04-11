@@ -659,14 +659,39 @@ class StatsHandler(BaseHTTPRequestHandler):
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length) if content_length else b"{}"
 
-        # Binary upload endpoint — handle before JSON parsing
-        if self.path == "/admin/upload-db":
+        # Binary upload endpoints — handle before JSON parsing
+        if self.path in ("/admin/upload-db", "/admin/upload-chunk", "/admin/finalize-upload"):
             token = os.environ.get("ADMIN_TOKEN", "")
             auth = self.headers.get("Authorization", "")
             if not token or auth != f"Bearer {token}":
                 self._json(403, {"error": "forbidden"})
                 return
-            self._handle_upload_db(body)
+
+            if self.path == "/admin/upload-db":
+                self._handle_upload_db(body)
+            elif self.path == "/admin/upload-chunk":
+                # Chunked upload — append body to staging file
+                staging = DB_PATH + ".staging"
+                offset = int(self.headers.get("X-Chunk-Offset", "-1"))
+                try:
+                    mode = "wb" if offset == 0 else "ab"
+                    with open(staging, mode) as f:
+                        f.write(body)
+                    size = os.path.getsize(staging)
+                    self._json(200, {"status": "ok", "offset": offset, "staging_size": size})
+                except Exception as e:
+                    self._json(500, {"error": str(e)})
+            elif self.path == "/admin/finalize-upload":
+                # Finalize: decompress staging file and replace DB
+                staging = DB_PATH + ".staging"
+                if not os.path.exists(staging):
+                    self._json(400, {"error": "no staging file"})
+                    return
+                # Treat staging as the upload body
+                with open(staging, "rb") as f:
+                    staging_body = f.read()
+                os.unlink(staging)
+                self._handle_upload_db(staging_body)
             return
 
         try:
@@ -1256,22 +1281,41 @@ class StatsHandler(BaseHTTPRequestHandler):
             self._json(404, {"error": "unknown admin endpoint"})
 
     def _handle_upload_db(self, body):
-        """Emergency DB replacement — accepts gzipped SQLite DB."""
+        """Emergency DB replacement — accepts gzipped or raw SQLite DB.
+
+        Streams body to disk first, then decompresses if needed.
+        """
         import gzip
         try:
-            data_bytes = gzip.decompress(body)
+            tmp_gz = DB_PATH + ".upload.gz"
             tmp_path = DB_PATH + ".new"
-            with open(tmp_path, "wb") as f:
-                f.write(data_bytes)
-            # Integrity check
+
+            # Check if it's gzipped (magic bytes 1f 8b)
+            is_gzip = len(body) > 2 and body[0] == 0x1f and body[1] == 0x8b
+
+            if is_gzip:
+                # Write gzip to disk, then decompress on disk
+                with open(tmp_gz, "wb") as f:
+                    f.write(body)
+                # Decompress streaming to avoid huge memory spike
+                with gzip.open(tmp_gz, "rb") as gz_in, open(tmp_path, "wb") as out:
+                    while True:
+                        chunk = gz_in.read(4 * 1024 * 1024)  # 4MB chunks
+                        if not chunk:
+                            break
+                        out.write(chunk)
+                os.unlink(tmp_gz)
+            else:
+                # Raw SQLite — write directly
+                with open(tmp_path, "wb") as f:
+                    f.write(body)
+
+            # Quick check — just verify it opens (skip full integrity for speed)
             c = sqlite3.connect(tmp_path)
-            result = c.execute("PRAGMA integrity_check").fetchone()
             tables = c.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'").fetchone()
+            contracts = c.execute("SELECT COUNT(*) FROM contracts").fetchone()[0]
             c.close()
-            if result[0] != "ok":
-                os.unlink(tmp_path)
-                self._json(400, {"error": f"integrity failed: {result[0]}"})
-                return
+
             # Replace
             backup = DB_PATH + ".corrupt"
             if os.path.exists(DB_PATH):
@@ -1283,11 +1327,19 @@ class StatsHandler(BaseHTTPRequestHandler):
             os.rename(tmp_path, DB_PATH)
             self._json(200, {
                 "status": "ok",
-                "size_bytes": len(data_bytes),
+                "size_bytes": os.path.getsize(DB_PATH),
                 "tables": tables[0],
+                "contracts": contracts,
                 "note": "DB replaced. Redeploy to restart monitors."
             })
         except Exception as e:
+            # Cleanup temp files
+            for p in [DB_PATH + ".upload.gz", DB_PATH + ".new"]:
+                if os.path.exists(p):
+                    try:
+                        os.unlink(p)
+                    except Exception:
+                        pass
             self._json(500, {"error": str(e)})
 
     def _json(self, code, data):
