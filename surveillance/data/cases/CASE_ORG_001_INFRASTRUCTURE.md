@@ -11,7 +11,7 @@
 
 org_001 is a professional, multi-chain trap operation running honeypot contracts on Arbitrum and Base. The operation traces to two CEX origins (Coinbase, Binance), employs 559+ deployers, has deployed 7,400+ contracts, and victimized 3,400+ bots. Total identified assets exceed **$80M** when including the Binance origin branch (33,333 ETH withdrawal).
 
-On 2026-04-11, two **vanity-spoofed shadow wallets** were discovered during a data gap investigation. These wallets use address prefix collision to impersonate existing org_001 infrastructure — a previously unobserved OPSEC technique indicating the operator is actively evolving counter-forensic capabilities.
+On 2026-04-11, two **vanity-spoofed shadow wallets** were discovered during a data gap investigation. These wallets use address prefix collision to impersonate existing org_001 infrastructure — now classified as a formal **anti-forensic capability operating at the intelligence layer** of the diamond model. This is the highest counter-intelligence sophistication observed in the corpus: it targets organizational monitoring systems and analyst workflows, not victims or automated tools.
 
 ---
 
@@ -91,14 +91,28 @@ On 2026-04-11, two **vanity-spoofed shadow wallets** were discovered during a da
 
 ---
 
-## OPSEC Technique: Vanity Address Spoofing
+## Anti-Forensic Capability: Vanity Address Spoofing (Intelligence Layer)
 
 **Discovery date:** 2026-04-11
 **Discovery context:** Data gap investigation, Apr 8-11 period
 
+### Classification
+
+Vanity address spoofing is classified as a formal **anti-forensic capability** operating at the **intelligence layer** -- the highest tier of counter-intelligence sophistication observed in this corpus. Unlike transaction-layer or victim-layer techniques that target automated tools or individual users, vanity spoofing targets **organizational-level monitoring systems and analyst workflows** that truncate addresses for display.
+
+**Three-Tier Anti-Forensic Model (org_001):**
+
+| Layer | Technique | Target | Mechanism |
+|---|---|---|---|
+| **Transaction** | Custom selector drains (`e37136db`) | Log-based forensic tools | Zero log events emitted; extraction invisible at event-log level |
+| **Victim** | Unicode WETH impersonation | Human inspection of token names | Unicode characters mimic legitimate token symbols |
+| **Intelligence** | Vanity address spoofing (7-char prefix match) | Organizational monitoring & chain analysis | Spoofed addresses pass truncated-display matching in dashboards, alerts, and analyst review |
+
+This is counter-intelligence sophistication: the vanity spoofing is not designed to fool victims or automated transaction tools -- it is designed to fool **analysts and monitoring systems** that truncate addresses to prefixes for display. It operates at the organizational intelligence layer, making it the most strategically significant anti-forensic capability in the corpus.
+
 ### The Technique
 
-org_001 generated vanity addresses with matching **prefixes** to existing infrastructure wallets. In block explorers and monitoring tools, addresses are often displayed truncated (e.g., `0x01989c93...acf`), making the spoofs visually identical to the originals.
+org_001 generated vanity addresses with matching **7-character prefixes** to existing infrastructure wallets. In block explorers and monitoring tools, addresses are often displayed truncated (e.g., `0x01989c93...acf`), making the spoofs visually identical to the originals.
 
 | Real Address | Shadow (Spoofed) Address | Matching Prefix |
 |---|---|---|
@@ -111,6 +125,61 @@ org_001 generated vanity addresses with matching **prefixes** to existing infras
 2. **Confuses manual review.** An analyst scanning transaction lists sees familiar prefixes and skips deeper inspection.
 3. **Enables parallel extraction.** Shadow wallets can receive/move funds independently while appearing to be the known wallet in truncated views.
 4. **Volume during detection gap.** ~$2M moved through each shadow wallet during the Apr 8-11 data gap period.
+5. **Counter-intelligence sophistication.** This is not OPSEC (protecting operational security from victims) -- it is counter-intelligence (protecting operations from analysts and monitoring systems). The technique targets the intelligence layer: chain analysis tools, organizational dashboards, and human review workflows.
+
+### Evidence of Vanity Generation
+
+- **7-character prefix matching** on Shadow Wallet 1 (`0x01989c93890aed05` = 8 bytes exact match)
+- **Proxy contract funding chains** -- Shadow Wallet 1 funded by 5 CEX hot wallets (nonces 2.2M-7.9M), not through the standard org_001 treasury path
+- **Vanity suffix patterns on downstream wallets** -- the sybil gas distribution network (20 wallets from 0x17548bc3) supporting Shadow Wallet 2 suggests pre-planned parallel infrastructure
+- **Deliberate timing** -- shadow wallets activated during a monitoring gap (Apr 8-11), indicating awareness of surveillance coverage windows
+
+---
+
+## Address Poisoning Attacks Against org_001
+
+**Discovery date:** 2026-04-12
+**Classification:** External address poisoning campaign targeting org_001 Treasury
+
+### Summary
+
+Three external address poisoner EOAs are actively targeting org_001's Treasury (`0xf186cb00e49e18491db5783ff04fae3818102ff7`) on Arbitrum. These are **not org_001 infrastructure** — they are third-party attackers attempting to trick org_001 into sending funds to look-alike addresses. This is a separate phenomenon from org_001's own vanity address spoofing (documented above), which targets external analysts and monitoring systems.
+
+org_001 is simultaneously a **practitioner** of vanity spoofing (intelligence-layer anti-forensics against surveillance) and a **target** of address poisoning (transaction-layer social engineering against their own operators).
+
+### Active Poisoner Addresses
+
+| Address | Spoof Target | Technique | Nonce | Priority |
+|---|---|---|---|---|
+| `0xe93d2a52f549b9726f2914ab4c2ff0f25c6e7f86` | Operator (`0xe93d64...`) | Fake Unicode USDC transfers | 2 | MEDIUM |
+| `0x360ed34d03353bcc229bf4660e9f48a66db9fb32` | Vault (`0x360e68...`) | Zero-value ETH spam | 2,622 | MEDIUM |
+| `0x360ee8653c848ca03172e65f5c95bde66db9fb32` | Vault (`0x360e68...`) | Dust USDC/USDT spam | 4,069 | MEDIUM |
+
+### Techniques Observed
+
+1. **Unicode USDC impersonation** (`0xe93d2a...`): Sends fake token transfers using a contract that mimics USDC with Unicode characters in the token name/symbol. Low nonce (2) suggests recently activated or purpose-built.
+
+2. **Zero-value ETH spam** (`0x360ed3...`): Sends zero-value ETH transactions to org_001 Treasury from a vanity address matching the `0x360e` prefix of the real Vault. Nonce 2,622 indicates sustained automated operation.
+
+3. **Dust token spam** (`0x360ee8...`): Sends tiny amounts of USDC/USDT to org_001 Treasury from another `0x360e`-prefix vanity address. Nonce 4,069 — the most active of the three poisoners.
+
+### Campaign Scale
+
+- **Combined poisoner nonce count:** 6,693 (2 + 2,622 + 4,069)
+- This indicates a **sustained, automated campaign** — not opportunistic one-off attempts
+- Two of three poisoners target the same Vault prefix (`0x360e`), suggesting coordinated operation or a single operator with multiple poisoner wallets
+- The Operator-spoof poisoner (`0xe93d2a...`) has a different prefix target and very low nonce, possibly a newer or separate attacker
+
+### Implications
+
+1. **org_001 is a high-value target.** External actors are spending resources generating vanity addresses and running automated poisoning bots against org_001's Treasury.
+2. **Dual role confirmed.** org_001 both deploys vanity spoofing (intelligence-layer, targeting analysts) and is targeted by vanity spoofing (transaction-layer, targeting their operators). Different layers, different purposes, different actors.
+3. **Watchlist separation.** These poisoner addresses are classified as `address_poisoner_targeting_org_001` in the watchlist — distinct from org_001's own infrastructure. They should not be attributed to org_001.
+
+### Database Status
+
+- **Production watchlist:** All 3 flagged via `/admin/flag-address` on 2026-04-12
+- **Local watchlist:** All 3 inserted with `address_type=address_poisoner`, `entity_name=address_poisoner_targeting_org_001`, priority MEDIUM
 
 ---
 
@@ -225,7 +294,7 @@ org_001 generated vanity addresses with matching **prefixes** to existing infras
 | Active chains | Arbitrum, Base | org_cycles.py |
 | Trap types | DELEGATECALL proxy, conditional revert, V3 callback | diamond_model |
 | Camouflage rating | MEDIUM | diamond_model |
-| Anti-forensic techniques | Unicode WETH impersonation, multi-exit channel, **vanity spoofing** | diamond_model + new discovery |
+| Anti-forensic capabilities | Unicode WETH impersonation (victim layer), custom selector drain (transaction layer), **vanity address spoofing (intelligence layer)**, multi-exit channel | diamond_model — three-tier anti-forensic model |
 | Operating timezone | Americas (UTC-5 to UTC-8) | diamond_model |
 | Operational pattern | Night shift | diamond_model |
 
@@ -305,9 +374,10 @@ Funds flow from Cashout through four parallel exit channels:
 | 2026-03-26 | Ethereum depth trace reveals CEX origins | Two KYC chains identified |
 | 2026-03-28 | Funding channel shift detected (40% -> 68% whale) | Operational evolution during observation |
 | 2026-03-29 | Watchlist entries for gas station + whale | Real-time monitoring enabled |
-| **2026-04-11** | **Shadow wallets discovered (vanity spoofing)** | **New OPSEC technique. ~$4M volume in data gap.** |
+| **2026-04-11** | **Shadow wallets discovered (vanity spoofing)** | **Anti-forensic capability (intelligence layer). ~$4M volume in data gap.** |
 | **2026-04-11** | **CEX hot wallet funding of shadow wallet 1 identified** | **5 hot wallets, nonces 2.2M-7.9M** |
 | **2026-04-11** | **Sybil gas network for shadow wallet 2 identified** | **20 wallets, 60 ETH from 0x17548bc3** |
+| **2026-04-12** | **3 external address poisoners targeting org_001 Treasury discovered** | **6,693 combined nonce — sustained automated campaign. org_001 is both practitioner and target of vanity spoofing.** |
 
 ---
 
@@ -339,7 +409,7 @@ Funds flow from Cashout through four parallel exit channels:
 10 org_001 addresses classified (CRIMINAL/INFRASTRUCTURE categories). Shadow wallets updated 2026-04-12 with CRITICAL priority and vanity-spoofing notes.
 
 ### watchlist table
-4 org_001-related entries (whale trader, gas station, shadow wallet 1, shadow wallet 2). Shadow wallets added at CRITICAL priority on 2026-04-12.
+4 org_001-related entries (whale trader, gas station, shadow wallet 1, shadow wallet 2). Shadow wallets added at CRITICAL priority on 2026-04-12. Additionally, 3 external address poisoner entries targeting org_001 added at MEDIUM priority on 2026-04-12 (classified separately as `address_poisoner_targeting_org_001`).
 
 ### deployer_profiles table
 26 deployers profiled with org_link=org_001 (all funded by gas station 0x8c826f).

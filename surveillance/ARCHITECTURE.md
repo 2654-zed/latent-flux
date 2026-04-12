@@ -163,8 +163,9 @@ python3 sync_railway_db.py
 ## Key Findings
 
 1. **Trust Amplification: 96.6% router dominance** — The parasite contract `0xd4624228` received 96.6% of its 2,910 callers via Uniswap's Universal Router (selector `3593564c`), averaging 1,332 callers/day. *(Note: the originally claimed "14.2x amplification factor" compared this to a hand-picked set of 20 contracts averaging 94 callers/day. That comparison set was never persisted and the number cannot be reproduced from stored data. See CORRECTIONS.md 2026-04-02. The 96.6% router dominance IS verified.)*
-2. **Trap-as-a-Service:** 229 contracts from 213 deployers share parameterized bytecode templates with anti-forensics offset randomization
-3. **$5.75M MEV Vault** discovered through a "failing" bot's funder network (Bot_A investigation)
-4. **Revert rate trend:** 3% → 34% over 7 days as trap density increases
-5. **Camouflage ratio:** 69-73% of active contracts maintain <10% revert rate
-6. **Zero mixer usage** by org_001 — launders entirely through standard DEX pools
+2. **Three-tier anti-forensic model (org_001):** Transaction layer (custom selector drains — zero log events, invisible to event-log forensics), Victim layer (Unicode WETH impersonation — evades human token name inspection), Intelligence layer (vanity address spoofing — 7-char prefix matching evades organizational monitoring and chain analysis). The intelligence-layer capability is the highest counter-intelligence sophistication observed in the corpus.
+3. **Trap-as-a-Service:** 229 contracts from 213 deployers share parameterized bytecode templates with anti-forensics offset randomization
+4. **$5.75M MEV Vault** discovered through a "failing" bot's funder network (Bot_A investigation)
+5. **Revert rate trend:** 3% → 34% over 7 days as trap density increases
+6. **Camouflage ratio:** 69-73% of active contracts maintain <10% revert rate
+7. **Zero mixer usage** by org_001 — launders entirely through standard DEX pools

@@ -203,12 +203,26 @@ def generate_brief(target_date: str = None) -> Path:
     # Diamond model summary
     md += "## Diamond Model Index\n"
     md += "*Epistemic: INFERENTIAL — organizational attribution via funding-chain + behavioral pattern matching.*\n\n"
-    diamonds = conn.execute("SELECT case_id, adversary_type, infrastructure_delivery, victim_count, confidence FROM diamond_model ORDER BY victim_count DESC").fetchall()
+    diamonds = conn.execute("SELECT case_id, adversary_type, infrastructure_delivery, victim_count, confidence, capability_anti_forensic FROM diamond_model ORDER BY victim_count DESC").fetchall()
     if diamonds:
-        md += "| Case | Adversary | Delivery | Victims | Confidence |\n|---|---|---|---|---|\n"
+        md += "| Case | Adversary | Delivery | Victims | Confidence | Anti-Forensic Capabilities |\n|---|---|---|---|---|---|\n"
         for d in diamonds:
-            md += f"| {d['case_id']} | {d['adversary_type']} | {d['infrastructure_delivery']} | {d['victim_count']:,} | {d['confidence']} |\n"
+            af = d['capability_anti_forensic'] if d['capability_anti_forensic'] else "none"
+            try:
+                af_list = json.loads(af) if af != "none" else []
+                af_str = ", ".join(af_list) if af_list else "none"
+            except Exception:
+                af_str = af
+            md += f"| {d['case_id']} | {d['adversary_type']} | {d['infrastructure_delivery']} | {d['victim_count']:,} | {d['confidence']} | {af_str} |\n"
     md += "\n"
+
+    # Anti-forensic capability tiers (org_001 three-tier model)
+    md += "### Anti-Forensic Capability Tiers (org_001)\n\n"
+    md += "| Layer | Technique | Target | Effect |\n|---|---|---|---|\n"
+    md += "| Transaction | Custom selector drains (`e37136db`) | Log-based forensic tools | Zero log events; extraction invisible at event-log level |\n"
+    md += "| Victim | Unicode WETH impersonation | Human inspection of token names | Unicode characters mimic legitimate token symbols |\n"
+    md += "| **Intelligence** | **Vanity address spoofing** (7-char prefix) | **Organizational monitoring & chain analysis** | **Spoofed addresses pass truncated-display matching in dashboards and analyst review** |\n"
+    md += "\n*Intelligence-layer capability is the highest counter-intelligence sophistication observed in the corpus.*\n\n"
 
     # System health
     md += "## System Health\n\n"

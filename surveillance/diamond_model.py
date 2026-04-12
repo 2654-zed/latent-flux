@@ -27,7 +27,12 @@ CASES = [
         "capability_bytecode_family": "delegatecall_proxy",
         "capability_trap_mechanisms": json.dumps(["delegatecall_upgradeable", "conditional_revert"]),
         "capability_camouflage_rating": "MEDIUM",
-        "capability_anti_forensic": json.dumps(["unicode_weth_impersonation", "multi_exit_channel"]),
+        "capability_anti_forensic": json.dumps([
+            "unicode_weth_impersonation",       # victim layer: evade human token name inspection
+            "custom_selector_drain",            # transaction layer: evade log-based forensic detection
+            "vanity_address_spoofing",          # intelligence layer: evade organizational monitoring & chain analysis
+            "multi_exit_channel",
+        ]),
         "infrastructure_chains": json.dumps(["arbitrum", "base"]),
         "infrastructure_wallets": json.dumps({
             "treasury": "0xf186cb00e49e18491db5783ff04fae3818102ff7",

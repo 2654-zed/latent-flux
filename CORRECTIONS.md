@@ -243,12 +243,26 @@ EventMonitors live on production as of 2026-04-08 05:18 UTC heartbeat. Bridge sc
 - **Fix:** Updated investigation report. Real pattern is 1-hop chain rotation, not multi-chain simultaneous deployment. Still a valid Attack 5 instance but smaller in scope than originally reported.
 - **Severity:** LOW — direction was right, magnitude was overstated.
 
+## 2026-04-12 org_001 Is Targeted by External Address Poisoners (Not Just a Practitioner)
+
+- **Context:** org_001's own vanity address spoofing was documented on 2026-04-11 as an intelligence-layer anti-forensic capability — they generate look-alike addresses to confuse analysts and monitoring systems.
+- **New finding:** Three external address poisoner EOAs are actively targeting org_001's Treasury on Arbitrum. These are **not org_001 infrastructure** — they are third-party attackers using transaction-layer address poisoning (fake token transfers, zero-value ETH spam, dust token spam) to trick org_001 operators into copying the wrong address from transaction history.
+- **Addresses:**
+  - `0xe93d2a52f549b9726f2914ab4c2ff0f25c6e7f86` — Operator spoof, fake Unicode USDC, nonce=2
+  - `0x360ed34d03353bcc229bf4660e9f48a66db9fb32` — Vault spoof #1, zero-value ETH spam, nonce=2,622
+  - `0x360ee8653c848ca03172e65f5c95bde66db9fb32` — Vault spoof #2, dust USDC/USDT spam, nonce=4,069
+- **Key distinction:** org_001's own vanity spoofing operates at the intelligence layer (targeting analysts/monitoring systems). These external poisoners operate at the transaction layer (targeting org_001's own operators via tx history pollution). Different phenomenon, different actors, different layer.
+- **Implication:** org_001 is both a **practitioner** of vanity spoofing and a **target** of address poisoning. The combined poisoner nonce of 6,693 indicates a sustained, automated campaign against org_001 — confirming org_001 is a high-value target recognized by other actors in the ecosystem.
+- **Fix:** All 3 addresses added to production watchlist (`/admin/flag-address`) and local watchlist DB. Classified as `address_poisoner_targeting_org_001` — explicitly separated from org_001's own infrastructure. Documented in CASE_ORG_001_INFRASTRUCTURE.md under new "Address Poisoning Attacks Against org_001" section.
+- **Severity:** LOW — this is a new finding, not a correction of a prior claim. Logged here because it adds important context to the 2026-04-11 vanity spoofing discovery: the anti-forensic capability discussion should not be conflated with the fact that org_001 is simultaneously a victim of similar (but distinct) techniques from external actors.
+
 ---
 
 ## 2026-04-11 Vanity-Spoofed Shadow Wallets Discovered in org_001 Infrastructure
 
 - **Claim (implicit):** All wallets with org_001-associated prefixes in the deployers table are genuine org_001 infrastructure — specifically `0x96daa0b8...` (classified as `lp_staging`) and `0x01989c93...` (classified as `cex_deposit`).
 - **Reality:** Both addresses are **vanity-spoofed shadow wallets**. They share the first 6-8 hex characters of real org_001 infrastructure wallets but differ in the suffix. This is a deliberate address-generation technique (vanity address mining) to create lookalike addresses that pass casual visual inspection. These two wallets routed ~$2M+ each during the April 8-11 data gap period, exploiting the monitoring blind spot.
+- **Reclassification (2026-04-12):** Vanity address spoofing has been reclassified from an "OPSEC technique" to a formal **anti-forensic capability (intelligence layer)** in the diamond model framework. This is the highest counter-intelligence sophistication observed in the corpus. The three-tier anti-forensic model for org_001: transaction layer (custom selector drains evade log-based detection), victim layer (Unicode WETH impersonation evades human token inspection), intelligence layer (vanity address spoofing evades organizational monitoring and chain analysis). Evidence: 7-char prefix matching, proxy contract funding chains, vanity suffix patterns on downstream wallets.
   - `0x96daa0b8a5499ea9323421ed0cda06b345caab73` — mimics LP Staging wallet `0x96daa0e1...` (prefix match `0x96daa0`, suffix diverges)
   - `0x01989c93890aed05a63d179b03424997075b6acf` — mimics CEX Exit wallet (prefix match `0x01989c`, suffix diverges)
 - **Discovery:** Data gap investigation on 2026-04-11. During the Apr 8-11 monitoring gap, these addresses showed anomalous volume that did not match the behavioral baseline of the real wallets they impersonate. Suffix comparison against known org_001 wallets confirmed vanity spoofing.
@@ -257,8 +271,8 @@ EventMonitors live on production as of 2026-04-08 05:18 UTC heartbeat. Bridge sc
   - Local `entity_classification` updated: subtype reclassified from `lp_staging`/`cex_deposit` to `org_001_shadow_lp_staging`/`org_001_shadow_cex_exit`, confidence upgraded to `CONFIRMED`
   - Local `deployers` table updated: `entity_type` set to `org_001_shadow` with vanity-spoof documentation in `deployment_pattern_notes`
   - Both added to local `watchlist` table at `CRITICAL` priority
-- **Severity:** HIGH — these wallets were previously trusted as genuine org_001 infrastructure. Any analysis that routed through or attributed funds to them as legitimate org_001 operations during the data gap was contaminated. The vanity-spoofing technique itself is a new OPSEC discovery: org_001 (or actors adjacent to it) actively generate lookalike addresses to blend shadow operations into the known wallet graph.
-- **New technique documented:** Vanity address spoofing — generating addresses with matching prefixes to impersonate known wallets. Mitigation: future wallet attribution must compare full addresses, not prefix substrings. Watchlist matching should flag any new address sharing a 6+ hex prefix with a known org_001 wallet for manual review.
+- **Severity:** HIGH — these wallets were previously trusted as genuine org_001 infrastructure. Any analysis that routed through or attributed funds to them as legitimate org_001 operations during the data gap was contaminated. The vanity-spoofing technique is now classified as a formal anti-forensic capability at the intelligence layer of the diamond model — the highest counter-intelligence tier observed in the corpus.
+- **Anti-forensic capability documented:** Vanity address spoofing — generating addresses with matching 7-character prefixes to impersonate known wallets. This targets organizational monitoring systems and analyst workflows that truncate addresses, not victims or automated tools. Mitigation: future wallet attribution must compare full addresses, not prefix substrings. Watchlist matching should flag any new address sharing a 6+ hex prefix with a known org_001 wallet for manual review.
 
 ---
 
