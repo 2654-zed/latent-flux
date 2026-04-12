@@ -245,6 +245,23 @@ EventMonitors live on production as of 2026-04-08 05:18 UTC heartbeat. Bridge sc
 
 ---
 
+## 2026-04-11 Vanity-Spoofed Shadow Wallets Discovered in org_001 Infrastructure
+
+- **Claim (implicit):** All wallets with org_001-associated prefixes in the deployers table are genuine org_001 infrastructure — specifically `0x96daa0b8...` (classified as `lp_staging`) and `0x01989c93...` (classified as `cex_deposit`).
+- **Reality:** Both addresses are **vanity-spoofed shadow wallets**. They share the first 6-8 hex characters of real org_001 infrastructure wallets but differ in the suffix. This is a deliberate address-generation technique (vanity address mining) to create lookalike addresses that pass casual visual inspection. These two wallets routed ~$2M+ each during the April 8-11 data gap period, exploiting the monitoring blind spot.
+  - `0x96daa0b8a5499ea9323421ed0cda06b345caab73` — mimics LP Staging wallet `0x96daa0e1...` (prefix match `0x96daa0`, suffix diverges)
+  - `0x01989c93890aed05a63d179b03424997075b6acf` — mimics CEX Exit wallet (prefix match `0x01989c`, suffix diverges)
+- **Discovery:** Data gap investigation on 2026-04-11. During the Apr 8-11 monitoring gap, these addresses showed anomalous volume that did not match the behavioral baseline of the real wallets they impersonate. Suffix comparison against known org_001 wallets confirmed vanity spoofing.
+- **Fix:**
+  - Both flagged on production watchlist via `/admin/flag-address` with `priority: CRITICAL` and `entity_type: org_001_shadow`
+  - Local `entity_classification` updated: subtype reclassified from `lp_staging`/`cex_deposit` to `org_001_shadow_lp_staging`/`org_001_shadow_cex_exit`, confidence upgraded to `CONFIRMED`
+  - Local `deployers` table updated: `entity_type` set to `org_001_shadow` with vanity-spoof documentation in `deployment_pattern_notes`
+  - Both added to local `watchlist` table at `CRITICAL` priority
+- **Severity:** HIGH — these wallets were previously trusted as genuine org_001 infrastructure. Any analysis that routed through or attributed funds to them as legitimate org_001 operations during the data gap was contaminated. The vanity-spoofing technique itself is a new OPSEC discovery: org_001 (or actors adjacent to it) actively generate lookalike addresses to blend shadow operations into the known wallet graph.
+- **New technique documented:** Vanity address spoofing — generating addresses with matching prefixes to impersonate known wallets. Mitigation: future wallet attribution must compare full addresses, not prefix substrings. Watchlist matching should flag any new address sharing a 6+ hex prefix with a known org_001 wallet for manual review.
+
+---
+
 ## Summary of Wrong Numbers Previously Used in External Materials
 
 | Claim | Correct Number | Status |
