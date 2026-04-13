@@ -276,6 +276,17 @@ EventMonitors live on production as of 2026-04-08 05:18 UTC heartbeat. Bridge sc
 
 ---
 
+## 2026-04-13 0x785ce546 Reclassified: "Highest-Value Victim" → Controlled Intermediary
+
+- **Claim:** `0x785ce546ed429559b95895cb4a07874bf8ed329c` was listed as the highest-value drain victim — "$256,321 drained by E3B2" — in the CASE_X402_DRAINER_OPERATION.md spot-checked victims table (opened 2026-04-09). The figure contributed to the $3.9M aggregate and established the upper bound of individual victim exposure.
+- **Reality:** `0x785c` is a **controlled intermediary** in the drain operation, not a victim. E717 funded it with 1,406 ETH across 165 transfers. It has nonce 516 and distributed $8.06M in real stablecoins to the primary address-poisoning collector `0x881e7c4c`, plus $1.70M to a secondary collector, plus $30.8M in spoofed Unicode tokens as address-poisoning payloads. The "$256K drain" was an internal fund movement between wallets in the same operation.
+- **Discovery:** Deep trace of new rogue facilitator `0x881e7c4c` (nonce 120,983) on 2026-04-13. Following inbound funding to 0x881e led to intermediary `0x785c`, which led back to E717. The funding direction (E717 → 0x785c) is the opposite of what a victim relationship would show.
+- **Root cause:** The original spot-check sorted Permit2 transferFrom recipients by inflow volume and assumed top addresses were victims. It verified allowance state (unlimited, never-expiring) and post-drain balance (zero) — both of which matched the victim fingerprint because the operation also uses Permit2 for internal movements and 0x785c had forwarded its balance onward. The check failed to verify: (a) whether the "victim" received ETH from the drainer, (b) whether its nonce indicated operational activity, (c) whether it distributed funds downstream.
+- **Fix:** Victim table entry struck through with correction note. Highest confirmed single-victim loss revised from $256K to $179,999 (`0x303d5773`). Full reclassification section added to case file documenting what was claimed, what's true, and why the correction strengthens the finding (reveals dual-vector operation, elevates E717 to financial hub, expands timeline to 22 months).
+- **Severity:** HIGH — a controlled intermediary was presented as the worst-hit victim. If a customer or law enforcement had acted on this (e.g., attempting to contact the "victim" for a freeze request), they would have been contacting the operator. The reclassification expands the case from a $6.2M single-vector operation to a $10-15M+ dual-vector operation, so the overall finding is strengthened, not weakened.
+
+---
+
 ## Summary of Wrong Numbers Previously Used in External Materials
 
 | Claim | Correct Number | Status |
@@ -292,6 +303,7 @@ EventMonitors live on production as of 2026-04-08 05:18 UTC heartbeat. Bridge sc
 | "Coffee fleet size 55" | Local: 209. **Production: 56.** Local was stale-sync superset | CORRECTED 2026-04-08, case file needs rewrite |
 | "Pipeline is down" (2026-04-07) | Pipeline was healthy; local DB was stale | FIXED via sync 2026-04-07 |
 | "4,015 stale deployer counts" (2026-04-07) | Local artifact. Production had 3 stale, all -1 deltas | CORRECTED 2026-04-08 via `railway ssh refresh` |
+| "0x785c: $256K victim of E3B2" | Controlled intermediary funded by E717 with 1,406 ETH. Distributes $9.8M to address-poisoning collectors | CORRECTED 2026-04-13 in case file |
 
 ---
 

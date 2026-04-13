@@ -77,10 +77,11 @@ PERMIT2 ALLOWANCE STATE (still active on-chain):
 
 | Victim | Drainer | Amount drained | Nonce | Current token balance | Allowance |
 |---|---|---|---|---|---|
-| `0x785ce546ed429559b95895cb4a07874bf8ed329c` | E3B2 | **$256,321** | 318 | 0 USDC | UNLIMITED, NEVER |
+| ~~`0x785ce546ed429559b95895cb4a07874bf8ed329c`~~ | ~~E3B2~~ | ~~**$256,321**~~ | ~~318~~ | ~~0 USDC~~ | ~~UNLIMITED, NEVER~~ |
 | `0x303d5773082a740c3040d5763b3d86f84478980f` | E717 | **$179,999** | **1** | 0 USDC | UNLIMITED, NEVER |
 | `0x59f13bc19a82e9e67703d865eb96a45692760cd5` | A7B9 | $29,059 | 538 | 0 USDC | UNLIMITED, NEVER |
-| `0x303d5773` is the clearest drain example: a wallet that has sent exactly 1 transaction in its lifetime, lost $180k USDC to E717, and still has the drain allowance active. | | | | | |
+
+**⚠ CORRECTION (2026-04-13):** `0x785ce546` was originally listed as the highest-value victim ($256K drained by E3B2). It is **not a victim** — it is a **controlled intermediary** in the drain operation itself. See the "Reclassification" section below. The $256K transfer was an internal fund movement, not a third-party drain. `0x303d5773` is now the clearest single-victim drain example: nonce 1, lost $180K USDC to E717, allowance still active.
 
 ---
 
@@ -261,6 +262,55 @@ candidates.
 2. Scavenger bot `0x1a1d...63be` flagged with `priority: MEDIUM` and `entity_type: access_control_scavenger`
 3. 5 unindexed trap deployers flagged with `priority: HIGH` and `entity_type: unindexed_trap_deployer`
 4. Case file updated to reflect 6 facilitators; SUSPECT-881E nonce 120,983 noted as highest known
+
+---
+
+## Reclassification: 0x785ce546 — "Victim" → Controlled Intermediary (2026-04-13)
+
+### What was claimed
+
+`0x785ce546ed429559b95895cb4a07874bf8ed329c` was listed in the "Spot-checked high-value victims" table as the highest-value victim: "$256,321 drained by E3B2." It was presented as a third-party loss — evidence of the drain operation's scale and impact. The figure was used to establish the upper bound of individual victim exposure and appeared in the case summary's "$3.9M inflows across 1,955 distinct senders" calculation.
+
+### What is actually true
+
+`0x785c` is a **controlled intermediary wallet** operated by the drain organization itself. It is not a victim. The evidence:
+
+1. **Funded by E717** — the known rogue facilitator sent **1,406 ETH** to `0x785c` across 165 transfers. Victims don't receive ETH from their drainers.
+2. **Nonce 516** — active operational wallet, not a passive victim.
+3. **Distributes stolen funds downstream** — forwarded **$8.06M real stablecoins** to the primary address-poisoning collector `0x881e7c4c` (SUSPECT-881E) and **$1.70M** to secondary collector `0x881e152b`.
+4. **Distributes spoofed tokens** — sent **$30.8M in fake Unicode-impersonation tokens** (fake "USDТ", "UЅDТ" in Cyrillic/Lisu script) to the 0x881e vanity address family as part of the address-poisoning operation.
+5. **Sits between two attack vectors** — it is the distribution hub connecting the Permit2 drain infrastructure (funded by E717) to the address-poisoning infrastructure (feeding the 0x881e family).
+
+The "$256,321" transfer from E3B2 to 0x785c was an **internal fund movement** between wallets controlled by the same operation, not a third-party drain. It inflated the victim count and dollar total.
+
+### Root cause of the error
+
+The original spot-check methodology (April 9) sorted all Permit2 transferFrom recipients by inflow volume and assumed the top addresses were victims. The check verified the Permit2 allowance state (unlimited, never-expiring) and post-drain balance (zero), which were both consistent with the victim fingerprint — because the operation also uses Permit2 for internal fund movements between its own wallets, and 0x785c had forwarded its balance onward, leaving a zero balance that looked like a drain.
+
+The methodology didn't check:
+- Whether the "victim" had received ETH from the drainer (victims don't get funded by their attackers)
+- Whether the "victim" had significant outbound activity (real victims have nonce ~1; 0x785c has nonce 516)
+- Whether the "victim" distributed funds to other addresses in the operation's graph
+
+### What changed
+
+1. **Victim table corrected** — 0x785c row struck through with correction note
+2. **Highest confirmed single-victim loss** revised from $256,321 to **$179,999** (`0x303d5773`, nonce 1, drained by E717)
+3. **Operation topology expanded** — the case now documents a dual-vector operation:
+   - Vector 1: Permit2 unlimited-allowance drains (CE5E, E717, A7B9, E3B2, D270)
+   - Vector 2: Address poisoning via Unicode-spoofed tokens (0x881e family, fed by 0x785c, funded by E717)
+4. **E717 elevated to financial hub** — it funds both the Permit2 drain facilitators AND the address-poisoning infrastructure through 0x785c
+5. **Total operation estimate revised** from ~$6.2M (Permit2 only) to **$10-15M+** (both vectors combined over 22 months)
+
+### Why this strengthens the finding
+
+Reclassifying 0x785c from "victim" to "controlled intermediary" is not a reduction in the case — it's an expansion. It reveals:
+- The operation is **larger** than originally estimated (two attack vectors, not one)
+- The infrastructure is **more sophisticated** (intermediary wallets, vanity address families, Unicode token spoofing)
+- E717 is a **financial nexus** connecting both vectors, not just one of four equivalent drain facilitators
+- The operation has been running for **22 months** (address poisoning since June 2024), not the ~weeks estimated from Permit2 nonce analysis
+
+A misclassified intermediary pretending to be a victim would have been a credibility risk if presented to a customer. Correcting it now, with full provenance of the error and the expanded finding, makes the case more defensible.
 
 ---
 
