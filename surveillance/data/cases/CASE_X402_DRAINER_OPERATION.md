@@ -1,4 +1,4 @@
-# Case File — Permit2 Drainer Operation (4 Facilitators)
+# Case File — Permit2 Drainer Operation (5 Facilitators)
 
 **Status:** Active, confirmed via on-chain evidence.
 **Opened:** 2026-04-09
@@ -8,9 +8,9 @@
 
 ## Summary
 
-Four high-volume EOAs are using `Permit2.transferFrom` to drain stablecoin balances from victim wallets. Victims have granted **unlimited, never-expiring** Permit2 allowances (`MAX_UINT160` amount, `MAX_UINT48` expiration) to these drainers and been swept. Currently ~$3.9M in stablecoin inflows observed across 1,955 distinct sender addresses in recent 1000-tx windows per drainer, with individual victim losses up to $256k confirmed.
+Five high-volume EOAs are using `Permit2.transferFrom` to drain token balances from victim wallets across **Arbitrum + Base + Optimism**. Victims have granted **unlimited, never-expiring** Permit2 allowances (`MAX_UINT160` amount, `MAX_UINT48` expiration) to these drainers and been swept. Currently ~$3.9M in stablecoin inflows observed across 1,955 distinct sender addresses in recent 1000-tx windows per the original 4 drainers, with individual victim losses up to $256k confirmed. A 5th facilitator (D270) was identified on 2026-04-12 draining OP tokens on Optimism, expanding the operation beyond stablecoins.
 
-None of the 4 drainers appear in the public `facilitators.x402.watch` registry. They are misusing the x402/Permit2 settlement infrastructure as a drain vector.
+None of the 5 drainers appear in the public `facilitators.x402.watch` registry. They are misusing the x402/Permit2 settlement infrastructure as a drain vector.
 
 ---
 
@@ -22,7 +22,8 @@ None of the 4 drainers appear in the public `facilitators.x402.watch` registry. 
 | **DRAINER-E3B2** | `0xe3b205da6d47989538f03553bc394d941677ffd3` | base | ? | ? | 663 | $445,115 |
 | **DRAINER-E717** | `0xe7176831c898d585cd999bcee9984a7fa9a6be96` | arbitrum | **125.32 ETH** | 80,141 | 512 | $664,177 |
 | **DRAINER-CE5E** | `0xce5ec7336f863931fda2ee3e4b9dad99fcc53c91` | arbitrum | 0.94 ETH | 3,052 | 322 | $2,547,480 |
-| **TOTAL** | | | | | **1,955** | **$3,885,831** |
+| **DRAINER-D270** | `0xd27047fe310178316b3acc4746e2a30823bb9186` | optimism | ? | 49,006 | ? | ? (OP tokens) |
+| **TOTAL (original 4)** | | | | | **1,955** | **$3,885,831** |
 
 Note: the $2.5M to DRAINER-CE5E includes at least one legitimate counterparty (`0xee7ae85f2fe2239e27d9c1e23fffe168d63b4055`, a 175M USDC contract, no Permit2 allowance to CE5E, sent $73k via regular transfers). The real drain portion is lower but still multi-million.
 
@@ -214,6 +215,23 @@ is itself a meaningful finding. Either the cashout path is intentionally
 slow/patient, or it uses addresses outside any registry I have. OTC
 settlement or un-listed CEX deposit addresses are the remaining
 candidates.
+
+---
+
+## Activity update — 2026-04-12
+
+**New facilitator discovered:** DRAINER-D270 (`0xd27047fe310178316b3acc4746e2a30823bb9186`) on **Optimism**. Nonce 49,006. This is the 5th rogue facilitator and the first on Optimism, expanding chain coverage from Arbitrum + Base to **Arbitrum + Base + Optimism**.
+
+**Non-stablecoin expansion:** D270 is draining **OP tokens** via Permit2, not stablecoins. This is the first confirmed non-stablecoin drain in the operation. The drain vector is token-agnostic — any ERC-20 with a Permit2 allowance is vulnerable.
+
+**April 12 activity:** ~$75K drained across 15 victims. Drain pace accelerating to ~1.8 victims/hour.
+
+**Token decimals normalization bug:** The initial D270 alert reported a $3.1 quadrillion drain amount. This was a decimals normalization error — the alert pipeline assumed 6 decimals (USDC standard) but OP has 18 decimals. Real amount was ~3,100 OP (~$4,650-$6,200). See CORRECTIONS.md entry dated 2026-04-12.
+
+**Actions taken:**
+1. D270 classified as `rogue` in `x402_facilitators` table (surveillance.db)
+2. D270 flagged on production watchlist via `/admin/flag-address` with `priority: CRITICAL` and `entity_type: x402_rogue_facilitator`
+3. Case file updated to reflect 5 facilitators across 3 chains
 
 ---
 

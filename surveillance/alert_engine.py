@@ -87,11 +87,11 @@ def alert_trap_confirmed(conn: sqlite3.Connection, *,
             "contract": contract_address,
             "victim_bot": bot_address,
             "chain": chain,
-            "message": f"Contract {contract_address[:18]}... confirmed as trap. "
-                       f"Bot {bot_address[:18]}... reverted in tx {tx_hash[:18]}...",
+            "message": f"Contract {contract_address} confirmed as trap. "
+                       f"Bot {bot_address} reverted in tx {tx_hash}.",
         },
     )
-    logger.info("ALERT: TRAP_CONFIRMED %s chain=%s", contract_address[:18], chain)
+    logger.info("ALERT: TRAP_CONFIRMED %s chain=%s", contract_address, chain)
 
 
 def alert_high_velocity_deployer(conn: sqlite3.Connection, *,
@@ -111,11 +111,11 @@ def alert_high_velocity_deployer(conn: sqlite3.Connection, *,
             "contracts_this_session": contract_count,
             "threshold": threshold,
             "chain": chain,
-            "message": f"Deployer {deployer_address[:18]}... deployed {contract_count} "
+            "message": f"Deployer {deployer_address} deployed {contract_count} "
                        f"contracts (threshold: {threshold}) on {chain}",
         },
     )
-    logger.info("ALERT: HIGH_VELOCITY_DEPLOYER %s count=%d", deployer_address[:18], contract_count)
+    logger.info("ALERT: HIGH_VELOCITY_DEPLOYER %s count=%d", deployer_address, contract_count)
 
 
 def alert_watchlist_hit(conn: sqlite3.Connection, *,

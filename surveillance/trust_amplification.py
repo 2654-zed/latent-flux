@@ -254,7 +254,7 @@ def analyze(conn: sqlite3.Connection, emit_alerts: bool = True,
                     "alert_level": alert,
                     "epistemic_tag": "assessed",
                     "message": (
-                        f"Trust amplification: {addr[:18]}... has "
+                        f"Trust amplification: {addr} has "
                         f"{caller_diversity:.0%} caller diversity, "
                         f"{router_pct}% router selector dominance, "
                         f"{c['revert_rate']:.1f}% revert rate across "
@@ -275,13 +275,13 @@ def analyze(conn: sqlite3.Connection, emit_alerts: bool = True,
                     alerts_emitted += 1
                     logger.warning(
                         "TRUST_AMPLIFICATION: %s router=%s%% callers=%s",
-                        addr[:18], router_pct, c["total_callers"],
+                        addr, router_pct, c["total_callers"],
                     )
             except Exception as e:
                 logger.debug("trust_amplification alert failed: %s", e)
 
         if alert and not quiet:
-            print(f"  [{alert}] {addr[:16]}... amp={amplification}x "
+            print(f"  [{alert}] {addr} amp={amplification}x "
                   f"router={router_pct}% callers={c['total_callers']}")
 
     conn.commit()

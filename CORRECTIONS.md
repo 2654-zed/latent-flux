@@ -295,6 +295,16 @@ EventMonitors live on production as of 2026-04-08 05:18 UTC heartbeat. Bridge sc
 
 ---
 
+## 2026-04-12 Token Decimals Normalization Bug — OP Drain Amount Off by 10^12
+
+- **Claim:** Alert pipeline reported DRAINER-D270 (`0xd27047fe310178316b3acc4746e2a30823bb9186`) on Optimism drained ~$3.1 quadrillion in OP tokens via Permit2.
+- **Reality:** The alert normalized the raw token amount using 6 decimals (USDC default), but OP is an 18-decimal token. Dividing by 10^6 instead of 10^18 inflated the display value by 10^12. The actual drain was ~3,100 OP (~$4,650-$6,200 at current OP prices).
+- **Discovery:** Manual review of the D270 drain alert during facilitator classification on 2026-04-12. The quadrillion-dollar figure was immediately implausible.
+- **Fix:** Corrected amount logged in CASE_X402_DRAINER_OPERATION.md. The alert pipeline's token decimals lookup needs to be generalized beyond the stablecoin assumption (6 decimals) to query actual token decimals on-chain or from a registry. Not yet patched in code.
+- **Severity:** HIGH — a customer receiving a $3.1Q alert would either (a) lose trust in the system immediately, or (b) fail to act on what is actually a real drain because the number looks like a bug. Both outcomes are bad.
+
+---
+
 ## What This Log Does Not Cover
 
 - Claims made in prior sessions that weren't audited
