@@ -1,4 +1,4 @@
-# Case File — Permit2 Drainer Operation (5 Facilitators)
+# Case File — Permit2 Drainer Operation (6 Facilitators)
 
 **Status:** Active, confirmed via on-chain evidence.
 **Opened:** 2026-04-09
@@ -8,13 +8,13 @@
 
 ## Summary
 
-Five high-volume EOAs are using `Permit2.transferFrom` to drain token balances from victim wallets across **Arbitrum + Base + Optimism**. Victims have granted **unlimited, never-expiring** Permit2 allowances (`MAX_UINT160` amount, `MAX_UINT48` expiration) to these drainers and been swept. Currently ~$3.9M in stablecoin inflows observed across 1,955 distinct sender addresses in recent 1000-tx windows per the original 4 drainers, with individual victim losses up to $256k confirmed. A 5th facilitator (D270) was identified on 2026-04-12 draining OP tokens on Optimism, expanding the operation beyond stablecoins.
+Six high-volume EOAs are using `Permit2.transferFrom` to drain token balances from victim wallets across **Arbitrum + Base + Optimism**. Victims have granted **unlimited, never-expiring** Permit2 allowances (`MAX_UINT160` amount, `MAX_UINT48` expiration) to these drainers and been swept. Currently ~$3.9M in stablecoin inflows observed across 1,955 distinct sender addresses in recent 1000-tx windows per the original 4 drainers, with individual victim losses up to $256k confirmed. A 5th facilitator (D270) was identified on 2026-04-12 draining OP tokens on Optimism, expanding the operation beyond stablecoins.
 
-None of the 5 drainers appear in the public `facilitators.x402.watch` registry. They are misusing the x402/Permit2 settlement infrastructure as a drain vector.
+None of the 6 drainers appear in the public `facilitators.x402.watch` registry. They are misusing the x402/Permit2 settlement infrastructure as a drain vector.
 
 ---
 
-## The 4 rogue facilitators
+## The 6 rogue facilitators
 
 | Nickname | Address | Chain | Eth balance | Nonce | Distinct senders (recent 1000) | USD stablecoin inflow |
 |---|---|---|---|---|---|---|
@@ -23,11 +23,12 @@ None of the 5 drainers appear in the public `facilitators.x402.watch` registry. 
 | **DRAINER-E717** | `0xe7176831c898d585cd999bcee9984a7fa9a6be96` | arbitrum | **125.32 ETH** | 80,141 | 512 | $664,177 |
 | **DRAINER-CE5E** | `0xce5ec7336f863931fda2ee3e4b9dad99fcc53c91` | arbitrum | 0.94 ETH | 3,052 | 322 | $2,547,480 |
 | **DRAINER-D270** | `0xd27047fe310178316b3acc4746e2a30823bb9186` | optimism | ? | 49,006 | ? | ? (OP tokens) |
+| **SUSPECT-881E** | `0x881e7c4c90f2d7f013558caf4feca330c327e476` | arbitrum | **20.86 ETH** | **120,983** | ? | ? |
 | **TOTAL (original 4)** | | | | | **1,955** | **$3,885,831** |
 
 Note: the $2.5M to DRAINER-CE5E includes at least one legitimate counterparty (`0xee7ae85f2fe2239e27d9c1e23fffe168d63b4055`, a 175M USDC contract, no Permit2 allowance to CE5E, sent $73k via regular transfers). The real drain portion is lower but still multi-million.
 
-A7B9 and E717 have nonces of 96k and 80k — hundreds of thousands of outbound transactions each. They're industrial-scale automation. CE5E's lower nonce (3k) but much higher drain total ($2.5M) suggests it's a newer and more aggressive operator.
+A7B9 and E717 have nonces of 96k and 80k — hundreds of thousands of outbound transactions each. They're industrial-scale automation. CE5E's lower nonce (3k) but much higher drain total ($2.5M) suggests it's a newer and more aggressive operator. SUSPECT-881E (nonce 120,983) now holds the highest known nonce across all 6 facilitators.
 
 ---
 
@@ -231,7 +232,35 @@ candidates.
 **Actions taken:**
 1. D270 classified as `rogue` in `x402_facilitators` table (surveillance.db)
 2. D270 flagged on production watchlist via `/admin/flag-address` with `priority: CRITICAL` and `entity_type: x402_rogue_facilitator`
-3. Case file updated to reflect 5 facilitators across 3 chains
+3. Case file updated to reflect 5 facilitators across 3 chains (now 6 as of 2026-04-13)
+
+---
+
+## Activity update — 2026-04-13
+
+**6th facilitator discovered:** SUSPECT-881E (`0x881e7c4c90f2d7f013558caf4feca330c327e476`) on **Arbitrum**. Nonce **120,983** — the highest known across all 6 facilitators, indicating massive transaction volume. Gas reserve of **20.86 ETH**. Uses Permit2 `transferFrom` selector `36c78516`.
+
+**Nonce comparison across all facilitators:**
+- SUSPECT-881E: 120,983 (new highest)
+- DRAINER-A7B9: 96,144
+- DRAINER-E717: 80,141
+- DRAINER-D270: 49,006
+- DRAINER-CE5E: 3,052
+
+**April 13 trap surge:** 53 TRAP_CONFIRMED alerts on Base in ~90 minutes. 49 traps triggered across 35 distinct deployers. Top 5 deployers responsible for 22 of the 53 confirmations are unindexed (not in the deployers table) and have been flagged on the production watchlist:
+1. `0xc0ffeefeed8b9d271445cf5d1d24d74d2ca4235e` — 7 traps (coffee-fleet self-test deployer; the coffee fleet is also running traps, not just being victimized)
+2. `0xdb952fdd7c723aeade2a47c9e8cf86417b14bcc1` — 5 traps
+3. `0x604be06b9f6b6663f78e755db0c5965eb2337e3d` — 5 traps (known trap operator with 184 contracts, investigated 2026-04-12)
+4. `0x136d289c9c586d7c7fd3a39635a4877796845312` — 3 traps
+5. `0x7631326866e04b5c8e48c647b4ffaa56514b2e63` — 2 traps
+
+**Scavenger bot flagged:** `0x1a1d939b2ee78756d81e6ad1638911bc8eaf63be` — automated exploit scanner spraying `initialize/withdraw/sweep/destroy` at every new Base contract. Nonce 1,959. Hit 15 traps in 90 minutes. Classified as `access_control_scavenger`, priority MEDIUM. Dangerous if it finds a real vulnerable proxy.
+
+**Actions taken:**
+1. SUSPECT-881E flagged on production watchlist via `/admin/flag-address` with `priority: CRITICAL` and `entity_type: x402_rogue_facilitator`
+2. Scavenger bot `0x1a1d...63be` flagged with `priority: MEDIUM` and `entity_type: access_control_scavenger`
+3. 5 unindexed trap deployers flagged with `priority: HIGH` and `entity_type: unindexed_trap_deployer`
+4. Case file updated to reflect 6 facilitators; SUSPECT-881E nonce 120,983 noted as highest known
 
 ---
 
