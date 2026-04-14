@@ -447,6 +447,14 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
             );
         """)
 
+    # Migration: add deployed_code_hash to contracts for cross-deployer correlation
+    try:
+        conn.execute("SELECT deployed_code_hash FROM contracts LIMIT 1")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE contracts ADD COLUMN deployed_code_hash TEXT")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_contracts_code_hash ON contracts(deployed_code_hash)")
+        conn.commit()
+
     return conn
 
 
@@ -625,8 +633,8 @@ def insert_contract(conn: sqlite3.Connection, *,
                 routing_presence, routing_first_seen,
                 has_asymmetric_transfer, has_conditional_revert,
                 has_unusual_fee_structure, bytecode_pattern_notes,
-                last_updated
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                deployed_code_hash, last_updated
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 contract_address, chain, detection_method, detection_timestamp,
@@ -639,6 +647,7 @@ def insert_contract(conn: sqlite3.Connection, *,
                 kwargs.get("has_conditional_revert"),
                 kwargs.get("has_unusual_fee_structure"),
                 kwargs.get("bytecode_pattern_notes"),
+                kwargs.get("deployed_code_hash"),
                 _now_iso(),
             ),
         )

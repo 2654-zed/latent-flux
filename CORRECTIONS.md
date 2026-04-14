@@ -287,6 +287,32 @@ EventMonitors live on production as of 2026-04-08 05:18 UTC heartbeat. Bridge sc
 
 ---
 
+## 2026-04-13 DELEGATECALL Proxy Honeypots: 21-Day Detection Blind Spot (928 Victims)
+
+- **Claim (implicit):** The surveillance system detects trap contracts in near-real-time. Bytecode classification on day 0, behavioral confirmation within hours/days. Stale data implies coverage we don't have (CLAUDE.md design principle #4).
+- **Reality:** 10 contracts in bytecode family T1-2081a9d32218 were deployed on Base on **2026-03-23** (all within a 2-minute window, 19:44–19:46 UTC, by 10 different Sybil deployer wallets). The bytecode classifier correctly flagged them as `suspected` on day 0 for `delegatecall_in_token`. They then sat at `suspected` for **21 days** with zero alerts, zero escalation, while accumulating **928 victims and 2,147+ transactions** — all successful, zero reverts. The first alert fired on **2026-04-13** when the trust amplification heartbeat finally scanned them.
+- **Discovery:** Trust amplification batch alert at 17:13:45 UTC on April 13. Investigation revealed the 21-day gap and the architectural blind spot.
+- **Root cause — structural, not operational:** The entire confirmation pipeline depends on reverts:
+  - Trap confirmation: needs a revert transaction → **blind** (0% revert rate)
+  - Self-loop detector: needs deployer calling own contract → **blind** (no self-calls)
+  - Revert cluster detector: needs clustered reverts → **blind** (zero reverts)
+  - Velocity detector: needs 8+ contracts per deployer → **blind** (10 deployers × 1 contract each)
+  - Dormant activation: needs a dormant period → **N/A** (active from day 1)
+
+  The DELEGATECALL proxy design means the trap mechanism isn't in the bytecode we analyze — it's in the implementation contract behind the proxy, which can be swapped at any time. Static bytecode analysis correctly identifies `delegatecall_in_token` but cannot detect `asymmetric_transfer`, `conditional_revert`, or `unusual_fee_structure` because those signatures live in the implementation, not the proxy shell. The 0% revert rate is the camouflage: buys succeed normally, and the sell-block activates later via implementation upgrade.
+
+  The Sybil deployment was specifically structured to evade our detectors: 10 deployers (below velocity threshold of 8 per deployer), identical bytecode (but no cross-deployer family alert), zero self-calls, zero reverts, immediate victim traffic (no dormant phase). Whether this was designed to target Layer 3 specifically or represents general-purpose OPSEC, the effect is the same.
+
+- **Fix (4 code changes, all executed 2026-04-13):**
+  1. **Suspected + high traffic auto-escalation** — contracts at `suspected` tier that accumulate 50+ distinct callers now generate a `SUSPECTED_HIGH_TRAFFIC` WARNING alert. Prevents the 21-day silent accumulation.
+  2. **Cross-deployer family velocity alert** — when 3+ contracts with identical bytecode are deployed by different deployers within 1 hour, fire a `COORDINATED_DEPLOYMENT` alert regardless of per-deployer count. Catches the 10-deployer Sybil pattern.
+  3. **Trust amplification run frequency** — moved from heartbeat-only (every 360 beats / ~6h) to also run on a daily schedule, ensuring new high-traffic contracts are flagged within 24h of crossing the caller threshold.
+  4. **DELEGATECALL implementation tracking** — log the current implementation address (storage slot 0 or EIP-1967 slot) at deployment time. Future: alert if implementation changes post-deployment.
+- **Severity:** CRITICAL — 928 victims over 21 days with a system that claims near-real-time detection. This is the longest detection gap in the corpus and the only known case where the entire confirmation pipeline was structurally blind to a live trap operation. The bytecode classifier did its job (day 0 suspected), but the gap between "suspected" and "any alert" had no bridge for non-reverting contracts.
+- **Process lesson:** "Suspected" is not coverage. A contract can sit at "suspected" forever if it never produces a revert. The system needs an escalation path for suspected contracts that accumulate real traffic — the absence of reverts is itself a signal when combined with high caller count.
+
+---
+
 ## Summary of Wrong Numbers Previously Used in External Materials
 
 | Claim | Correct Number | Status |

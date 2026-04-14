@@ -41,6 +41,8 @@ ALERT_EPISTEMIC_TAGS = {
     "DORMANT_ACTIVATION":       "assessed",   # first interaction != malicious activation
     "APPROVAL_DRAIN":           "assessed",   # temporal sequence interpreted as drain
     "SELF_LOOP_TRAP":           "provable",   # deployer called own contract (on-chain)
+    "SUSPECTED_HIGH_TRAFFIC":   "assessed",   # suspected contract with 50+ distinct callers
+    "COORDINATED_DEPLOYMENT":   "assessed",   # 3+ deployers deploy identical bytecode within 1 hour
 }
 
 
@@ -144,3 +146,37 @@ def alert_watchlist_hit(conn: sqlite3.Connection, *,
         },
     )
     logger.info("ALERT: WATCHLIST_HIT entity=%s chain=%s priority=%s", entity_name, chain, priority)
+
+
+def alert_coordinated_deployment(conn: sqlite3.Connection, *,
+                                  deployed_code_hash: str,
+                                  deployer_count: int,
+                                  contract_count: int,
+                                  deployers: list[str],
+                                  time_window: str = "1 hour",
+                                  trigger_contract: str,
+                                  chain: str = None,
+                                  timestamp: str = None) -> None:
+    """Alert when 3+ deployers deploy identical bytecode within 1 hour (Sybil pattern)."""
+    insert_alert(
+        conn,
+        alert_type="COORDINATED_DEPLOYMENT",
+        address=trigger_contract,
+        timestamp=timestamp or _now_iso(),
+        payload={
+            "deployed_code_hash": deployed_code_hash,
+            "deployer_count": deployer_count,
+            "contract_count": contract_count,
+            "deployers": deployers,
+            "time_window": time_window,
+            "trigger_contract": trigger_contract,
+            "chain": chain,
+            "message": f"Coordinated deployment: {deployer_count} distinct deployers "
+                       f"deployed {contract_count} contracts with identical bytecode "
+                       f"({deployed_code_hash[:16]}...) within {time_window} on {chain}",
+        },
+    )
+    logger.warning(
+        "ALERT: COORDINATED_DEPLOYMENT hash=%s deployers=%d contracts=%d chain=%s",
+        deployed_code_hash[:16], deployer_count, contract_count, chain,
+    )

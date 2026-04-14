@@ -425,11 +425,11 @@ class DeploymentMonitor:
                 except Exception as e:
                     logger.debug("Deployer count refresh failed: %s", e)
 
-            # Trust amplification scan every 360 heartbeats (~6 hours)
+            # Trust amplification scan every 120 heartbeats (~2 hours)
             # Detects contracts where 80%+ of callers arrive via Universal
             # Router — trusted infrastructure as attack delivery mechanism.
             # Pure SQLite, zero RPC. Emits TRUST_AMPLIFICATION alerts.
-            if heartbeat_count % 360 == 220:
+            if heartbeat_count % 120 == 100:
                 try:
                     from surveillance.trust_amplification import analyze as ta_analyze
                     summary = ta_analyze(self.conn, emit_alerts=True, quiet=True)
@@ -713,6 +713,9 @@ class DeploymentMonitor:
                         "Classifier failed for %s: %s", dep.contract_address, e
                     )
 
+            # Use deployed_code_hash; fall back to init_code_hash if unavailable
+            code_hash = dep.deployed_code_hash or dep.init_code_hash or None
+
             db.insert_contract(
                 self.conn,
                 contract_address=dep.contract_address,
@@ -727,6 +730,7 @@ class DeploymentMonitor:
                 has_conditional_revert=bytecode_signals.get("has_conditional_revert"),
                 has_unusual_fee_structure=bytecode_signals.get("has_unusual_fee_structure"),
                 bytecode_pattern_notes=bytecode_signals.get("pattern_notes"),
+                deployed_code_hash=code_hash,
             )
             logger.info(
                 "Recorded: %s [%s/%s] deployer=%s block=%d",
@@ -734,8 +738,24 @@ class DeploymentMonitor:
                 dep.deployer_address[:18] + "...", dep.block_number,
             )
 
+            # TODO(delegatecall-impl-tracking): When delegatecall_in_token is
+            # detected, read the implementation address from storage slot 0 and
+            # EIP-1967 slot (0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc)
+            # via eth_getStorageAt to establish a baseline. This requires an async
+            # RPC call (self._w3.eth.get_storage_at) but _record_deployment is sync.
+            # Options: (a) make _record_deployment async, (b) add a post-processing
+            # step in _handle_block_header after _record_deployment returns, or
+            # (c) queue flagged contracts for the proxy_upgrade_watcher to pick up.
+            # Store the implementation address in bytecode_pattern_notes so future
+            # proxy_upgrade_watcher runs can detect when the implementation changes.
+            # See: proxy_upgrade_watcher.py (runs every 1440 heartbeats at offset 100).
+
             # Deployment velocity check
             self._check_velocity(dep.deployer_address)
+
+            # Cross-deployer coordinated deployment check
+            if code_hash:
+                self._check_coordinated_deployment(dep, code_hash)
 
             # Watchlist check — zero API calls, pure SQLite
             try:
@@ -855,6 +875,56 @@ class DeploymentMonitor:
             self.conn.commit()
         except Exception:
             pass
+
+    def _check_coordinated_deployment(self, dep: Deployment, code_hash: str) -> None:
+        """
+        Detect Sybil deployment pattern: 3+ contracts with identical bytecode
+        deployed by different deployers within 1 hour. Fires COORDINATED_DEPLOYMENT
+        alert. This catches operators using multiple deployer wallets to stay
+        below the per-deployer velocity threshold.
+        """
+        try:
+            row = self.conn.execute(
+                """
+                SELECT COUNT(DISTINCT deployer_address) as deployer_count,
+                       COUNT(*) as contract_count
+                FROM contracts
+                WHERE deployed_code_hash = ?
+                  AND detection_timestamp >= datetime('now', '-1 hour')
+                """,
+                (code_hash,),
+            ).fetchone()
+
+            if not row or row["deployer_count"] < 3:
+                return
+
+            # Fetch the distinct deployer list for the alert payload
+            deployer_rows = self.conn.execute(
+                """
+                SELECT DISTINCT deployer_address
+                FROM contracts
+                WHERE deployed_code_hash = ?
+                  AND detection_timestamp >= datetime('now', '-1 hour')
+                """,
+                (code_hash,),
+            ).fetchall()
+            deployers = [r["deployer_address"] for r in deployer_rows]
+
+            from surveillance.alert_engine import alert_coordinated_deployment
+            alert_coordinated_deployment(
+                self.conn,
+                deployed_code_hash=code_hash,
+                deployer_count=row["deployer_count"],
+                contract_count=row["contract_count"],
+                deployers=deployers,
+                time_window="1 hour",
+                trigger_contract=dep.contract_address,
+                chain=self.chain,
+                timestamp=dep.timestamp_iso,
+            )
+            self.conn.commit()
+        except Exception as e:
+            logger.debug("Coordinated deployment check failed: %s", e)
 
     @property
     def blocks_processed(self) -> int:

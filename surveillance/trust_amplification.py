@@ -200,6 +200,50 @@ def analyze(conn: sqlite3.Connection, emit_alerts: bool = True,
         # Low ratio = few bot callers making repeat calls.
         caller_diversity = round(c["total_callers"] / c["total_tx"], 4) if c["total_tx"] else 0
 
+        # --- SUSPECTED_HIGH_TRAFFIC auto-escalation ---
+        # Contracts stuck at "suspected" tier that accumulate 50+ distinct
+        # callers are likely DELEGATECALL proxy honeypots invisible to
+        # revert-based detectors.  Emit a WARNING so they don't sit in
+        # the blind spot for weeks.
+        if emit_alerts and c["total_callers"] >= 50:
+            try:
+                tier_row = conn.execute(
+                    "SELECT confidence_tier, deployer_address FROM contracts "
+                    "WHERE contract_address = ?", (addr,)
+                ).fetchone()
+                if tier_row and tier_row["confidence_tier"] == "suspected":
+                    existing_sht = conn.execute(
+                        "SELECT 1 FROM alerts WHERE alert_type = 'SUSPECTED_HIGH_TRAFFIC' "
+                        "AND address = ?", (addr,)
+                    ).fetchone()
+                    if not existing_sht:
+                        sht_payload = json.dumps({
+                            "contract_address": addr,
+                            "total_callers": c["total_callers"],
+                            "callers_per_day": callers_per_day,
+                            "revert_rate": c["revert_rate"],
+                            "bytecode_family": family_id,
+                            "deployer": tier_row["deployer_address"],
+                            "epistemic_tag": "assessed",
+                            "message": (
+                                f"SUSPECTED_HIGH_TRAFFIC: {addr} is at 'suspected' tier "
+                                f"with {c['total_callers']:,} distinct callers "
+                                f"({callers_per_day}/day). Possible proxy honeypot."
+                            ),
+                        })
+                        conn.execute(
+                            "INSERT INTO alerts (alert_type, address, timestamp, "
+                            "payload, false_positive) VALUES (?, ?, datetime('now'), ?, 0)",
+                            ("SUSPECTED_HIGH_TRAFFIC", addr, sht_payload),
+                        )
+                        alerts_emitted += 1
+                        logger.warning(
+                            "SUSPECTED_HIGH_TRAFFIC: %s callers=%s tier=suspected",
+                            addr, c["total_callers"],
+                        )
+            except Exception as e:
+                logger.debug("suspected_high_traffic check failed: %s", e)
+
         # Alert level — three independent dimensions:
         # 1. Amplification factor (vs family baseline)
         # 2. Router dominance (% of callers via Universal Router — currently always 0)
