@@ -245,6 +245,13 @@ def _compute_deployer_risk(conn: sqlite3.Connection, address: str) -> tuple[int,
     if dep is None:
         return 0, {"reason": "deployer not found"}
 
+    # Full deployer record for age/funding checks
+    dep_full = conn.execute(
+        "SELECT first_seen, funding_trail FROM deployers "
+        "WHERE deployer_address = ?",
+        (deployer,),
+    ).fetchone()
+
     # Confirmed trap count (derived -- schema note says these are computed at read time)
     confirmed = conn.execute(
         "SELECT COUNT(*) as cnt FROM contracts "
@@ -292,6 +299,60 @@ def _compute_deployer_risk(conn: sqlite3.Connection, address: str) -> tuple[int,
             if style == "burst" or max_per_day >= 10:
                 score += 3
                 components["velocity_flag"] = True
+
+    # Deployer age TTL boost — new deployers funded by CEX hot wallets
+    # are high risk even with zero history. This addresses the 32% blind
+    # spot where confirmed traps from first-time deployers score LOW.
+    first_seen = dep_full["first_seen"] if dep_full else None
+    if first_seen:
+        try:
+            from datetime import datetime, timezone, timedelta
+            seen_dt = datetime.fromisoformat(first_seen.replace("+00:00", "+00:00"))
+            if seen_dt.tzinfo is None:
+                seen_dt = seen_dt.replace(tzinfo=timezone.utc)
+            age_hours = (datetime.now(timezone.utc) - seen_dt).total_seconds() / 3600
+            components["deployer_age_hours"] = round(age_hours, 1)
+
+            if age_hours < 24:
+                components["deployer_is_new"] = True
+                # Check if funded by a high-nonce address (CEX hot wallet pattern)
+                funding_trail = dep_full["funding_trail"] if dep_full else None
+                funder_nonce = None
+                if funding_trail:
+                    try:
+                        trail = json.loads(funding_trail)
+                        funder_addr = trail.get("funder", "")
+                        if funder_addr:
+                            # Check funder's deployer record for nonce hints,
+                            # or check if funder is a known gas_station
+                            funder_dep = conn.execute(
+                                "SELECT total_contracts_deployed, entity_type "
+                                "FROM deployers WHERE deployer_address = ?",
+                                (funder_addr.lower(),),
+                            ).fetchone()
+                            if funder_dep:
+                                funder_total = funder_dep["total_contracts_deployed"] or 0
+                                funder_type = (funder_dep["entity_type"] or "").lower()
+                                # High-volume funder (>100 contracts funded = likely gas station/CEX)
+                                if funder_total > 100 or "gas_station" in funder_type:
+                                    score += 10
+                                    components["new_deployer_cex_funded"] = True
+                                    components["funder_address"] = funder_addr
+                                    components["funder_total_contracts"] = funder_total
+                            # Also check entity_classification
+                            if not components.get("new_deployer_cex_funded") and _table_exists(conn, "entity_classification"):
+                                ec = conn.execute(
+                                    "SELECT subtype FROM entity_classification WHERE address = ?",
+                                    (funder_addr.lower(),),
+                                ).fetchone()
+                                if ec and "gas_station" in (ec["subtype"] or "").lower():
+                                    score += 10
+                                    components["new_deployer_cex_funded"] = True
+                                    components["funder_address"] = funder_addr
+                    except (json.JSONDecodeError, TypeError, KeyError):
+                        pass
+        except (ValueError, TypeError):
+            pass
 
     return min(score, 25), components
 
@@ -457,9 +518,53 @@ def _compute_org_context(conn: sqlite3.Connection, address: str) -> tuple[int, d
 # ------------------------------------------------------------------
 
 def _compute_realized_value(conn: sqlite3.Connection, address: str) -> tuple[int, dict]:
-    """Score based on value already extracted via on-chain transfers."""
+    """Score based on value already extracted via on-chain transfers.
+
+    Gaming resistance: excludes value sent by deployer-adjacent wallets
+    (deployer itself, funder, same-org wallets). Only counts value from
+    external callers — the actual victim/user traffic that represents
+    real extraction.
+    """
     components: dict[str, Any] = {}
     addr = address.lower()
+
+    # Build exclusion set: deployer + funder + org wallets
+    # These are "self-deposits" that shouldn't count as realized value
+    exclude_addrs = set()
+    contract_row = conn.execute(
+        "SELECT deployer_address, deployer_funding_source FROM contracts "
+        "WHERE contract_address = ?",
+        (addr,),
+    ).fetchone()
+    if contract_row:
+        deployer = contract_row["deployer_address"]
+        if deployer:
+            exclude_addrs.add(deployer.lower())
+        funder = contract_row["deployer_funding_source"]
+        if funder:
+            exclude_addrs.add(funder.lower())
+        # Also exclude other contracts from the same deployer
+        siblings = conn.execute(
+            "SELECT contract_address FROM contracts WHERE deployer_address = ?",
+            (deployer,),
+        ).fetchall()
+        for s in siblings:
+            exclude_addrs.add(s["contract_address"].lower())
+        # Check funding_trail for additional funders
+        dep_row = conn.execute(
+            "SELECT funding_trail FROM deployers WHERE deployer_address = ?",
+            (deployer,),
+        ).fetchone()
+        if dep_row and dep_row["funding_trail"]:
+            try:
+                trail = json.loads(dep_row["funding_trail"])
+                trail_funder = trail.get("funder", "")
+                if trail_funder:
+                    exclude_addrs.add(trail_funder.lower())
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    components["excluded_addresses"] = len(exclude_addrs)
 
     if not _table_exists(conn, "transaction_events"):
         return 0, {"reason": "transaction_events table not found"}
@@ -472,7 +577,7 @@ def _compute_realized_value(conn: sqlite3.Connection, address: str) -> tuple[int
         has_value = False
 
     if not has_value:
-        # Fall back to trap_events loss estimates
+        # Fall back to trap_events loss estimates (these are already external victims)
         row = conn.execute(
             "SELECT SUM(loss_estimate_usd) as total_usd, COUNT(*) as cnt "
             "FROM trap_events WHERE trap_contract_address = ?",
@@ -483,23 +588,30 @@ def _compute_realized_value(conn: sqlite3.Connection, address: str) -> tuple[int
         components["total_usd"] = total_usd
         components["event_count"] = row["cnt"] if row else 0
     else:
-        # Sum value_wei from transaction_events for this contract
+        # Sum value_wei from EXTERNAL callers only (exclude deployer-adjacent)
+        if exclude_addrs:
+            placeholders = ",".join("?" * len(exclude_addrs))
+            exclude_clause = f"AND interacting_address NOT IN ({placeholders})"
+            params = [addr] + list(exclude_addrs)
+        else:
+            exclude_clause = ""
+            params = [addr]
+
         row = conn.execute(
-            "SELECT COUNT(*) as cnt FROM transaction_events "
-            "WHERE contract_address = ? AND value_wei IS NOT NULL "
-            "AND value_wei != '' AND value_wei != '0'",
-            (addr,),
+            f"SELECT COUNT(*) as cnt FROM transaction_events "
+            f"WHERE contract_address = ? AND value_wei IS NOT NULL "
+            f"AND value_wei != '' AND value_wei != '0' {exclude_clause}",
+            params,
         ).fetchone()
         tx_count = row["cnt"] if row else 0
-        components["source"] = "transaction_events"
+        components["source"] = "transaction_events_external_only"
         components["value_tx_count"] = tx_count
 
-        # Sum the values (stored as text for big ints)
         rows = conn.execute(
-            "SELECT value_wei FROM transaction_events "
-            "WHERE contract_address = ? AND value_wei IS NOT NULL "
-            "AND value_wei != '' AND value_wei != '0'",
-            (addr,),
+            f"SELECT value_wei FROM transaction_events "
+            f"WHERE contract_address = ? AND value_wei IS NOT NULL "
+            f"AND value_wei != '' AND value_wei != '0' {exclude_clause}",
+            params,
         ).fetchall()
         total_wei = 0
         for r in rows:
@@ -626,18 +738,34 @@ def _compute_volatility(conn: sqlite3.Connection, address: str) -> tuple[float, 
 
     components["has_timestamp_gate"] = has_timestamp_gate
 
-    # Apply multipliers -- use the higher of the two if both apply
+    # Check for SELFDESTRUCT (opcode 0xff) — contract can erase evidence
+    has_selfdestruct = "SELFDESTRUCT" in notes or "SUICIDE" in notes
+    components["has_selfdestruct"] = has_selfdestruct
+
+    # Check for CREATE2 (opcode 0xf5) — contract can redeploy at same address
+    has_create2 = "CREATE2" in notes
+    components["has_create2"] = has_create2
+
+    # Apply multipliers -- use the highest if multiple apply
     delegatecall_vol = 1.0
     timestamp_vol = 1.0
+    selfdestruct_vol = 1.0
 
     if has_delegatecall and not ownership_renounced:
         delegatecall_vol = 2.5
     if has_timestamp_gate:
         timestamp_vol = 2.0
+    if has_selfdestruct:
+        selfdestruct_vol = 3.0
+        # SELFDESTRUCT + CREATE2 = metamorphic contract (destroy + redeploy)
+        if has_create2:
+            selfdestruct_vol = 3.5
+            components["metamorphic_pattern"] = True
 
-    volatility = max(delegatecall_vol, timestamp_vol)
+    volatility = max(delegatecall_vol, timestamp_vol, selfdestruct_vol)
     components["delegatecall_volatility"] = delegatecall_vol
     components["timestamp_volatility"] = timestamp_vol
+    components["selfdestruct_volatility"] = selfdestruct_vol
 
     return volatility, components
 
