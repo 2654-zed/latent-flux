@@ -22,7 +22,7 @@ None of the 7 drainers appear in the public `facilitators.x402.watch` registry. 
 | **DRAINER-E717** | `0xe7176831c898d585cd999bcee9984a7fa9a6be96` | arbitrum | **125.32 ETH** | 80,141 | 512 | $664,177 |
 | **SUSPECT-881E** | `0x881e7c4c90f2d7f013558caf4feca330c327e476` | arbitrum | **20.86 ETH** | **120,983** | ? | ? |
 | **DRAINER-A7B9** | `0xa7b9874d15742358fb455dd56f97c6d19ad74f5c` | base | **272.29 ETH** | 96,144 | 458 | $229,059 |
-| **DRAINER-E3B2** | `0xe3b205da6d47989538f03553bc394d941677ffd3` | base | ? | ? | 663 | $445,115 |
+| **DRAINER-E3B2** | `0xe3b205da6d47989538f03553bc394d941677ffd3` | base | ? | **190,508** | 663 | $445,115 |
 | **DRAINER-D270** | `0xd27047fe310178316b3acc4746e2a30823bb9186` | optimism | ? | 49,006 | ? | ? (OP tokens) |
 | **DRAINER-F71C** | `0xf71c98b3025baa6d1c15148429a9f2f1ce952e8c` | optimism | ? | **117,655** | ? | ? |
 | **TOTAL (original 4)** | | | | | **1,955** | **$3,885,831** |
@@ -320,6 +320,32 @@ Reclassifying 0x785c from "victim" to "controlled intermediary" is not a reducti
 - The operation has been running for **22 months** (address poisoning since June 2024), not the ~weeks estimated from Permit2 nonce analysis
 
 A misclassified intermediary pretending to be a victim would have been a credibility risk if presented to a customer. Correcting it now, with full provenance of the error and the expanded finding, makes the case more defensible.
+
+---
+
+## Activity update — 2026-04-14
+
+**E3B2 nonce resolved:** DRAINER-E3B2 (`0xe3b205da6d47989538f03553bc394d941677ffd3`) nonce is now **190,508** — the highest across all 7 facilitators by a wide margin (previously unknown). Processing 100+ outbound transfers per 5 hours. Updated nonce ranking:
+- DRAINER-E3B2: **190,508** (new highest)
+- SUSPECT-881E: 120,983
+- DRAINER-F71C: 117,655
+- DRAINER-A7B9: 96,144
+- DRAINER-E717: 80,141
+- DRAINER-D270: 49,006
+- DRAINER-CE5E: 3,052
+
+**0x785c reloaded E3B2:** The controlled intermediary `0x785ce546ed429559b95895cb4a07874bf8ed329c` reloaded E3B2 with **$38,755 USDC + 13.84 ETH**. This is a fund reload (operational capital replenishment), not a drain — consistent with 0x785c's reclassified role as the operation's distribution hub between Permit2 drains and address poisoning infrastructure.
+
+**Multi-layered address poisoning discovered:** Each intermediary in the operation runs its own vanity clone pairs. Specifically, `0xa17f` and `0x1637` each operate independent sets of vanity-generated address pairs for poisoning campaigns. This is a deeper layer of infrastructure than previously documented — the address poisoning is not centralized through a single generator but distributed across multiple intermediaries, each with their own clone factories.
+
+**Homoglyph token variants catalogued:** The spoofed token operation now uses at least three confirmed variants:
+- `USDC` — legitimate token name, used in real drains
+- `USDС` — Cyrillic С (U+0421) replacing Latin C, visually identical in most fonts
+- `UႽD‬C` — Myanmar Shan digit five (U+1075) replacing S, with Unicode right-to-left mark (U+202C) embedded
+
+These homoglyph variants are designed to pass both visual inspection and naive string-match filters. Only Unicode-aware normalization catches the difference.
+
+**E3B2 remains Base-only:** Cross-chain probe confirms E3B2 has nonce 0 on both Arbitrum and Optimism. Despite having the highest nonce of all 7 facilitators, E3B2 operates exclusively on Base. No evidence of cross-chain expansion for this facilitator.
 
 ---
 

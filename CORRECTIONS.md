@@ -344,6 +344,16 @@ EventMonitors live on production as of 2026-04-08 05:18 UTC heartbeat. Bridge sc
 
 ---
 
+## 2026-04-14 0xe69f81b8 Bridge Withdrawal Running Total — 49,000 ETH (~$147M)
+
+- **Context:** `0xe69f81b825d7dc31ee9becef4dbeab5cf30e3abb` was first documented on 2026-04-07 bridging 19,000 ETH to L1 via the canonical Base bridge (see entry "19,000 ETH Trace Coverage Gap" above). On 2026-04-08, its bridge scanner schema migration added it to the `_org_wallets` monitoring set.
+- **New finding (2026-04-14):** An additional **30,000 ETH** bridge withdrawal has been observed, bringing the running total to **49,000 ETH (~$147M at $3K/ETH) bridged to L1 in one week (April 7-14)**. Withdrawals are coordinated during western sleep hours (consistent with prior pattern). L1 nonce is now **36,602**.
+- **Scale context:** 49,000 ETH in 7 days from a single EOA is an extraordinarily high withdrawal rate. This address is one of the most active L2-to-L1 bridge users in the Base ecosystem.
+- **Action:** Flagged on production watchlist via `/admin/flag-address` with `entity_type: high_value_bridge_user`, `priority: HIGH`.
+- **Severity:** MEDIUM — this is a tracking update, not a correction. The 19,000 ETH figure from April 7 was accurate at the time; this entry documents continued activity at accelerating pace.
+
+---
+
 ## What This Log Does Not Cover
 
 - Claims made in prior sessions that weren't audited
