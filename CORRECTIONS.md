@@ -304,6 +304,7 @@ EventMonitors live on production as of 2026-04-08 05:18 UTC heartbeat. Bridge sc
 | "Pipeline is down" (2026-04-07) | Pipeline was healthy; local DB was stale | FIXED via sync 2026-04-07 |
 | "4,015 stale deployer counts" (2026-04-07) | Local artifact. Production had 3 stale, all -1 deltas | CORRECTED 2026-04-08 via `railway ssh refresh` |
 | "0x785c: $256K victim of E3B2" | Controlled intermediary funded by E717 with 1,406 ETH. Distributes $9.8M to address-poisoning collectors | CORRECTED 2026-04-13 in case file |
+| "6 rogue facilitators" | 7 confirmed: CE5E, E717, A7B9, E3B2, D270, 881E, F71C | UPDATED 2026-04-13 |
 
 ---
 

@@ -1,4 +1,4 @@
-# Case File — Permit2 Drainer Operation (6 Facilitators)
+# Case File — Permit2 Drainer Operation (7 Facilitators)
 
 **Status:** Active, confirmed via on-chain evidence.
 **Opened:** 2026-04-09
@@ -8,27 +8,30 @@
 
 ## Summary
 
-Six high-volume EOAs are using `Permit2.transferFrom` to drain token balances from victim wallets across **Arbitrum + Base + Optimism**. Victims have granted **unlimited, never-expiring** Permit2 allowances (`MAX_UINT160` amount, `MAX_UINT48` expiration) to these drainers and been swept. Currently ~$3.9M in stablecoin inflows observed across 1,955 distinct sender addresses in recent 1000-tx windows per the original 4 drainers, with individual victim losses up to $256k confirmed. A 5th facilitator (D270) was identified on 2026-04-12 draining OP tokens on Optimism, expanding the operation beyond stablecoins.
+Seven high-volume EOAs are using `Permit2.transferFrom` to drain token balances from victim wallets across **Arbitrum + Base + Optimism**. Victims have granted **unlimited, never-expiring** Permit2 allowances (`MAX_UINT160` amount, `MAX_UINT48` expiration) to these drainers and been swept. Currently ~$3.9M in stablecoin inflows observed across 1,955 distinct sender addresses in recent 1000-tx windows per the original 4 drainers, with individual victim losses up to $256k confirmed. A 5th facilitator (D270) was identified on 2026-04-12 draining OP tokens on Optimism, expanding the operation beyond stablecoins. A 7th facilitator (F71C) was identified on 2026-04-13 on Optimism, directly funded by D270.
 
-None of the 6 drainers appear in the public `facilitators.x402.watch` registry. They are misusing the x402/Permit2 settlement infrastructure as a drain vector.
+None of the 7 drainers appear in the public `facilitators.x402.watch` registry. They are misusing the x402/Permit2 settlement infrastructure as a drain vector.
 
 ---
 
-## The 6 rogue facilitators
+## The 7 rogue facilitators
 
 | Nickname | Address | Chain | Eth balance | Nonce | Distinct senders (recent 1000) | USD stablecoin inflow |
 |---|---|---|---|---|---|---|
+| **DRAINER-CE5E** | `0xce5ec7336f863931fda2ee3e4b9dad99fcc53c91` | arbitrum | 0.94 ETH | 3,052 | 322 | $2,547,480 |
+| **DRAINER-E717** | `0xe7176831c898d585cd999bcee9984a7fa9a6be96` | arbitrum | **125.32 ETH** | 80,141 | 512 | $664,177 |
+| **SUSPECT-881E** | `0x881e7c4c90f2d7f013558caf4feca330c327e476` | arbitrum | **20.86 ETH** | **120,983** | ? | ? |
 | **DRAINER-A7B9** | `0xa7b9874d15742358fb455dd56f97c6d19ad74f5c` | base | **272.29 ETH** | 96,144 | 458 | $229,059 |
 | **DRAINER-E3B2** | `0xe3b205da6d47989538f03553bc394d941677ffd3` | base | ? | ? | 663 | $445,115 |
-| **DRAINER-E717** | `0xe7176831c898d585cd999bcee9984a7fa9a6be96` | arbitrum | **125.32 ETH** | 80,141 | 512 | $664,177 |
-| **DRAINER-CE5E** | `0xce5ec7336f863931fda2ee3e4b9dad99fcc53c91` | arbitrum | 0.94 ETH | 3,052 | 322 | $2,547,480 |
 | **DRAINER-D270** | `0xd27047fe310178316b3acc4746e2a30823bb9186` | optimism | ? | 49,006 | ? | ? (OP tokens) |
-| **SUSPECT-881E** | `0x881e7c4c90f2d7f013558caf4feca330c327e476` | arbitrum | **20.86 ETH** | **120,983** | ? | ? |
+| **DRAINER-F71C** | `0xf71c98b3025baa6d1c15148429a9f2f1ce952e8c` | optimism | ? | **117,655** | ? | ? |
 | **TOTAL (original 4)** | | | | | **1,955** | **$3,885,831** |
+
+**Chain distribution:** Arbitrum (CE5E, E717, 881E), Base (A7B9, E3B2), Optimism (D270, F71C).
 
 Note: the $2.5M to DRAINER-CE5E includes at least one legitimate counterparty (`0xee7ae85f2fe2239e27d9c1e23fffe168d63b4055`, a 175M USDC contract, no Permit2 allowance to CE5E, sent $73k via regular transfers). The real drain portion is lower but still multi-million.
 
-A7B9 and E717 have nonces of 96k and 80k — hundreds of thousands of outbound transactions each. They're industrial-scale automation. CE5E's lower nonce (3k) but much higher drain total ($2.5M) suggests it's a newer and more aggressive operator. SUSPECT-881E (nonce 120,983) now holds the highest known nonce across all 6 facilitators.
+A7B9 and E717 have nonces of 96k and 80k — hundreds of thousands of outbound transactions each. They're industrial-scale automation. CE5E's lower nonce (3k) but much higher drain total ($2.5M) suggests it's a newer and more aggressive operator. SUSPECT-881E (nonce 120,983) holds the highest known nonce across all 7 facilitators. DRAINER-F71C (nonce 117,655) is the 2nd highest — notably exceeding D270 (49,006) despite being funded by D270, suggesting F71C was operational before D270 funded it.
 
 ---
 
@@ -257,11 +260,17 @@ candidates.
 
 **Scavenger bot flagged:** `0x1a1d939b2ee78756d81e6ad1638911bc8eaf63be` — automated exploit scanner spraying `initialize/withdraw/sweep/destroy` at every new Base contract. Nonce 1,959. Hit 15 traps in 90 minutes. Classified as `access_control_scavenger`, priority MEDIUM. Dangerous if it finds a real vulnerable proxy.
 
+**7th facilitator discovered (later on April 13):** DRAINER-F71C (`0xf71c98b3025baa6d1c15148429a9f2f1ce952e8c`) on **Optimism**. Nonce **117,655** — the 2nd highest across all 7 facilitators. **Directly funded by D270** with $81K+, confirming a D270 -> F71C funding chain on Optimism. Dual-vector operator: Permit2 drain + address poisoning. F71C's nonce (117,655) exceeds D270's (49,006) despite being funded by it — this suggests F71C was operational first and D270 is a newer wallet that began funding an already-active operator.
+
+**April 13 drain activity:** 26 drains observed today. D270 -> F71C funding chain confirmed.
+
 **Actions taken:**
 1. SUSPECT-881E flagged on production watchlist via `/admin/flag-address` with `priority: CRITICAL` and `entity_type: x402_rogue_facilitator`
 2. Scavenger bot `0x1a1d...63be` flagged with `priority: MEDIUM` and `entity_type: access_control_scavenger`
 3. 5 unindexed trap deployers flagged with `priority: HIGH` and `entity_type: unindexed_trap_deployer`
-4. Case file updated to reflect 6 facilitators; SUSPECT-881E nonce 120,983 noted as highest known
+4. DRAINER-F71C classified as `rogue` in `x402_facilitators` table (surveillance.db)
+5. DRAINER-F71C flagged on production watchlist via `/admin/flag-address` with `priority: CRITICAL` and `entity_type: x402_rogue_facilitator`
+6. Case file updated to reflect 7 facilitators across 3 chains: Arbitrum (CE5E, E717, 881E), Base (A7B9, E3B2), Optimism (D270, F71C)
 
 ---
 
