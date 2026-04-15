@@ -746,6 +746,184 @@ async def verify(chain: str, address: str):
 
 
 # ---------------------------------------------------------------------------
+# Phase 4: Agent Pre-Transaction Screening
+#
+# The integration point for AI agent frameworks. An agent calls this endpoint
+# BEFORE signing any approval or interacting with an unverified contract.
+# Returns the stored potential risk score, capability breakdown, and a
+# machine-readable recommendation.
+#
+# The agent's policy boundary: "If risk_score > 50 or tier == CRITICAL,
+# refuse the transaction." This makes prompt injection ineffective —
+# the injection can convince the agent to try, but the on-chain intelligence
+# prevents the try from executing.
+#
+# Integration surfaces:
+#   1. Pre-transaction: agent calls /agent/screen before signing
+#   2. Approval scope: agent calls /agent/approval-check before granting Permit2
+#   3. Facilitator validation: agent calls /agent/facilitator before x402 payment
+# ---------------------------------------------------------------------------
+
+@router.get("/agent/screen/{chain}/{address}")
+async def agent_screen(chain: str, address: str):
+    """Pre-transaction risk screen for AI agents.
+
+    Returns stored potential score, capability breakdown, and recommendation.
+    Designed for programmatic consumption — no auth required for the screen
+    endpoint (rate-limited in production). This is the oracle the agent consults.
+    """
+    addr = address.lower()
+    conn = _ro_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM contracts WHERE contract_address = ? AND chain = ?",
+            (addr, chain),
+        ).fetchone()
+
+        if not row:
+            # Unknown contract — not in our corpus. This is itself a signal.
+            return JSONResponse({
+                "address": addr,
+                "chain": chain,
+                "in_corpus": False,
+                "risk_score": 0,
+                "risk_tier": "UNKNOWN",
+                "recommendation": "UNVERIFIED",
+                "reason": "Contract not in Layer 3 monitored corpus. Proceed with caution.",
+                "note": "Absence of data is not safety. This contract has not been analyzed.",
+            })
+
+        row = dict(row)
+
+        # Run the stored potential risk scorer
+        from surveillance.risk_scoring import score_contract
+        risk = score_contract(conn, addr)
+
+        # Capabilities — the agent needs to understand WHAT the contract can do
+        capabilities = {}
+        notes = (row.get("bytecode_pattern_notes") or "").upper()
+        capabilities["asymmetric_transfer"] = bool(row.get("has_asymmetric_transfer"))
+        capabilities["conditional_revert"] = bool(row.get("has_conditional_revert"))
+        capabilities["unusual_fee_structure"] = bool(row.get("has_unusual_fee_structure"))
+        capabilities["delegatecall"] = "DELEGATECALL" in notes
+        capabilities["selfdestruct"] = "SELFDESTRUCT" in notes or "SUICIDE" in notes
+        capabilities["create2"] = "CREATE2" in notes
+
+        # Upgrade authority status
+        upgrade_burned = False
+        if "RENOUNCEOWNERSHIP" in notes.replace(" ", ""):
+            upgrade_burned = True
+        capabilities["upgrade_authority_burned"] = upgrade_burned
+
+        # Approval exposure on this contract
+        approval = conn.execute(
+            "SELECT COUNT(*) as total, "
+            "SUM(CASE WHEN drain_detected = 1 THEN 1 ELSE 0 END) as drained "
+            "FROM approval_watchlist WHERE contract_address = ?",
+            (addr,),
+        ).fetchone()
+        existing_approvals = approval["total"] if approval else 0
+        historical_drains = approval["drained"] or 0 if approval else 0
+        drain_rate = historical_drains / existing_approvals if existing_approvals > 0 else 0.0
+
+        # Recommendation logic
+        score = risk.get("risk_score", 0)
+        tier = risk.get("risk_tier", "MINIMAL")
+        if tier == "CRITICAL" or score >= 50:
+            recommendation = "DO_NOT_APPROVE"
+            reason = f"CRITICAL risk score ({score:.0f}). Contract exhibits {sum(capabilities.values())} dangerous capabilities."
+        elif tier == "HIGH" or score >= 20:
+            recommendation = "CAUTION"
+            reason = f"HIGH risk score ({score:.0f}). Review capabilities before proceeding."
+        elif existing_approvals > 100 and drain_rate > 0.05:
+            recommendation = "CAUTION"
+            reason = f"{existing_approvals} existing approvals with {drain_rate:.1%} historical drain rate."
+        elif row["confidence_tier"] == "confirmed":
+            recommendation = "DO_NOT_APPROVE"
+            reason = "Contract is a confirmed trap with on-chain victim evidence."
+        elif row["confidence_tier"] == "suspected":
+            recommendation = "CAUTION"
+            reason = "Contract exhibits trap-like bytecode patterns."
+        else:
+            recommendation = "PROCEED"
+            reason = "No elevated risk signals detected."
+
+        return JSONResponse({
+            "address": addr,
+            "chain": chain,
+            "in_corpus": True,
+            "risk_score": risk.get("risk_score", 0),
+            "risk_tier": tier,
+            "stored_potential": risk.get("stored_potential", 0),
+            "recommendation": recommendation,
+            "reason": reason,
+            "capabilities": capabilities,
+            "deployer_risk": risk.get("deployer_risk_score", 0),
+            "org_context": risk.get("org_context_score", 0),
+            "approval_exposure": {
+                "existing_approvals": existing_approvals,
+                "historical_drain_rate": round(drain_rate, 4),
+                "drains_detected": historical_drains,
+            },
+            "confidence_tier": row["confidence_tier"],
+            "volatility": risk.get("volatility", 1.0),
+        })
+    finally:
+        conn.close()
+
+
+@router.get("/agent/facilitator/{address}")
+async def agent_facilitator_check(address: str):
+    """Validate an x402 facilitator before authorizing payment.
+
+    Returns the facilitator's classification, nonce profile, and whether
+    it's in the known rogue registry.
+    """
+    addr = address.lower()
+    conn = _ro_conn()
+    try:
+        # Check x402_facilitators table
+        fac = None
+        try:
+            fac = conn.execute(
+                "SELECT address, chain, classification, name, notes "
+                "FROM x402_facilitators WHERE address = ?",
+                (addr,),
+            ).fetchone()
+        except Exception:
+            pass
+
+        if fac:
+            classification = fac["classification"]
+            safe = classification in ("known", "benign_relayer")
+            return JSONResponse({
+                "address": addr,
+                "known": True,
+                "classification": classification,
+                "name": fac["name"],
+                "safe": safe,
+                "recommendation": "PROCEED" if safe else "DO_NOT_AUTHORIZE",
+                "reason": f"Facilitator classified as '{classification}'" + (
+                    ". This facilitator is in the rogue registry — DO NOT authorize payments."
+                    if classification == "rogue" else ""
+                ),
+            })
+
+        # Not in facilitator table — unknown
+        return JSONResponse({
+            "address": addr,
+            "known": False,
+            "classification": "unknown",
+            "name": None,
+            "safe": False,
+            "recommendation": "CAUTION",
+            "reason": "Facilitator not in Layer 3 registry. Verify independently before authorizing.",
+        })
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
 # Phase 3: Tier 2 — Intelligence Feed
 # ---------------------------------------------------------------------------
 
