@@ -930,6 +930,19 @@ class X402Monitor:
 
             if fire_drain:
                 amount_norm = amount / 1e6 if amount else 0
+
+                # Pass-through detection: check if the payer received
+                # the drained tokens FROM a known drainer address.
+                # If so, this is laundering flow (drainer cycling their
+                # own money through a compromised wallet), not victim
+                # extraction. Separates real theft from wash volume.
+                event_class = "REAL_DRAIN"
+                deposit_source = None
+                if payer:
+                    deposit_source = self._check_deposit_source(payer.lower())
+                    if deposit_source:
+                        event_class = "PASS_THROUGH"
+
                 self._alert(
                     "X402_AGENT_DRAIN",
                     payer,
@@ -943,8 +956,11 @@ class X402Monitor:
                         "facilitator": facilitator,
                         "chain": self.chain,
                         "detection_path": drain_reason,
+                        "event_class": event_class,
+                        "deposit_source": deposit_source,
                         "message": (
-                            f"X402_AGENT_DRAIN [{drain_reason}]: "
+                            f"X402_AGENT_DRAIN [{drain_reason}] "
+                            f"[{event_class}]: "
                             f"Permit2.transferFrom pulled "
                             f"{amount_norm:,.2f} from payer "
                             f"{payer[:18]}... via facilitator "
@@ -957,6 +973,107 @@ class X402Monitor:
             self.conn.commit()
         except Exception:
             pass
+
+    # ------------------------------------------------------------------
+    # Pass-through detection
+    # ------------------------------------------------------------------
+
+    # Known drainer infrastructure addresses. If a "victim" received
+    # funds FROM any of these before being drained, the event is a
+    # pass-through (laundering), not a real victim extraction.
+    # Prefixes used for vanity-family matching (the operation generates
+    # addresses with matching prefixes).
+    _DRAINER_ADDRESSES: set[str] = set()
+    _DRAINER_PREFIXES: list[str] = []
+    _drainer_set_loaded = False
+
+    def _load_drainer_set(self) -> None:
+        """Build the known drainer address set from the DB."""
+        if self._drainer_set_loaded:
+            return
+        addrs = set()
+
+        # All rogue facilitators
+        try:
+            rows = self.conn.execute(
+                "SELECT address FROM x402_facilitators WHERE classification = 'rogue'"
+            ).fetchall()
+            for r in rows:
+                addrs.add(r[0].lower())
+        except Exception:
+            pass
+
+        # Known vanity sinks and intermediaries (from case file)
+        hardcoded = [
+            "0xbec87a77b19797bbe9b920ec521f3716c3725d22",  # CE5E vanity sink #1
+            "0xbec8721e796b0ce7705d317a73f110693d895d22",  # CE5E vanity sink #2
+            "0x785ce546ed429559b95895cb4a07874bf8ed329c",  # Controlled intermediary
+            "0x881e152be3750bd01ddc1f0d1b9a2f69a726e476",  # Secondary collector
+            "0x881e1cfb5c0002ab9765635fba2c13e9ab47e476",  # Secondary collector
+            "0xa17f9c66ac5f987422a9e209438c46e6c5bbe5f0",  # Consolidation sink
+            "0x4c0b3b02f1295863923a7f5994fcf4368b1d4692",  # Consolidation sink
+        ]
+        for a in hardcoded:
+            addrs.add(a.lower())
+
+        # Vanity prefixes for fuzzy matching (the operation generates
+        # many addresses with matching 4-8 char prefixes)
+        self._DRAINER_PREFIXES = [
+            "0xce5e", "0xe717", "0xa7b9", "0xe3b2",
+            "0x881e", "0xbec8", "0xd270", "0xf71c",
+        ]
+
+        self._DRAINER_ADDRESSES = addrs
+        self._drainer_set_loaded = True
+
+    def _check_deposit_source(self, payer_addr: str) -> Optional[str]:
+        """Check if the payer received tokens from a known drainer address.
+
+        Returns the drainer source address if found, None otherwise.
+        This is a lightweight check using the local DB only (no RPC).
+        Falls back to prefix matching for vanity-generated addresses.
+        """
+        self._load_drainer_set()
+        addr = payer_addr.lower()
+
+        # Check transaction_events: did any known drainer address send
+        # value to this payer recently?
+        try:
+            rows = self.conn.execute(
+                "SELECT interacting_address FROM transaction_events "
+                "WHERE contract_address = ? AND is_reverted = 0 "
+                "ORDER BY timestamp DESC LIMIT 20",
+                (addr,),
+            ).fetchall()
+            for r in rows:
+                caller = (r[0] or "").lower()
+                if caller in self._DRAINER_ADDRESSES:
+                    return caller
+                for prefix in self._DRAINER_PREFIXES:
+                    if caller.startswith(prefix):
+                        return caller
+        except Exception:
+            pass
+
+        # Check org_transfer_events for inbound from drainer infra
+        try:
+            rows = self.conn.execute(
+                "SELECT from_address FROM org_transfer_events "
+                "WHERE to_address = ? "
+                "ORDER BY timestamp DESC LIMIT 10",
+                (addr,),
+            ).fetchall()
+            for r in rows:
+                src = (r[0] or "").lower()
+                if src in self._DRAINER_ADDRESSES:
+                    return src
+                for prefix in self._DRAINER_PREFIXES:
+                    if src.startswith(prefix):
+                        return src
+        except Exception:
+            pass
+
+        return None
 
     # ------------------------------------------------------------------
     # Exposure management
