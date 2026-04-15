@@ -5,20 +5,143 @@ Synthesizes all upgrade modules into a single comprehensive report.
 The "President's Daily Brief" for the on-chain ecosystem.
 
 Usage:
-    python -m surveillance.daily_brief --generate
+    python -m surveillance.daily_brief --generate          # sync from prod + generate
+    python -m surveillance.daily_brief --generate --no-sync # local only (offline)
 """
 
 import argparse
 import json
+import os
 import sqlite3
+import urllib.parse
+import urllib.request
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent / "data" / "surveillance.db"
 BRIEFS_DIR = Path(__file__).resolve().parent / "data" / "briefs"
 
+# Production sync settings
+RAILWAY_URL = os.environ.get("RAILWAY_URL", "https://spypy.up.railway.app")
+SYNC_TOKEN = os.environ.get("ADMIN_TOKEN", "")
+SYNC_BATCH = 5000
 
-def generate_brief(target_date: str = None) -> Path:
+# Tables to sync for the brief (in dependency order).
+# Only tables the brief actually reads — not the full list from sync_railway_db.py.
+BRIEF_TABLES = [
+    "deployers", "contracts", "trap_events", "transaction_events",
+    "bot_candidates", "alerts", "watchlist", "watchlist_hits",
+    "trust_amplification", "approval_watchlist", "self_test_traps",
+    "bytecode_families", "bytecode_family_members",
+    "heartbeat", "connection_gaps", "liquidity_events",
+    "approval_events", "bridge_events", "pair_creation_events",
+    "org_transfer_events", "x402_facilitators", "x402_events",
+    "x402_permit2_exposure",
+]
+
+
+def _sync_table(local_conn, table, token):
+    """Pull a single table from production /dump endpoint into local DB."""
+    local_cols = [r[1] for r in local_conn.execute(f"PRAGMA table_info([{table}])").fetchall()]
+    if not local_cols:
+        return 0
+
+    offset = 0
+    total_synced = 0
+    while True:
+        params = urllib.parse.urlencode({
+            "token": token, "table": table, "offset": offset, "limit": SYNC_BATCH,
+        })
+        url = f"{RAILWAY_URL}/dump?{params}"
+        try:
+            with urllib.request.urlopen(url, timeout=30) as resp:
+                data = json.loads(resp.read())
+        except Exception:
+            break
+
+        rows = data.get("rows", [])
+        if not rows:
+            break
+
+        remote_cols = set(rows[0].keys())
+        sync_cols = [c for c in local_cols if c in remote_cols]
+        if not sync_cols:
+            break
+
+        col_names = ", ".join(f"[{c}]" for c in sync_cols)
+        placeholders = ", ".join("?" * len(sync_cols))
+        sql = f"INSERT OR REPLACE INTO [{table}] ({col_names}) VALUES ({placeholders})"
+
+        for row in rows:
+            vals = [row.get(c) for c in sync_cols]
+            try:
+                local_conn.execute(sql, vals)
+            except sqlite3.IntegrityError:
+                try:
+                    local_conn.execute(
+                        f"INSERT OR IGNORE INTO [{table}] ({col_names}) VALUES ({placeholders})",
+                        vals,
+                    )
+                except Exception:
+                    pass
+
+        total_synced += len(rows)
+        offset += len(rows)
+
+        if len(rows) < SYNC_BATCH:
+            break
+        time.sleep(0.15)
+
+    local_conn.commit()
+    return total_synced
+
+
+def sync_from_production(token: str = None) -> dict:
+    """Pull latest data from Railway production into local DB.
+
+    Returns a dict of {table: rows_synced}.
+    """
+    tok = token or SYNC_TOKEN
+    if not tok:
+        print("[daily_brief] No ADMIN_TOKEN — skipping production sync.")
+        print("  Set ADMIN_TOKEN env var or pass --token.")
+        return {}
+
+    conn = sqlite3.connect(str(DB_PATH), timeout=30)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=OFF")
+
+    # Quick connectivity check
+    try:
+        url = f"{RAILWAY_URL}/dump?{urllib.parse.urlencode({'token': tok, 'table': 'heartbeat', 'offset': 0, 'limit': 1})}"
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            json.loads(resp.read())
+    except Exception as e:
+        print(f"[daily_brief] Cannot reach production: {e}")
+        conn.close()
+        return {}
+
+    print(f"[daily_brief] Syncing from {RAILWAY_URL}...")
+    results = {}
+    for table in BRIEF_TABLES:
+        synced = _sync_table(conn, table, tok)
+        if synced > 0:
+            print(f"  {table}: {synced:,} rows")
+        results[table] = synced
+
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.close()
+    total = sum(results.values())
+    print(f"[daily_brief] Sync complete: {total:,} rows across {sum(1 for v in results.values() if v > 0)} tables.")
+    return results
+
+
+def generate_brief(target_date: str = None, sync: bool = True, token: str = None) -> Path:
+    # Sync from production first (unless --no-sync)
+    if sync:
+        sync_from_production(token=token)
+
     conn = sqlite3.connect(str(DB_PATH), timeout=10)
     conn.row_factory = sqlite3.Row
     now = datetime.now(timezone.utc)
@@ -41,7 +164,7 @@ def generate_brief(target_date: str = None) -> Path:
 
     md = f"# LAYER 3 DAILY INTELLIGENCE BRIEF\n"
     md += f"**Date:** {day}\n"
-    md += f"**Coverage:** Base + Arbitrum\n"
+    md += f"**Coverage:** Base + Arbitrum + Optimism\n"
     md += f"**Corpus:** {total_c:,} contracts | {total_tx:,} events | {total_ent:,} entities classified\n\n---\n\n"
 
     # Key metrics
@@ -468,9 +591,16 @@ def generate_brief(target_date: str = None) -> Path:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--generate", action="store_true")
-    parser.add_argument("--date", default=None)
+    parser = argparse.ArgumentParser(
+        description="Layer 3 Daily Intelligence Brief — syncs from production then generates."
+    )
+    parser.add_argument("--generate", action="store_true", help="Generate the brief")
+    parser.add_argument("--date", default=None, help="Target date (YYYY-MM-DD)")
+    parser.add_argument("--no-sync", action="store_true", help="Skip production sync (use local DB only)")
+    parser.add_argument("--sync-only", action="store_true", help="Sync from production without generating")
+    parser.add_argument("--token", default=None, help="ADMIN_TOKEN for production sync")
     args = parser.parse_args()
-    if args.generate or not args.date:
-        generate_brief(target_date=args.date)
+    if args.sync_only:
+        sync_from_production(token=args.token)
+    elif args.generate or not args.date:
+        generate_brief(target_date=args.date, sync=not args.no_sync, token=args.token)
