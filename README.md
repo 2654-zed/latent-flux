@@ -1,4 +1,37 @@
-# Latent Flux
+# Layer 3 — Passive On-Chain Trap Surveillance (and Latent Flux)
+
+**What's running:** Layer 3 is a passive surveillance system monitoring smart contract deployments on Base, Arbitrum, and Optimism in real time. Detects trap contracts (honeypots, Permit2 drainers, fee skimmers), traces organizational structures, and serves a pre-transaction risk API for AI agent frameworks. Built on the Latent Flux primitives library documented below.
+
+**Live deployment:** `https://spypy.up.railway.app` — 24/7 on Railway since March 2026. Corpus: 124,341 contracts, 1.17M transaction events, 36,115 deployers across 3 chains.
+
+## Run It (3 commands)
+
+```bash
+git clone https://github.com/2654-zed/latent-flux.git && cd latent-flux
+pip install -r requirements.txt
+ARB_WSS_URL=wss://... BASE_WSS_URL=wss://... OP_WSS_URL=wss://... python run_surveillance.py
+```
+
+Then hit the API:
+
+```bash
+curl http://localhost:8080/stats                                     # corpus metrics
+curl http://localhost:8080/api/v1/agent/screen/base/0x<contract>     # pre-tx risk score for AI agents
+curl http://localhost:8080/api/v1/agent/facilitator/0x<addr>         # x402 facilitator validation
+```
+
+The `/api/v1/agent/screen` endpoint returns `{risk_score, risk_tier, capabilities, recommendation: "DO_NOT_APPROVE" | "CAUTION" | "PROCEED" | "UNVERIFIED"}` — designed to be called by an AI agent before signing any approval.
+
+## Full Documentation
+
+- **End-to-end system:** [`surveillance/ARCHITECTURE.md`](surveillance/ARCHITECTURE.md) — streaming ingest, SQLite schema, all heuristic modules, full API surface
+- **Interpretive framework:** [`L3_TOPOLOGY_FRAMEWORK.md`](L3_TOPOLOGY_FRAMEWORK.md) — five-primitive risk model (position, permissions, trust bindings, mutability, observation)
+- **Design principles:** [`claude.md`](claude.md) — ground truth, conservative classification, immutable record
+- **Corrections log:** [`CORRECTIONS.md`](CORRECTIONS.md) — every claim ever challenged and its resolution
+
+---
+
+# Latent Flux (underlying library)
 
 **A continuous-flow programming language for latent-space computation.**
 
@@ -7,6 +40,8 @@ Latent Flux replaces discrete symbolic reasoning with continuous vector field dy
 ```
 ds/dt = f(s, q)       s ∈ ℝ^d,  q ∈ ℝ^d (attractor),  f: ℝ^d × ℝ^d → ℝ^d
 ```
+
+Layer 3's analysis layer uses these primitives (AttractorCompetition for contract classification, ReservoirState for deployer behavioral baseline, RecursiveFlow for cluster resolution, FoldReference for data integrity).
 
 ---
 
