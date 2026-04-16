@@ -1,6 +1,10 @@
 """
 Layer 3 — Vanity Attention Scorer
 
+STATUS: SHELVED 2026-04-16 — infrastructure complete, intelligence yield
+unconfirmed. Revisit when one of the re-open triggers below fires. See
+shelf note at end of this docstring.
+
 Inverts the usual detection model. Instead of analyzing a wallet's behavior
 to determine its role, this module analyzes OTHER ATTACKERS' behavior
 toward the wallet to infer the wallet's role.
@@ -41,7 +45,43 @@ Scoring:
 Usage:
     python -m surveillance.vanity_attention --score 0xe93d64f3fbc352131e79fc5578cbe44b66697f86
     python -m surveillance.vanity_attention --rank --top 20
-    python -m surveillance.vanity_attention --discover
+    python -m surveillance.vanity_attention --rank --deep --blocks 10000
+
+----------------------------------------------------------------------
+SHELF NOTE (2026-04-16)
+----------------------------------------------------------------------
+
+What's proven:
+  - Architecture works end-to-end (v1 asset-transfer path + v2 block-walk)
+  - False-positive filtering against system addresses (zero, dead,
+    precompiles, WETH9, Permit2, OP Stack bridge) is correct
+  - Batched block-scanning scales with blocks_back, not target count
+
+What's NOT proven:
+  - The "discovery signal" thesis — that scoring reveals unclassified
+    high-value targets the poisoners found before we did. We scored 20
+    top-value candidates and found zero high-attention targets. Could
+    mean sophisticated vanity poisoning is genuinely rare, OR the
+    window was too narrow, OR the poisoners moved to zero-value spam
+    that v1 can't see and v2 wasn't run with a wide enough window.
+  - The documented org_001 Treasury poisoners (nonces 2622, 4069) were
+    not detected with the 100-block v2 window. A 10,000-block run
+    would resolve whether they're still active.
+
+Re-open triggers:
+  1. Targeted investigation — "is this specific operator being
+     poisoned?" Run --score on the single address.
+  2. New poisoner addresses surface in other investigations.
+     The 3 org_001 poisoners are on watch; if similar patterns appear
+     elsewhere, re-run --rank --deep --blocks 10000 on fresh candidates.
+  3. Customer use case — wallet provider asks "is this address a
+     target?" The infrastructure answers it without further build work.
+
+What keeps running:
+  - surveillance/poisoning_watcher.py continues catching non-vanity
+    poisoning (Unicode homoglyphs, phishing airdrops) against the
+    3 default targets. If its output starts showing vanity-pattern
+    senders, that's the signal to revive this module.
 """
 
 import argparse
