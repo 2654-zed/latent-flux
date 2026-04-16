@@ -76,6 +76,10 @@ PREFIX_MATCH_CHARS = 8  # 4 hex chars + '0x' prefix = 6 char substring
 # Minimum matching length between sender and counterparty for poisoning suspicion
 MIN_PREFIX_OVERLAP = 6  # 4 real hex chars (strict)
 
+# Block walking parameters for zero-value poisoning detection (v2)
+# Batch scans across all targets in a single chain pass to minimize RPC cost.
+BLOCKS_BACK_DEFAULT = 500  # ~8min on Arbitrum, ~16min on Base/Optimism
+
 
 def _rpc(url: str, method: str, params: list) -> Optional[dict]:
     data = json.dumps({
@@ -212,6 +216,72 @@ def _get_nonce(chain: str, address: str) -> int:
         return 0
 
 
+# ---------------------------------------------------------------------------
+# v2: Zero-value ETH poisoning detection via block walking
+#
+# alchemy_getAssetTransfers does not return transactions where value=0 and
+# no ERC-20 is transferred — there's no asset to report. But that's exactly
+# how sophisticated vanity poisoners operate: they send empty txs from
+# vanity addresses so the target's tx history shows the lookalike address
+# next to their real counterparties.
+#
+# The documented org_001 Treasury poisoners (nonces 2622, 4069) use this
+# exact path. v1 was blind to them.
+#
+# v2 approach: batch-scan recent blocks on each chain ONCE and match all
+# targets in memory. For 20 targets × 3 chains × 500 blocks = 1,500 RPC
+# calls (batched per-chain). Worst-case RPC cost is bounded regardless
+# of target count.
+# ---------------------------------------------------------------------------
+
+def _batch_scan_blocks(chain: str, target_set: set[str],
+                      blocks_back: int = BLOCKS_BACK_DEFAULT) -> dict[str, list[dict]]:
+    """Walk the most recent N blocks on chain, collect all inbound txs
+    (including value=0) for every address in target_set.
+
+    Returns {target_address: [{tx_hash, block, from, value_wei}, ...]}.
+
+    Single pass per chain — scales with blocks_back, not with target count.
+    """
+    url = RPC_URLS.get(chain)
+    if not url:
+        return {}
+
+    latest_hex = _rpc(url, "eth_blockNumber", [])
+    if not latest_hex:
+        return {}
+    try:
+        latest = int(latest_hex, 16)
+    except (ValueError, TypeError):
+        return {}
+
+    start = max(0, latest - blocks_back)
+    results: dict[str, list[dict]] = {t.lower(): [] for t in target_set}
+
+    for block_num in range(start, latest + 1):
+        block = _rpc(url, "eth_getBlockByNumber", [hex(block_num), True])
+        if not block:
+            continue
+        for tx in block.get("transactions", []) or []:
+            to_addr = (tx.get("to") or "").lower()
+            if to_addr in results:
+                try:
+                    val_wei = int(tx.get("value", "0x0"), 16)
+                except (ValueError, TypeError):
+                    val_wei = 0
+                results[to_addr].append({
+                    "tx_hash": tx.get("hash", ""),
+                    "block": block_num,
+                    "from": (tx.get("from") or "").lower(),
+                    "value_wei": val_wei,
+                })
+        # Light rate limiting
+        if block_num % 100 == 0:
+            time.sleep(0.05)
+
+    return results
+
+
 # Well-known system addresses that should NOT be treated as counterparties
 # or senders — they create false positives via shared prefixes.
 SYSTEM_ADDRESSES: set[str] = {
@@ -289,8 +359,14 @@ def _check_vanity_match(sender: str, target: str,
     return best_match
 
 
-def score_target(conn: sqlite3.Connection, target: str) -> dict:
-    """Score vanity attention for a single target across all chains."""
+def score_target(conn: sqlite3.Connection, target: str,
+                 block_scan_results: Optional[dict] = None) -> dict:
+    """Score vanity attention for a single target across all chains.
+
+    If block_scan_results is provided (from _batch_scan_blocks), use it
+    for zero-value poisoning detection instead of (or in addition to)
+    the asset-transfer API.
+    """
     target = target.lower()
 
     # Get target's counterparty set (same across chains — these are
@@ -303,13 +379,15 @@ def score_target(conn: sqlite3.Connection, target: str) -> dict:
     for chain in ["arbitrum", "base", "optimism"]:
         inbound = _get_inbound_dust(chain, target, count=100)
         chain_attempts: list[dict] = []
+        seen_tx_hashes: set[str] = set()
 
+        # v1 path: asset-bearing transfers
         for t in inbound:
             sender = (t.get("from") or "").lower()
             value = t.get("value") or 0
             asset = t.get("asset") or ""
+            tx_hash = t.get("hash", "")
 
-            # Check for vanity match
             match = _check_vanity_match(sender, target, counterparties)
             if not match:
                 continue
@@ -321,9 +399,37 @@ def score_target(conn: sqlite3.Connection, target: str) -> dict:
                 "match_length": match_len,
                 "value": value,
                 "asset": asset,
-                "tx_hash": t.get("hash", ""),
+                "tx_hash": tx_hash,
                 "chain": chain,
+                "detection_path": "asset_transfer",
             })
+            if tx_hash:
+                seen_tx_hashes.add(tx_hash)
+
+        # v2 path: zero-value inbound from block walk (if provided)
+        if block_scan_results and chain in block_scan_results:
+            chain_blocks = block_scan_results[chain].get(target, [])
+            for b in chain_blocks:
+                sender = b["from"]
+                tx_hash = b.get("tx_hash", "")
+                if tx_hash in seen_tx_hashes:
+                    continue
+
+                match = _check_vanity_match(sender, target, counterparties)
+                if not match:
+                    continue
+
+                impersonated, match_len = match
+                chain_attempts.append({
+                    "poisoner": sender,
+                    "impersonates": impersonated,
+                    "match_length": match_len,
+                    "value": b.get("value_wei", 0),
+                    "asset": "ETH" if b.get("value_wei", 0) > 0 else "none",
+                    "tx_hash": tx_hash,
+                    "chain": chain,
+                    "detection_path": "block_walk_zero_value",
+                })
 
         # Get poisoner nonces (expensive — only for the matches)
         for a in chain_attempts:
@@ -333,6 +439,8 @@ def score_target(conn: sqlite3.Connection, target: str) -> dict:
         chain_details[chain] = {
             "inbound_count": len(inbound),
             "vanity_attempts": len(chain_attempts),
+            "zero_value_caught": sum(1 for a in chain_attempts
+                                     if a.get("detection_path") == "block_walk_zero_value"),
         }
         time.sleep(0.2)
 
@@ -442,11 +550,16 @@ def _persist_score(conn: sqlite3.Connection, result: dict) -> None:
     conn.commit()
 
 
-def rank_targets(limit: int = 20) -> None:
+def rank_targets(limit: int = 20, deep_scan: bool = False,
+                 blocks_back: int = BLOCKS_BACK_DEFAULT) -> None:
     """Rank known candidates by vanity attention score.
 
     Scores a curated set of high-value addresses: known org wallets,
     CRITICAL watchlist entries, and bridge whales.
+
+    deep_scan=True activates v2 block-walking for zero-value poisoning
+    detection. Costs ~blocks_back RPC calls per chain (once, batched
+    across all targets).
     """
     conn = sqlite3.connect(str(DB_PATH), timeout=30)
     conn.row_factory = sqlite3.Row
@@ -483,17 +596,37 @@ def rank_targets(limit: int = 20) -> None:
         pass
 
     candidates_list = list(candidates)[:limit]
+
+    # v2: batch block scan ONCE per chain for all candidates
+    block_scan_results: dict[str, dict] = {}
+    if deep_scan:
+        print(f"[vanity_attention] v2 deep scan: walking {blocks_back} recent blocks "
+              f"on each chain for {len(candidates_list)} targets...")
+        target_set = set(candidates_list)
+        for chain in ["arbitrum", "base", "optimism"]:
+            print(f"  Scanning {chain}...", end=" ", flush=True)
+            result = _batch_scan_blocks(chain, target_set, blocks_back=blocks_back)
+            block_scan_results[chain] = result
+            total_inbound = sum(len(v) for v in result.values())
+            print(f"{total_inbound} inbound txs captured")
+        print()
+
     print(f"[vanity_attention] Scoring {len(candidates_list)} candidates across 3 chains...\n")
 
     results = []
     for i, target in enumerate(candidates_list, 1):
         print(f"  [{i}/{len(candidates_list)}] {target[:24]}...", end=" ", flush=True)
         try:
-            result = score_target(conn, target)
+            result = score_target(conn, target,
+                                  block_scan_results=block_scan_results if deep_scan else None)
             _persist_score(conn, result)
             results.append(result)
+            zero_val = sum(cd.get("zero_value_caught", 0)
+                          for cd in result.get("chain_details", {}).values())
+            zero_note = f" zero_val={zero_val}" if deep_scan and zero_val else ""
             print(f"score={result['attention_score']} tier={result['tier']} "
-                  f"attempts={result['attempt_count']} distinct_poisoners={result['distinct_poisoners']}")
+                  f"attempts={result['attempt_count']} "
+                  f"distinct_poisoners={result['distinct_poisoners']}{zero_note}")
         except Exception as e:
             print(f"ERROR: {e}")
 
@@ -553,6 +686,10 @@ def main() -> None:
     parser.add_argument("--rank", action="store_true",
                         help="Rank known high-value targets by attention score")
     parser.add_argument("--top", type=int, default=20, help="Limit for --rank")
+    parser.add_argument("--deep", action="store_true",
+                        help="Enable v2 block-walking for zero-value poisoning detection")
+    parser.add_argument("--blocks", type=int, default=BLOCKS_BACK_DEFAULT,
+                        help="Blocks to walk per chain in --deep mode")
     args = parser.parse_args()
 
     conn = sqlite3.connect(str(DB_PATH), timeout=30)
@@ -570,7 +707,7 @@ def main() -> None:
                       f"nonce={a['poisoner_nonce']} "
                       f"match_len={a['match_length']}")
     elif args.rank:
-        rank_targets(limit=args.top)
+        rank_targets(limit=args.top, deep_scan=args.deep, blocks_back=args.blocks)
     else:
         parser.print_help()
 
