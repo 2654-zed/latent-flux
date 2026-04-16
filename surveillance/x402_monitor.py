@@ -1003,11 +1003,12 @@ class X402Monitor:
         except Exception:
             pass
 
-        # Known vanity sinks and intermediaries (from case file)
+        # Known vanity sinks and intermediaries (from case file + investigations)
         hardcoded = [
             "0xbec87a77b19797bbe9b920ec521f3716c3725d22",  # CE5E vanity sink #1
             "0xbec8721e796b0ce7705d317a73f110693d895d22",  # CE5E vanity sink #2
             "0x785ce546ed429559b95895cb4a07874bf8ed329c",  # Controlled intermediary
+            "0xa3a1d7a54269be09c34accfeb4b08adc21a51738",  # CE5E laundering hop (2026-04-15 investigation)
             "0x881e152be3750bd01ddc1f0d1b9a2f69a726e476",  # Secondary collector
             "0x881e1cfb5c0002ab9765635fba2c13e9ab47e476",  # Secondary collector
             "0xa17f9c66ac5f987422a9e209438c46e6c5bbe5f0",  # Consolidation sink
@@ -1027,17 +1028,37 @@ class X402Monitor:
         self._drainer_set_loaded = True
 
     def _check_deposit_source(self, payer_addr: str) -> Optional[str]:
-        """Check if the payer received tokens from a known drainer address.
+        """Check if the "victim" is actually laundering infrastructure.
 
-        Returns the drainer source address if found, None otherwise.
-        This is a lightweight check using the local DB only (no RPC).
-        Falls back to prefix matching for vanity-generated addresses.
+        Returns a source address / classification reason if this drain is
+        a pass-through, None otherwise.
+
+        Three-step check in order of specificity:
+          1. Payer IS in known drainer set (self-classified pass-through)
+          2. Payer matches a drainer vanity prefix (likely drainer wallet)
+          3. Payer received tokens from drainer infra (deposit-source match)
+
+        The first two are the reliable paths for EOA victims — the
+        third path (transaction_events / org_transfer_events) only works
+        for contracts and org wallets. Fix logged in CORRECTIONS.md
+        (2026-04-16 EOA pass-through blind spot).
         """
         self._load_drainer_set()
         addr = payer_addr.lower()
 
-        # Check transaction_events: did any known drainer address send
-        # value to this payer recently?
+        # Path 1: payer is itself known drainer infrastructure
+        if addr in self._DRAINER_ADDRESSES:
+            return f"self:{addr}"
+
+        # Path 2: payer matches a drainer vanity prefix (unclassified
+        # but structurally part of the operation's vanity family)
+        for prefix in self._DRAINER_PREFIXES:
+            if addr.startswith(prefix):
+                return f"vanity_prefix:{prefix}"
+
+        # Path 3: payer received tokens from known drainer addresses
+        # (original deposit-source check — works for contracts and org
+        # wallets but blind to arbitrary EOAs without live Alchemy queries)
         try:
             rows = self.conn.execute(
                 "SELECT interacting_address FROM transaction_events "
@@ -1048,14 +1069,13 @@ class X402Monitor:
             for r in rows:
                 caller = (r[0] or "").lower()
                 if caller in self._DRAINER_ADDRESSES:
-                    return caller
+                    return f"received_from:{caller}"
                 for prefix in self._DRAINER_PREFIXES:
                     if caller.startswith(prefix):
-                        return caller
+                        return f"received_from_prefix:{caller}"
         except Exception:
             pass
 
-        # Check org_transfer_events for inbound from drainer infra
         try:
             rows = self.conn.execute(
                 "SELECT from_address FROM org_transfer_events "
@@ -1066,10 +1086,10 @@ class X402Monitor:
             for r in rows:
                 src = (r[0] or "").lower()
                 if src in self._DRAINER_ADDRESSES:
-                    return src
+                    return f"received_from:{src}"
                 for prefix in self._DRAINER_PREFIXES:
                     if src.startswith(prefix):
-                        return src
+                        return f"received_from_prefix:{src}"
         except Exception:
             pass
 

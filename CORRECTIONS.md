@@ -276,6 +276,27 @@ EventMonitors live on production as of 2026-04-08 05:18 UTC heartbeat. Bridge sc
 
 ---
 
+## 2026-04-16 Pass-Through Classifier Blind to EOA Victims — $200K Drain Missed Today
+
+- **Claim (implicit):** The pass-through classifier that shipped 2026-04-15 correctly labels drain events against drainer infrastructure (documented laundering hops) as PASS_THROUGH instead of REAL_DRAIN.
+- **Reality:** The classifier misclassified a $200,615 drain against `0x785ce546` (the documented controlled intermediary) as REAL_DRAIN at 2026-04-16 00:16 UTC. Also missed similar prior events against `0xa3a1d7a5` (documented CE5E laundering hop).
+- **Discovery:** Production query during Apr 16 data analysis. Filtered drains by amount; the top hit was 0x785c being drained by E3B2 for $200K, labeled `event_class=REAL_DRAIN path=rogue_facilitator_self_settlement`. 0x785c is explicitly in our `_DRAINER_ADDRESSES` hardcoded set — should have been caught.
+- **Root cause:** The `_check_deposit_source()` function queried two sources:
+  1. `transaction_events WHERE contract_address = payer` — only populates for contracts, not EOAs
+  2. `org_transfer_events WHERE to_address = payer` — only populates for org wallets
+
+  The victim in this case (0x785c) is an EOA that isn't an org wallet, so both queries returned empty. The check structurally cannot see EOA-to-EOA drainer deposits without live Alchemy calls. It never checked the simplest case: **is the payer itself in the known drainer set?**
+- **Fix (2026-04-16):** `surveillance/x402_monitor.py::_check_deposit_source` now has a three-path check in order of specificity:
+  1. Payer is itself in `_DRAINER_ADDRESSES` → `self:<addr>` (catches all documented intermediaries)
+  2. Payer matches a drainer vanity prefix → `vanity_prefix:<prefix>` (catches undocumented addresses in the vanity family)
+  3. Original deposit-source check (unchanged, still only works for contracts/org wallets)
+
+  Also added `0xa3a1d7a5` to the hardcoded drainer set — it was documented in the Apr 15 audit but only added to `audit_passthrough.py`, not to the monitor.
+- **Implication for Apr 15 numbers:** The `~$2.3M real victim extraction / ~$1.6M pass-through` split from 2026-04-15 is likely an **underestimate of pass-through volume** because the live classifier couldn't fire on EOA victims that are actually drainer infrastructure. A full corpus re-audit with the fixed classifier is needed to produce accurate totals.
+- **Severity:** HIGH — a documented laundering wallet was presented as a victim of a $200K drain. If this had appeared in a customer feed or law-enforcement brief, the "victim" would have been the drain operator themselves. The same pattern likely occurred dozens of times historically; the Apr 15 audit only sampled the 4 largest events.
+
+---
+
 ## 2026-04-15 Drain Volume Inflation: Pass-Through Laundering Counted as Victim Extraction
 
 - **Claim:** The case file documented ~$3.9M in stablecoin drain volume across 1,955 distinct senders, presented as victim extraction. The spot-checked victims table listed $769K (0xa3a1d7a5, CE5E), $256K (0x785ce546, E3B2), $180K (0x303d5773, E717), $29K (0x59f13bc1, A7B9) as the top individual losses.
@@ -354,6 +375,7 @@ EventMonitors live on production as of 2026-04-08 05:18 UTC heartbeat. Bridge sc
 | "0x785c: $256K victim of E3B2" | Controlled intermediary funded by E717 with 1,406 ETH. Distributes $9.8M to address-poisoning collectors | CORRECTED 2026-04-13 in case file |
 | "6 rogue facilitators" | 7 confirmed: CE5E, E717, A7B9, E3B2, D270, 881E, F71C | UPDATED 2026-04-13 |
 | "$3.9M drain volume" | ~$2.3M real victim extraction + ~$1.6M pass-through laundering. 42% of top-value events are drainer cycling own funds through compromised wallets | CORRECTED 2026-04-15 |
+| "Pass-through classifier is live" | Shipped 2026-04-15 but structurally blind to EOA victims. Fixed 2026-04-16 (self-check + vanity prefix match). Real pass-through % is likely higher than 42% estimate | CORRECTED 2026-04-16 |
 
 ---
 
