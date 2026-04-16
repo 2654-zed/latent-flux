@@ -1,8 +1,8 @@
-# Layer 3 — Passive On-Chain Trap Surveillance (and Latent Flux)
+# Layer 3 — On-Chain Behavioral Threat Intel
 
-**What's running:** Layer 3 is a passive surveillance system monitoring smart contract deployments on Base, Arbitrum, and Optimism in real time. Detects trap contracts (honeypots, Permit2 drainers, fee skimmers), traces organizational structures, and serves a pre-transaction risk API for AI agent frameworks. Built on the Latent Flux primitives library documented below.
+**What's running:** A passive surveillance system monitoring smart contract deployments on Base, Arbitrum, and Optimism in real time. Detects trap contracts (honeypots, Permit2 drainers, fee skimmers), traces organizational structures, documents active criminal operations, and serves a pre-transaction risk API for AI agent frameworks.
 
-**Live deployment:** `https://spypy.up.railway.app` — 24/7 on Railway since March 2026. Corpus: 124,341 contracts, 1.17M transaction events, 36,115 deployers across 3 chains.
+**Live deployment:** `https://spypy.up.railway.app` — 24/7 on Railway since March 2026. Corpus: 124,341 contracts, 1.17M transaction events, 36,115 deployers across 3 chains. $10-15M+ drain operation documented, 7 rogue facilitators tracked.
 
 ## Run It (3 commands)
 
@@ -31,17 +31,7 @@ The `/api/v1/agent/screen` endpoint returns `{risk_score, risk_tier, capabilitie
 
 ---
 
-# Latent Flux (underlying library)
-
-**A continuous-flow programming language for latent-space computation.**
-
-Latent Flux replaces discrete symbolic reasoning with continuous vector field dynamics. States flow toward semantic attractors through differentiable manifolds. There are no conditionals, no loops, no call stacks — only flow, superposition, and collapse.
-
-```
-ds/dt = f(s, q)       s ∈ ℝ^d,  q ∈ ℝ^d (attractor),  f: ℝ^d × ℝ^d → ℝ^d
-```
-
-Layer 3's analysis layer uses these primitives (AttractorCompetition for contract classification, ReservoirState for deployer behavioral baseline, RecursiveFlow for cluster resolution, FoldReference for data integrity).
+> **Latent Flux primitives power Layer 3's analysis layer** — AttractorCompetition for contract classification, ReservoirState for deployer behavioral baseline, RecursiveFlow for cluster resolution, FoldReference for data integrity. Full language spec below.
 
 ---
 
