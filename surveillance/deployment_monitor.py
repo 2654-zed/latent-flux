@@ -852,6 +852,7 @@ class DeploymentMonitor:
                 f"Deployer velocity escalation: {deployer_address} deployed "
                 f"{count}+ contracts this session (threshold: "
                 f"{self.velocity_threshold}). Bulk upgrade from unknown.",
+                detection_method="deployer_history",
             )
 
         logger.warning(

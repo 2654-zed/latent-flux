@@ -268,7 +268,8 @@ class RoutingMonitor:
                         f"despite apparent price advantage -- {anomaly}"
                     )
                     db.update_contract_confidence(
-                        self.conn, addr, "suspected", reason
+                        self.conn, addr, "suspected", reason,
+                        detection_method="routing_anomaly",
                     )
                     logger.info(
                         "ROUTING ANOMALY: %s -- %s", addr, anomaly

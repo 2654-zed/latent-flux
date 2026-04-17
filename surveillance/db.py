@@ -658,14 +658,35 @@ def insert_contract(conn: sqlite3.Connection, *,
 
 
 def update_contract_confidence(conn: sqlite3.Connection, contract_address: str,
-                               confidence_tier: str, confidence_reason: str) -> None:
-    conn.execute(
-        """
-        UPDATE contracts SET confidence_tier = ?, confidence_reason = ?, last_updated = ?
-        WHERE contract_address = ?
-        """,
-        (confidence_tier, confidence_reason, _now_iso(), contract_address),
-    )
+                               confidence_tier: str, confidence_reason: str,
+                               detection_method: Optional[str] = None) -> None:
+    """Update a contract's confidence tier and reason.
+
+    detection_method is optional; when provided, it is written alongside the
+    tier/reason so evidence-basis labels stay truthful. Callers that upgrade
+    a contract's tier because of a NEW evidence source (velocity escalation,
+    routing anomaly, self-loop) should pass the matching method to avoid
+    preserving a stale 'bytecode_pattern' label from the original insert.
+    """
+    if detection_method is None:
+        conn.execute(
+            """
+            UPDATE contracts
+            SET confidence_tier = ?, confidence_reason = ?, last_updated = ?
+            WHERE contract_address = ?
+            """,
+            (confidence_tier, confidence_reason, _now_iso(), contract_address),
+        )
+    else:
+        conn.execute(
+            """
+            UPDATE contracts
+            SET confidence_tier = ?, confidence_reason = ?, detection_method = ?, last_updated = ?
+            WHERE contract_address = ?
+            """,
+            (confidence_tier, confidence_reason, detection_method,
+             _now_iso(), contract_address),
+        )
     conn.commit()
 
 
