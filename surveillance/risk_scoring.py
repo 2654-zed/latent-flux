@@ -181,7 +181,8 @@ def _compute_capability(conn: sqlite3.Connection, address: str) -> tuple[int, di
 
     # Check for DELEGATECALL in bytecode_pattern_notes
     notes = row["bytecode_pattern_notes"] or ""
-    if "DELEGATECALL" in notes.upper():
+    notes_upper = notes.upper()
+    if "DELEGATECALL" in notes_upper:
         score += 10
         components["delegatecall_in_token"] = True
 
@@ -201,6 +202,37 @@ def _compute_capability(conn: sqlite3.Connection, address: str) -> tuple[int, di
             if signals.get("delegatecall_in_token") and "delegatecall_in_token" not in components:
                 score += 10
                 components["delegatecall_in_token"] = True
+
+    # Admin-freeze capability (blacklist-like stored potential)
+    #
+    # A contract with conditional_revert (address-keyed SLOAD gating
+    # transfer) AND non-renounced ownership has the admin-freeze
+    # primitive: the admin can freeze any holder's tokens by writing
+    # to the blacklist mapping. This is the same topological primitive
+    # as USDT's blacklist function — a capability held by the admin
+    # against ALL holders.
+    #
+    # The classifier detects the CHECK side (SLOAD -> JUMPI -> REVERT).
+    # The WRITE side (admin populates the mapping) is inferred from
+    # non-renounced ownership — if the admin key is live, the write
+    # capability exists.
+    #
+    # This doesn't score HIGHER than other capability signals — it
+    # scores ALONGSIDE them. A contract with both asymmetric_transfer
+    # (trap mechanism) and admin_freeze (admin control) has two
+    # independent risk surfaces.
+    has_admin_freeze = False
+    if row["has_conditional_revert"]:
+        # Check if ownership is NOT burned (admin key is live)
+        ownership_live = True
+        if "RENOUNCEOWNERSHIP" in notes_upper.replace(" ", ""):
+            ownership_live = False
+        # Check for blacklist-specific pattern in notes
+        is_blacklist_pattern = "blacklist" in notes.lower() or "owner_check" in notes.lower()
+
+        if ownership_live and is_blacklist_pattern:
+            has_admin_freeze = True
+            components["has_admin_freeze"] = True
 
     # Confidence tier bonus
     tier = (row["confidence_tier"] or "").lower()

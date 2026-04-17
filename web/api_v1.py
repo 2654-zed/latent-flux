@@ -815,6 +815,15 @@ async def agent_screen(chain: str, address: str):
             upgrade_burned = True
         capabilities["upgrade_authority_burned"] = upgrade_burned
 
+        # Admin-freeze capability (blacklist-like stored potential)
+        # Same topological primitive as USDT's blacklist — admin can
+        # freeze any holder's tokens via address-keyed mapping write.
+        notes_lower = (row.get("bytecode_pattern_notes") or "").lower()
+        has_blacklist_check = "blacklist" in notes_lower or "owner_check" in notes_lower
+        capabilities["admin_freeze"] = bool(
+            row.get("has_conditional_revert") and has_blacklist_check and not upgrade_burned
+        )
+
         # Approval exposure on this contract
         approval = conn.execute(
             "SELECT COUNT(*) as total, "
