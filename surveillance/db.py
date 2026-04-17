@@ -687,6 +687,16 @@ def update_contract_confidence(conn: sqlite3.Connection, contract_address: str,
             (confidence_tier, confidence_reason, detection_method,
              _now_iso(), contract_address),
         )
+    # Invalidate any bytecode_cache rows this contract seeded. The cache
+    # entry was stamped with the old tier; future deployments with matching
+    # bytecode would otherwise inherit the stale label. DELETE (not UPDATE)
+    # because the new tier came from a non-bytecode signal (trap firing,
+    # routing anomaly, self-loop) — re-classification must re-run the
+    # bytecode classifier, not copy the behavioral tier onto a fresh deploy.
+    conn.execute(
+        "DELETE FROM bytecode_cache WHERE source_contract = ?",
+        (contract_address,),
+    )
     conn.commit()
 
 
@@ -813,6 +823,13 @@ def insert_trap_event(conn: sqlite3.Connection, *,
         """,
         (bot_address, tx_hash, tx_hash, timestamp, block_number,
          _now_iso(), trap_contract_address),
+    )
+    # Behavioral confirmation invalidates the bytecode cache entry this
+    # contract seeded: future deploys with identical bytecode should
+    # re-classify, not inherit the pre-confirmation 'suspected' label.
+    conn.execute(
+        "DELETE FROM bytecode_cache WHERE source_contract = ?",
+        (trap_contract_address,),
     )
     conn.commit()
 

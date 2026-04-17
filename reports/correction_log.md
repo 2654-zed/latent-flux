@@ -117,6 +117,67 @@ I recommend option 3 if the business asks for a tightening. For now, the pipelin
 
 ---
 
+## Correction #5 — Bytecode-Cache Transplant Staleness
+**Date applied:** 2026-04-17
+**Scope (code fix):** Four mutation sites now invalidate the bytecode cache entry a contract seeded. Two route through the central helper (`db.update_contract_confidence`, `db.insert_trap_event`); two are direct-UPDATE bypasses in `honeypot_checker.py` and `backfill_self_loops.py` patched inline. Four additional call paths (`routing_monitor`, `revert_cluster_detector`, `deployment_monitor` velocity escalation, `seed_defihacklabs`) inherit the fix for free via the helper.
+**Scope (data, pending):** 641 stale `bytecode_cache` rows identified; 8 downstream contracts in the `contracts` table uniquely matched to a source whose current tier differs from the cached tier. Data remediation (deletion of the 641 stale cache rows) is queued in `surveillance/backfill_cache_invalidation.py` and will be run against Railway after this entry is committed to the repo.
+
+### What we claimed (implicitly)
+Every cache hit at `deployment_monitor.py:683–696` transplants a `confidence_tier`, `confidence_reason`, and `bytecode_signals` payload from a prior source contract onto a new deployment with identical bytecode. API consumers reading the resulting `contracts` row were implicitly told the cached tier reflected the source's *current* classification.
+
+### What was actually true
+The cache is write-once: `db.cache_store` uses `INSERT OR IGNORE`, and no mutation path updated or deleted cache entries when the source contract's tier was later changed. Three post-insert mutations invalidate the source's cache entry in principle and did not in practice:
+
+- `db.insert_trap_event` (behavioral confirmation → `confirmed`)
+- `db.update_contract_confidence` (velocity escalation, self-loop promotion, routing anomaly, defihacklabs seed)
+- `honeypot_checker.py` direct UPDATEs (honeypot.is + GoPlus external confirmations)
+- `backfill_self_loops.py` direct UPDATE (historical promotion)
+
+Measured against the local DB snapshot on the correction date:
+
+| cached_tier | current_tier | entries | downstream lookups |
+|---|---|---|---|
+| suspected | confirmed | 469 | 11 |
+| unknown   | confirmed | 128 | 2 |
+| unknown   | suspected | 34  | 0 |
+| suspected | unknown   | 10  | 0 |
+| **total** | | **641** | **13** |
+
+Direction of drift: almost entirely **under-classification** — the cache carried a lower tier than the source's current reality, because the dominant mutation path is `insert_trap_event` promoting suspected traps to confirmed after a bot is caught. 13 downstream lookups (hits) occurred on stale entries. Of 10,010 cache-sourced rows in the `contracts` table, 8 uniquely match a source whose current tier differs — the provable downstream mislabel count.
+
+All observed drift produces honest-but-lower tier labels (the cache says `suspected` when the source is now `confirmed`). No false-positive amplification; zero entries moved a contract UP to a higher tier than the source's current reality without fresh evidence.
+
+### How was the error caught
+Open-work item in Correction #4 (2026-04-17) explicitly flagged `deployment_monitor.py:683–696` as unaudited and directed a follow-up. The follow-up enumerated every mutation path on `contracts.confidence_tier`, cross-checked whether each path invalidates `bytecode_cache`, and counted the residue. The class of bug is the same family as Correction #3: derived data outliving the assumption that justified it. Here the derived data is a cache row, not a family record.
+
+### What we changed
+
+| Component | Change |
+|-----------|--------|
+| `surveillance/db.py` — `update_contract_confidence` | `DELETE FROM bytecode_cache WHERE source_contract = ?` added before commit. All callers (routing_monitor, revert_cluster_detector, deployment_monitor velocity, seed_defihacklabs) inherit the fix without edits. |
+| `surveillance/db.py` — `insert_trap_event` | Same DELETE added alongside the auto-upgrade UPDATE, so behavioral confirmations invalidate the cache. |
+| `surveillance/honeypot_checker.py` | DELETE added inside both direct-UPDATE sites (honeypot.is, GoPlus). Append-style `confidence_reason` semantics preserved by not routing through the helper. |
+| `surveillance/backfill_self_loops.py` | DELETE added inside the backfill loop. |
+| `surveillance/backfill_cache_invalidation.py` (new) | Idempotent CLI, dry-run default, `--commit` required for execution. Prints the stale-entry breakdown before and after. Queued to run against Railway after this entry commits. |
+
+### Rationale for `DELETE` over `UPDATE`
+The cache entry was stamped at classification time with the tier that bytecode analysis produced. Post-insert mutations upgrade a contract's tier from **non-bytecode evidence** — a trap firing, a routing anomaly, a self-loop, an external-API confirmation. Overwriting the cache's tier with the new value would imply future deploys of the same bytecode deserve the behavioral tier on bytecode-only grounds. That is the same epistemic failure Correction #4 fixed for `detection_method`. DELETE forces the next matching deploy to re-run the classifier; the cache-derived tier can only ever be `bytecode-pattern` evidence.
+
+### Verification
+Unit smoke test (temp DB, no fixtures) confirms the three relevant properties: (a) `update_contract_confidence` deletes both `init_code_hash` and `deployed_code_hash` cache rows sourced from the mutated contract; (b) `insert_trap_event` does the same; (c) mutating contract A does not touch contract B's cache entries. The backfill dry-run against the production snapshot prints the same 641 / 13 figures measured by the audit, confirming the delete predicate matches the audit query.
+
+### Effect on published numbers
+- **No change** to current tier counts or any headline metric.
+- `bytecode_cache` row count will drop from 53,096 → 52,455 when the backfill commits (−641, −1.2%).
+- Forward: under-classification drift in the cache cannot re-accumulate via the four patched mutation paths.
+
+### Open work
+- **Backfill not yet executed on Railway.** Will run `python -m surveillance.backfill_cache_invalidation --commit` against the production volume after this entry is committed to the repo. Residual stale count after backfill should be zero; script verifies and reports.
+- **Orphan cache rows** (source in `bytecode_cache` whose address is missing from `contracts`) are not touched by this fix. Measured at 2,310 cache-sourced contracts whose reason cites a source prefix no longer in the cache. Separate cleanup — not a staleness issue, a pruning artifact.
+- **Cache-staleness class pattern search** (Wave 1) will enumerate other derived-data tables whose invalidation is not guaranteed when source rows mutate (e.g., `deployer_similarity`, `bytecode_families`, `risk_scores`, `entity_classification`). Report-only pass scheduled; not remediation.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.

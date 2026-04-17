@@ -122,6 +122,10 @@ async def enrich_suspected_contracts(conn: sqlite3.Connection,
                            WHERE contract_address = ? AND confidence_tier != 'confirmed'""",
                         (reason, addr),
                     )
+                    conn.execute(
+                        "DELETE FROM bytecode_cache WHERE source_contract = ?",
+                        (addr,),
+                    )
                     conn.commit()
                     print(f"  [{i+1}] {addr[:18]}... HONEYPOT CONFIRMED: {reason}")
                     if result.get("sell_tax", 0) > 0:
@@ -148,6 +152,10 @@ async def enrich_suspected_contracts(conn: sqlite3.Connection,
                                 confidence_reason = confidence_reason || '; GOPLUS CONFIRMED: honeypot=' || ? || ' cannot_sell=' || ?
                                WHERE contract_address = ? AND confidence_tier != 'confirmed'""",
                             (str(info["is_honeypot"]), str(info["cannot_sell_all"]), addr),
+                        )
+                        conn.execute(
+                            "DELETE FROM bytecode_cache WHERE source_contract = ?",
+                            (addr,),
                         )
                         conn.commit()
                         sell_tax = info.get("sell_tax", 0)

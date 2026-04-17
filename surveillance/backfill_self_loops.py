@@ -86,6 +86,10 @@ def backfill_self_loops(conn: sqlite3.Connection, dry_run: bool = False) -> dict
                 """,
                 (reason, now_iso, contract),
             )
+            conn.execute(
+                "DELETE FROM bytecode_cache WHERE source_contract = ?",
+                (contract,),
+            )
         promoted += 1
         by_deployer[deployer] = by_deployer.get(deployer, 0) + 1
         if len(top_rows) < 50:
