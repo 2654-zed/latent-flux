@@ -171,10 +171,30 @@ Unit smoke test (temp DB, no fixtures) confirms the three relevant properties: (
 - `bytecode_cache` row count will drop from 53,096 → 52,455 when the backfill commits (−641, −1.2%).
 - Forward: under-classification drift in the cache cannot re-accumulate via the four patched mutation paths.
 
+### Backfill executed (local DB, 2026-04-17)
+After committing the code fix and this entry (commit `0d23b6e`), ran the backfill against the local snapshot. Results:
+
+```
+bytecode_cache rows before: 53,096
+Stale entries identified (dry-run count, grouped by tier pair):
+  cached=suspected  current=confirmed   entries=469  downstream_lookups=11
+  cached=unknown    current=confirmed   entries=128  downstream_lookups= 2
+  cached=unknown    current=suspected   entries= 34  downstream_lookups= 0
+  cached=suspected  current=unknown     entries= 10  downstream_lookups= 0
+  TOTAL: 641 entries, 13 downstream lookups
+
+Rows deleted: 661
+bytecode_cache rows after: 52,435
+Residual stale entries after delete: 0
+```
+
+**661 deleted vs 641 counted — resolved.** The DELETE predicate is `source_contract IN (<stale set>)`, not `code_hash IN (...)`. For sources that seeded BOTH an `init_code_hash` cache row AND a `deployed_code_hash` cache row, the dry-run count reports each row independently (matching the actual tier-pair drift), but the DELETE removes every cache row under that source — including sibling rows that weren't individually tier-stale. The 20-row surplus is `source_contract` buckets where one hash row was stale and the other wasn't. This is safe over-deletion: the next deploy of matching bytecode re-runs the classifier and re-caches deterministically. No cache row with a STILL-valid tier was spared; all rows sourced from a mutated contract are removed, which matches the intent of the fix.
+
 ### Open work
-- **Backfill not yet executed on Railway.** Will run `python -m surveillance.backfill_cache_invalidation --commit` against the production volume after this entry is committed to the repo. Residual stale count after backfill should be zero; script verifies and reports.
+- **Railway backfill pending.** Local DB is clean. Production run is a separate deploy step — same script, pointed at Railway's persistent volume.
 - **Orphan cache rows** (source in `bytecode_cache` whose address is missing from `contracts`) are not touched by this fix. Measured at 2,310 cache-sourced contracts whose reason cites a source prefix no longer in the cache. Separate cleanup — not a staleness issue, a pruning artifact.
-- **Cache-staleness class pattern search** (Wave 1) will enumerate other derived-data tables whose invalidation is not guaranteed when source rows mutate (e.g., `deployer_similarity`, `bytecode_families`, `risk_scores`, `entity_classification`). Report-only pass scheduled; not remediation.
+- **Wave 1 audit published** (`reports/cache_invalidation_audit.md`). Headline finding is bigger than the original Class A bug: five producer-recompute derived tables (`trust_amplification`, `camouflage_metrics`, `bytecode_families`, `deployer_similarity`, `daily_metrics`) have not been written in 22+ days and are served by the API with no freshness indicator. Scheduler audit is now the next priority, displacing the originally-planned epistemic-tag audit.
+- **`risk_scores` table referenced in CLAUDE.md does not exist in the DB.** Dedicated investigation queued (`reports/risk_scoring_persistence_audit.md`).
 
 ---
 
