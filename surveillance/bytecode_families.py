@@ -129,6 +129,11 @@ def cluster(conn: sqlite3.Connection) -> None:
 
     tier2_groups: dict[str, list] = {}
     for r in tier2_rows:
+        # Skip contracts with all-zero signatures: they are unanalyzed, not a family.
+        # The absence of classification is not itself a classification.
+        # See reports/correction_log.md entry "T2-NULL-bucket reclassification".
+        if not (r["fee"] or r["asym"] or r["crev"]):
+            continue
         key = f"fee={r['fee']}|asym={r['asym']}|crev={r['crev']}"
         tier2_groups.setdefault(key, []).append(r)
 

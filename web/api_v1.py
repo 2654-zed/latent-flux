@@ -174,6 +174,23 @@ def _risk_level(confidence: Optional[float], tier: str) -> str:
     return "UNKNOWN"
 
 
+def _evidence_type(row: dict, sigs: list) -> str:
+    """Distinguish WHY a contract is flagged — the evidence basis.
+
+    behavioral-confirmation: behavioral evidence (bot reverted on this contract)
+    bytecode-pattern:        bytecode detector(s) fired OR pattern notes exist
+    deployer-derivative:     flagged only because deployer also deployed a confirmed trap
+    unanalyzed:              classifier ran, no trap patterns detected
+    """
+    if row.get("confidence_tier") == "confirmed":
+        return "behavioral-confirmation"
+    if sigs or row.get("bytecode_pattern_notes"):
+        return "bytecode-pattern"
+    if row.get("detection_method") == "deployer_history":
+        return "deployer-derivative"
+    return "unanalyzed"
+
+
 # ---------------------------------------------------------------------------
 # Phase 2: Tier 1 — Contract Screening
 # ---------------------------------------------------------------------------
@@ -592,6 +609,7 @@ def _build_risk(conn: sqlite3.Connection, row: dict) -> dict:
         },
         "detection": {
             "method": row.get("detection_method"),
+            "evidence_type": _evidence_type(row, sigs),
             "trap_signatures": sigs,
             "signature_count": len(sigs),
             "bytecode_notes": row.get("bytecode_pattern_notes"),
