@@ -118,7 +118,8 @@ Key tables:
 | `daily_metrics` | Daily | Daily aggregate metrics |
 | `predictions` | Daily | Forecast + scoring |
 | `diamond_model` | 4 | Intelligence cases |
-| `extraction_events` | 3+ | Documented theft events |
+| `extraction_events` | 5+ | Documented theft events. Columns include `chain` and `monitored_chain` (added 2026-04-18). `monitored_chain=0` for off-chain reference events (Rhea on NEAR, Drift on Solana); `monitored_chain=1` for events on Base/Arbitrum/Optimism. Chain-scoped rollups MUST filter on `monitored_chain=1` to avoid mixing off-chain dollars with L2 dollars. |
+| `infrastructure_registry` | 12+ | Known-legitimate high-stakes infrastructure (Circle CCTP v2 seeded 2026-04-18; Uniswap routers, Aave pools etc. as they land). PK `(address, chain)` — same address can appear on multiple chains (CCTP v2 uses CREATE2 so the same address is canonical everywhere). Primary classification location; `entity_classification` may cross-link later. This becomes the "known-legitimate template baseline" (priority #2). |
 | `org_wallets` | — | Organization wallet mappings |
 | `deployer_profiles` | 25,834 | Behavioral fingerprints |
 | `deployer_similarity` | 4,879+ | High-similarity pairs |
