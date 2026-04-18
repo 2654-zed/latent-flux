@@ -37,7 +37,7 @@ CCTP v2 uses CREATE2 deterministic deployment, so **the same address is used on 
 
 CCTP domain IDs for the three chains we monitor: Base=6, Arbitrum=3, Optimism=2.
 
-**"USDC Bridge" as a consumer product:** Circle's docs as fetched do not identify any contract explicitly labeled "USDC Bridge" or "BridgeOperator" distinct from CCTP core. If such a consumer-facing wrapper exists, it is not at the URL queried; the handoff's framing of "Circle moves from infrastructure provider to direct consumer-facing bridge operator" may describe the same CCTP v2 contracts repositioned in Circle's marketing, with no new on-chain entity. This is worth following up at the `circle.com/usdc-bridge` product page rather than the developer docs if they differ; out of scope for Phase 1 findings.
+**"USDC Bridge" as a consumer product:** Circle's docs as fetched do not identify any contract explicitly labeled "USDC Bridge" or "BridgeOperator" distinct from CCTP core. Circle USDC Bridge appears to be a consumer-facing UI wrapper over CCTP v2. No separate contracts identified in developer documentation. If distinct operator contracts emerge, update the registry. The consumer-wrapper question is answerable once Circle's bridge product is actually launched and visible on-chain; right now CCTP v2 is the infrastructure to register.
 
 **CCTP v1 addresses:** Circle's current developer documentation no longer surfaces v1 addresses (the v2 page replaces them). I did not hardcode v1 addresses from memory because they should be verified before any production classification. If v1 is still relevant to the ecosystem, a separate WebFetch pass against Circle's GitHub repo or historical docs is the honest path. Flagging this as an open question.
 

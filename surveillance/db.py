@@ -455,6 +455,49 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_contracts_code_hash ON contracts(deployed_code_hash)")
         conn.commit()
 
+    # Migration: infrastructure_registry — known-legitimate high-stakes
+    # infrastructure (Circle CCTP, Uniswap routers, Aave pools, etc.).
+    # Primary classification location; entity_classification may cross-link
+    # later. See reports/circle_bridge_infrastructure.md and Correction #7-
+    # adjacent discussion for design rationale.
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='infrastructure_registry'"
+    )
+    if cursor.fetchone() is None:
+        conn.executescript("""
+            CREATE TABLE infrastructure_registry (
+                address              TEXT    NOT NULL,
+                chain                TEXT    NOT NULL,
+                classification       TEXT    NOT NULL,
+                verified_at          TEXT    NOT NULL,
+                verification_source  TEXT    NOT NULL,
+                notes                TEXT,
+                PRIMARY KEY (address, chain)
+            );
+            CREATE INDEX IF NOT EXISTS idx_infra_registry_class
+                ON infrastructure_registry(classification);
+        """)
+
+    # Migration: extraction_events chain tagging. Distinguishes events on
+    # monitored chains from off-chain reference events (Rhea on NEAR,
+    # Drift on Solana) so chain-scoped rollups stay correct.
+    try:
+        conn.execute("SELECT chain FROM extraction_events LIMIT 1")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE extraction_events ADD COLUMN chain TEXT")
+        conn.execute(
+            "ALTER TABLE extraction_events ADD COLUMN monitored_chain INTEGER NOT NULL DEFAULT 1"
+        )
+        # Backfill existing rows (EXTRACTION_001-003 span monitored L2s).
+        conn.execute(
+            "UPDATE extraction_events SET chain = 'ethereum_l2_mixed' WHERE chain IS NULL"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_extraction_events_chain "
+            "ON extraction_events(chain, monitored_chain)"
+        )
+        conn.commit()
+
     return conn
 
 
