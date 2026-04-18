@@ -190,9 +190,27 @@ Residual stale entries after delete: 0
 
 **661 deleted vs 641 counted — resolved.** The DELETE predicate is `source_contract IN (<stale set>)`, not `code_hash IN (...)`. For sources that seeded BOTH an `init_code_hash` cache row AND a `deployed_code_hash` cache row, the dry-run count reports each row independently (matching the actual tier-pair drift), but the DELETE removes every cache row under that source — including sibling rows that weren't individually tier-stale. The 20-row surplus is `source_contract` buckets where one hash row was stale and the other wasn't. This is safe over-deletion: the next deploy of matching bytecode re-runs the classifier and re-caches deterministically. No cache row with a STILL-valid tier was spared; all rows sourced from a mutated contract are removed, which matches the intent of the fix.
 
+### Backfill executed (Railway production, 2026-04-18)
+Followed the local run with the production execution via `railway ssh`. Service: `latent-flux`, commit deployed `b75a02b`, volume: `/app/surveillance/data/` (1.21 GB).
+
+```
+bytecode_cache rows before: 20,345
+Stale entries identified:
+  cached=suspected  current=confirmed   entries=481  downstream_lookups=15
+  cached=suspected  current=unknown     entries=  8  downstream_lookups= 0
+  TOTAL: 489 entries, 15 downstream lookups
+
+Rows deleted: 489
+bytecode_cache rows after: 19,856
+Residual stale entries after delete: 0
+```
+
+Prod cleanup is exact (489 counted, 489 deleted) — no over-deletion, unlike the local run (661 deleted vs 641 counted). Production has fewer multi-hash-per-source cases, likely because the periodic unknown-cache prune at `deployment_monitor.py:258` has already removed sibling rows that the local (superset) DB preserved.
+
+Cache staleness now zero in both DBs. The four mutation-path fixes shipped in `0d23b6e` prevent recurrence going forward.
+
 ### Open work
-- **Railway backfill pending.** Local DB is clean. Production run is a separate deploy step — same script, pointed at Railway's persistent volume.
-- **Orphan cache rows** (source in `bytecode_cache` whose address is missing from `contracts`) are not touched by this fix. Measured at 2,310 cache-sourced contracts whose reason cites a source prefix no longer in the cache. Separate cleanup — not a staleness issue, a pruning artifact.
+- **Orphan cache rows** (source in `bytecode_cache` whose address is missing from `contracts`) are not touched by this fix. Measured at 2,310 cache-sourced contracts locally whose reason cites a source prefix no longer in the cache. Separate cleanup — not a staleness issue, a pruning artifact.
 - **Wave 1 audit published** (`reports/cache_invalidation_audit.md`). Headline finding is bigger than the original Class A bug: five producer-recompute derived tables (`trust_amplification`, `camouflage_metrics`, `bytecode_families`, `deployer_similarity`, `daily_metrics`) have not been written in 22+ days and are served by the API with no freshness indicator. Scheduler audit is now the next priority, displacing the originally-planned epistemic-tag audit.
 - **`risk_scores` table referenced in CLAUDE.md does not exist in the DB.** Dedicated investigation queued (`reports/risk_scoring_persistence_audit.md`).
 
