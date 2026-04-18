@@ -335,6 +335,50 @@ The deployer_similarity jump (4,879 → 531,779 rows) is not a bug — the previ
 
 ---
 
+## Correction #8 — x402 Decimals Assumption (`amount_normalized_6dec`)
+**Date applied:** 2026-04-18
+**Scope (code):** `surveillance/x402_monitor.py` drain-alert path. One-line-equivalent behavior change: emit normalized dollar amounts only when the drained token is in a 6-decimal stablecoin allowlist.
+**Scope (data):** Historical `X402_AGENT_DRAIN` alerts with non-stablecoin tokens carry inflated `amount_normalized_6dec` values. Not corrected in-place (immutable historical record); new alerts use the corrected encoding.
+
+### What we claimed
+Every `X402_AGENT_DRAIN` alert exposed a field `amount_normalized_6dec` presented as the USD-equivalent drain amount. Alert `message` prose rendered it as dollars. Customers reading the feed saw one alert from today with `"amount_normalized_6dec": 17717910000.0` and a message reading "Permit2.transferFrom pulled 17,717,910,000.00 from payer…" — a claim that $17.7 billion moved through a single transaction on Base.
+
+### What was actually true
+The drain targeted token `0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22` — NOT a 6-decimal stablecoin. Raw amount was `17,717,910,000,000,000` (≈1.77 × 10¹⁶). The normalization code divided by 10⁶ universally, as if every token used stablecoin decimals. If the token has 18 decimals (the default for most ERC-20s), the real amount is `0.01772` tokens — a 10¹² overstatement. USD value of that amount depends on the token's price, which we don't look up; it may be pennies or under $100 at most, given token size.
+
+The drain detection itself fired correctly — the facilitator is A7B9, a confirmed rogue drainer, and the self-settlement shape matched. Only the displayed amount is wrong.
+
+### How was the error caught
+Today's activity-pull surfaced an A7B9 event on Base with the improbable $17.7B figure. Inspection of the raw payload showed the token contract is not USDC or USDT; the decimals assumption was the only plausible explanation for the scale.
+
+### Root cause
+`_handle_x402_tx` computed `amount_norm = amount / 1e6 if amount else 0` for every drain, regardless of token. The 6-decimal assumption was hard-coded in the Phase 1 design when the only observed drains were USDC. The code comment at `DRAIN_AMOUNT_THRESHOLD` did name "6-decimal" as a scope; the normalization site did not. Same class as Correction #4 (a convention treated as universal).
+
+### What we changed
+
+| Component | Change |
+|-----------|--------|
+| `x402_monitor.py` | Added `STABLECOIN_TOKENS_6DEC` allowlist (USDC Base/Arb/OP + USDT Arb/OP + EURC Base). |
+| `x402_monitor.py` drain alert payload | `amount_normalized_6dec` renamed → `amount_usd_6dec`, populated only when the drained token is in the allowlist. New `token_is_stablecoin: bool` companion field. Raw `amount` always preserved. |
+| `x402_monitor.py` drain alert message | Non-stablecoin drains now print raw units and a `(decimals unknown)` note instead of a fabricated dollar figure. |
+
+### What we did NOT change
+- **Threshold logic.** `DRAIN_AMOUNT_THRESHOLD = 100 * 10**6` still applies to raw `amount`. For 18-decimal tokens this is trivially satisfied by any non-dust amount; we get a drain alert with `(decimals unknown)` display. This is intentional for now: a rogue-facilitator self-settlement on a non-stablecoin still fires an alert with honest units. Tightening this is a separate design question (decimals-aware threshold, or stablecoin-only alerting) — flagged as open work.
+- **Historical alert payloads.** Existing `X402_AGENT_DRAIN` rows in production keep their `amount_normalized_6dec` field as written. Immutable historical record; future consumers reading those rows should filter on token address against `STABLECOIN_TOKENS_6DEC` and interpret `amount_normalized_6dec` only when the token is in the set.
+- **`x402_events` table.** Its `amount` column stores raw units. No change needed there.
+
+### Effect on published numbers
+- Today's CE5E drain total ($135,400 across 11 Arbitrum USDC victims) is unaffected — all CE5E drains are on USDC, which is in the allowlist. The figure reported in today's activity digest stands.
+- The A7B9 Base event that read "$17.7B" was the only non-stablecoin drain in recent history; its actual USD value is unknown without a token-price lookup. The fix ensures future non-stablecoin drains don't repeat the inflation.
+- No corpus-wide rollup statistics change. Nothing summed `amount_normalized_6dec` programmatically; customers only saw per-alert displays.
+
+### Open work
+- **Decimals-aware amount handling for non-stablecoins.** Optional upgrade: cache `decimals()` via one-time on-demand ERC-20 call per seen token. Would let us emit a correct `amount_token_units` field. Has Alchemy cost; not urgent given today's traffic. Could piggyback on the next x402-tracer deployment.
+- **Historical payload migration.** Considered: could we rewrite stored alert payloads for past non-stablecoin drains? Decision: no. Immutability discipline says old claims stay as written. A consumer-facing note in `/api/v1/feed` explaining the schema change is the right path; filed as a non-priority follow-up.
+- **Volume of historical miscounts.** Only one non-stablecoin X402_AGENT_DRAIN alert has ever fired (today's A7B9). Impact is small. If the historical volume were larger, a migration might be worth it.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.

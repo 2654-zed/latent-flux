@@ -619,6 +619,22 @@ class X402Monitor:
     # lighting up micropayment traffic.
     DRAIN_AMOUNT_THRESHOLD = 100 * 10**6
 
+    # 6-decimal stablecoins we recognize for USD-equivalent amount display.
+    # Any token NOT in this set has unknown decimals from our perspective;
+    # we do not emit `amount_normalized_6dec` for it. See Correction #8
+    # (2026-04-18) for the decimals bug that motivated this allowlist.
+    STABLECOIN_TOKENS_6DEC = {
+        # USDC
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",  # Base
+        "0xaf88d065e77c8cc2239327c5edb3a432268e5831",  # Arbitrum
+        "0x0b2c639c533813f4aa9d7837caf62653d097ff85",  # Optimism
+        # USDT
+        "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",  # Arbitrum
+        "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58",  # Optimism
+        # EURC
+        "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",  # Base
+    }
+
     def __init__(self, conn: sqlite3.Connection, chain: str = "base"):
         self.conn = conn
         self.chain = chain
@@ -929,7 +945,21 @@ class X402Monitor:
                 drain_reason = "rogue_facilitator_self_settlement"
 
             if fire_drain:
-                amount_norm = amount / 1e6 if amount else 0
+                # Amount normalization: only safe for the 6-decimal stablecoin
+                # allowlist. For any other token we don't know the decimals
+                # without an ERC20.decimals() call, so emit raw only and flag
+                # the display as unknown. Correction #8 (2026-04-18): prior
+                # code applied /1e6 universally, inflating 18-decimal token
+                # amounts by 10^12 in customer-visible alerts.
+                token_is_stablecoin = (
+                    (token_contract or "").lower() in self.STABLECOIN_TOKENS_6DEC
+                )
+                if token_is_stablecoin and amount is not None:
+                    amount_usd = amount / 1e6
+                    amount_display = f"${amount_usd:,.2f}"
+                else:
+                    amount_usd = None
+                    amount_display = f"{amount:,} raw units" if amount else "unknown amount"
 
                 # Pass-through detection: check if the payer received
                 # the drained tokens FROM a known drainer address.
@@ -952,7 +982,11 @@ class X402Monitor:
                         "payee": payee,
                         "token": token_contract,
                         "amount": amount,
-                        "amount_normalized_6dec": amount_norm,
+                        # Only populated when token is a 6-decimal stablecoin;
+                        # for other tokens, consumers should read `amount` raw
+                        # and apply decimals lookup externally.
+                        "amount_usd_6dec": amount_usd,
+                        "token_is_stablecoin": token_is_stablecoin,
                         "facilitator": facilitator,
                         "chain": self.chain,
                         "detection_path": drain_reason,
@@ -961,10 +995,11 @@ class X402Monitor:
                         "message": (
                             f"X402_AGENT_DRAIN [{drain_reason}] "
                             f"[{event_class}]: "
-                            f"Permit2.transferFrom pulled "
-                            f"{amount_norm:,.2f} from payer "
-                            f"{payer[:18]}... via facilitator "
+                            f"Permit2.transferFrom pulled {amount_display} "
+                            f"from payer {payer[:18]}... via facilitator "
                             f"{(facilitator or '?')[:18]}... on {self.chain}"
+                            + ("" if token_is_stablecoin else
+                               f" (token={token_contract[:18]}...; decimals unknown)")
                         ),
                     },
                 )
