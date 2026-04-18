@@ -113,4 +113,4 @@ This is not the same as saying advisor-parasites don't exist in the ecosystem. I
 
 ## Recommended next step
 
-Stand down this specific scan until either (a) corpus age reaches 90+ days, or (b) the Transfer-event indexer work item above gets scoped and approved. In the meantime, **the hypothesis belongs in the behavioral-laundering framework as Pattern F** (the five existing patterns all assume on-chain-only fingerprints; advisor-parasite is the first pattern where the missing data is on-chain but outside our indexing scope). If you want it documented there, I'll add it to `reports/behavioral_laundering_detection_scope.md` when that file is drafted (currently pending — it's one of the seven deliverables from the Part 2 handoff that hasn't been produced yet).
+Stand down this specific scan until either (a) corpus age reaches 90+ days, or (b) the Transfer-event indexer work item above gets scoped and approved. The hypothesis has been memorialized as **Pattern F** in `reports/behavioral_laundering_detection_scope.md` (2026-04-18) — see that doc for the re-scan trigger conditions and full detection-gap analysis alongside Patterns A–E.
