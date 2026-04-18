@@ -62,8 +62,58 @@ def _meta(conn: sqlite3.Connection) -> dict:
     }
 
 
-def _ok(data: dict, conn: sqlite3.Connection) -> dict:
-    return {"status": "ok", "data": data, "meta": _meta(conn)}
+# Derived-data producer tables served by the API. Map each to the column
+# that reflects the producer's last write. Introduced with Correction #7
+# so customers can see whether the analysis they are reading is current.
+# See reports/producer_scheduler_audit.md for the scheduling architecture
+# that keeps these fresh.
+_TABLE_FRESHNESS_COLUMN = {
+    "trust_amplification":  "last_updated",
+    "deployer_profiles":    "profiled_at",
+    "deployer_similarity":  "computed_at",
+    "entity_classification":"last_updated",
+    "bytecode_families":    "last_updated",
+    "daily_metrics":        "date",
+    "camouflage_metrics":   "date",
+    "predictions":          "issued_date",
+}
+
+
+def _freshness(conn: sqlite3.Connection, tables: list) -> dict:
+    """Return {table_name: latest_timestamp} for the requested tables.
+    Missing tables map to None. Never raises — freshness is advisory."""
+    out = {}
+    for t in tables:
+        col = _TABLE_FRESHNESS_COLUMN.get(t)
+        if not col:
+            out[t] = None
+            continue
+        try:
+            row = conn.execute(f"SELECT MAX({col}) FROM {t}").fetchone()
+            out[t] = row[0] if row else None
+        except sqlite3.Error:
+            out[t] = None
+    return out
+
+
+def _ok(data: dict, conn: sqlite3.Connection,
+        fresh_tables: Optional[list] = None,
+        live: bool = False) -> dict:
+    """Wrap a successful response.
+
+    fresh_tables: list of derived-data tables this endpoint reads. When
+        provided, meta.computed_at reports each table's last-write
+        timestamp. Customers who care about staleness can filter; customers
+        who don't continue consuming as before.
+    live: set True for endpoints (e.g., /risk) that compute on every call
+        rather than reading a producer table. Signals current-by-definition.
+    """
+    meta = _meta(conn)
+    if live:
+        meta["computed_at"] = "live"
+    elif fresh_tables:
+        meta["computed_at"] = _freshness(conn, fresh_tables)
+    return {"status": "ok", "data": data, "meta": meta}
 
 
 def _error(code: str, message: str, status: int = 400) -> JSONResponse:
@@ -208,7 +258,11 @@ async def risk_by_chain(chain: str, address: str):
             return _error("NOT_FOUND",
                           "Address not found in monitored corpus. Layer 3 covers Base, Arbitrum, and Optimism.",
                           404)
-        return JSONResponse(_ok(_build_risk(conn, dict(row)), conn))
+        return JSONResponse(_ok(
+            _build_risk(conn, dict(row)), conn,
+            fresh_tables=["trust_amplification", "bytecode_families",
+                          "entity_classification"],
+        ))
     finally:
         conn.close()
 
@@ -1314,7 +1368,10 @@ async def org_detail(org_id: str):
                 "timezone_inference": tz[0] if tz else None,
                 "techniques": techniques[:3],
             },
-        }, conn))
+        }, conn,
+            fresh_tables=["entity_classification", "deployer_profiles",
+                          "deployer_similarity"],
+        ))
     finally:
         conn.close()
 
@@ -1402,7 +1459,10 @@ async def deployer_detail(address: str):
                 "org_link": funding.get("org_link"),
             },
             "similar_deployers": sim_list,
-        }, conn))
+        }, conn,
+            fresh_tables=["deployer_profiles", "deployer_similarity",
+                          "entity_classification"],
+        ))
     finally:
         conn.close()
 
@@ -1417,7 +1477,11 @@ async def contract_detail(address: str):
         ).fetchone()
         if not row:
             return _error("NOT_FOUND", "Contract not found", 404)
-        return JSONResponse(_ok(_build_risk(conn, dict(row)), conn))
+        return JSONResponse(_ok(
+            _build_risk(conn, dict(row)), conn,
+            fresh_tables=["trust_amplification", "bytecode_families",
+                          "entity_classification"],
+        ))
     finally:
         conn.close()
 
@@ -1484,7 +1548,10 @@ async def ecosystem_stats():
                 "wallet_rotations_detected": rotations,
                 "rotation_criteria": "similarity >= 0.85 with temporal succession",
             },
-        }, conn))
+        }, conn,
+            fresh_tables=["entity_classification", "deployer_similarity",
+                          "daily_metrics"],
+        ))
     finally:
         conn.close()
 

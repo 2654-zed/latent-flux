@@ -266,6 +266,75 @@ A correction log that grows at this cadence is doing its job. The alternative �
 
 ---
 
+## Correction #7 — Stale Derived Metrics Served Without Freshness Indicators
+**Date applied:** 2026-04-18
+**Scope (code):** `run_surveillance.py` gains a nightly `_analysis_scheduler` thread wiring six producers. `web/api_v1.py` adds `metadata.computed_at` to five endpoint responses.
+**Scope (data):** All six producers run once against Railway production to restore current-day freshness. Row counts refreshed across seven tables.
+
+### What we claimed (implicitly)
+The API served `trust_amplification`, `camouflage_metrics`, `bytecode_families`, `deployer_similarity`, `daily_metrics`, and `deployer_profiles` without any `computed_at` indicator. A customer hitting `/api/v1/contract/0x…` received attribution and amplification data that the response presented as current. No `epistemic_tag` accompanied it with a computation timestamp.
+
+### What was actually true
+The Wave 2 scheduler audit (`reports/producer_scheduler_audit.md`, 2026-04-17) established that these tables had not been written in 22+ days. Concretely:
+
+| Table | Last prod write (before this correction) | Staleness |
+|---|---|---|
+| `trust_amplification` | 2026-03-25 16:17:28 UTC (32 rows, one-second burst) | 24 days |
+| `camouflage_metrics` | 2026-03-25 (9 daily rows, cron-shaped) | 24 days |
+| `bytecode_families` | 2026-03-24 (405 rows) | 25 days |
+| `deployer_similarity` | 2026-03-26 15:37:34 UTC (4,879 rows, 7-sec burst) | 23 days |
+| `daily_metrics` | 2026-03-25 (9 daily rows) | 24 days |
+| `deployer_profiles` | no `profiled_at` timestamp before this run | unknown |
+
+None of the producers were wired into `run_surveillance.py`. Three were driven by an external daily cron that died the night of 2026-03-25 → 2026-03-26. Two only ever ran as one-shot manual CLI invocations. The in-process heartbeat integration at `deployment_monitor.py:432–445` for `trust_amplification` fires every ~2 hours but has not written a row since March 25 (suspected silent IntegrityError in `db_writer.py:109`, same class as the x402 bug; dedicated diagnostic at `surveillance/diagnostics/x402_write_tracer.py` queued for deployment).
+
+### How was the error caught
+Wave 1 cache-invalidation audit noticed the timestamps on these tables as a side effect of probing for cache-staleness siblings. Wave 2 quantified the gap per producer (trigger type, last-run signature, cron death date).
+
+### Root cause
+The producers were assumed-scheduled, not actually-scheduled. `CLAUDE.md` lists all six under *Running Common Operations* as if they were scheduled analysis jobs, but `run_surveillance.py` only invokes one scheduled job (`daily_report.generate_report` at 06:03 UTC), and none of the six were called by it. Same shape as Correction #6 — documentation described intended state, deployed code ran actual state, the gap accumulated silently.
+
+### What we changed
+
+| Component | Change |
+|-----------|--------|
+| `run_surveillance.py` | New `_analysis_scheduler` background thread mirroring the existing `_daily_report_scheduler` pattern. Polls every 60 s, fires any job whose (hour, minute, day-of-week) matches. Jobs run as subprocesses (crash isolation); failures log at visible level. |
+| `ANALYSIS_JOBS` config (same file) | Six jobs on a fixed UTC schedule: 00:15 `trend_forecaster --compute-today` → 00:20 `camouflage_tracker --compute-today` → 00:30 `trend_forecaster --forecast --score` → 02:00 `deployer_profiler --profile-all` → 03:00 `bytecode_families --cluster` → Sunday 04:00 `deployer_profiler --cluster`. |
+| `web/api_v1.py` | New `_TABLE_FRESHNESS_COLUMN` map + `_freshness(conn, tables)` helper. `_ok(data, conn, fresh_tables=[...])` accepts the list of derived tables the endpoint reads and emits `meta.computed_at = {table: timestamp}`. Applied to `/api/v1/risk/{chain}/{address}`, `/api/v1/contract/{address}`, `/api/v1/deployer/{address}`, `/api/v1/org/{org_id}`, `/api/v1/ecosystem/stats`. |
+| Railway production (data) | All six producers invoked once via `railway ssh` to restore current-day correctness before the nightly schedule takes over. |
+
+### Effect on published numbers
+Immediate post-backfill snapshot (Railway production, 2026-04-18):
+
+| Table | Rows before | Rows after | Latest timestamp |
+|---|---|---|---|
+| `trust_amplification` | 32 | **151** | 2026-04-18 05:04:49 |
+| `deployer_profiles` | (no tsc) | **10,132** | 2026-04-18 05:00:53 |
+| `deployer_similarity` | 4,879 | **531,779** | 2026-04-18 05:04:35 |
+| `bytecode_families` | 405 | **1,438** | (latest per-row) |
+| `bytecode_family_members` | (paired) | **8,280** | — |
+| `daily_metrics` | 9 | **10** | 2026-04-18 |
+| `camouflage_metrics` | 9 | **10** | 2026-04-18 |
+| `predictions` | 9 | **12** | 2026-04-18 |
+
+The deployer_similarity jump (4,879 → 531,779 rows) is not a bug — the previous single-shot run in March covered ~22k deployers; the current corpus has 37,564, and O(n²) candidate pairs at ≥0.75 similarity threshold scale accordingly. Rows are legitimate matches, not spurious.
+
+### Scope limitations (what this correction does NOT do)
+
+- **`/api/v1/*` FastAPI surface is not yet deployed in production.** `spypy.up.railway.app` currently serves the legacy `StatsHandler` defined inside `run_surveillance.py`. The `computed_at` metadata is live in code but only visible once FastAPI is mounted in prod — see `reports/statshandler_migration_plan.md` scoping (pending, not drafted in this correction).
+- **`entity_classification` staleness persists.** Its producer (`entity_classifier.py`) is not one of the six jobs in the new scheduler. Latest prod write is 2026-03-24. Will get addressed in a follow-up once the scheduler pattern is validated in the wild for a week.
+- **The heartbeat-embedded `trust_amplification.analyze` is still silently failing.** We now run it nightly via the scheduler *and* the broken 2-hour heartbeat path remains. Fixing the heartbeat path is blocked on the x402 write-tracer catching the actual IntegrityError — a shared root cause fix, not a per-table bandaid.
+- **Freshness headers are advisory, not enforcement.** A client can ignore `computed_at` and still consume a stale table value as if fresh. A future `/methodology/freshness` endpoint and an optional `max_age_seconds` query parameter on hot endpoints would harden this; neither is shipped here.
+
+### Open work
+- Ship FastAPI (`web/app.py`) on Railway so the `computed_at` metadata reaches customers.
+- Add `entity_classifier` to `ANALYSIS_JOBS` once its cadence is confirmed (daily vs weekly).
+- Deploy the x402 write-tracer to diagnose the trust_amplification heartbeat silent failure.
+- Ship the `/methodology/freshness` endpoint documenting the producer schedule and current-actual lag per table.
+- Monitor the scheduler for its first full week — one missed job means subprocess / SQLite contention issue; verify via Railway logs.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.

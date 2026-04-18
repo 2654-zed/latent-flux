@@ -1515,6 +1515,98 @@ def _daily_report_scheduler():
 
 threading.Thread(target=_daily_report_scheduler, daemon=True).start()
 
+# Analysis scheduler — nightly producers for derived-data tables.
+# See reports/producer_scheduler_audit.md (Wave 2) and Correction #7 for
+# the scope decision. Prior to this scheduler, these tables were written
+# manually or by an external cron that died 2026-03-25 → 2026-03-26 and
+# never ran again. Result: 22+ days of stale analysis served via API.
+#
+# Design:
+#   - One poller thread checks every 60 s whether any job's UTC time matches.
+#   - Each job runs as a subprocess via the existing CLI flags, so a crash
+#     in one producer doesn't poison the scheduler.
+#   - Dedupe by minute-fingerprint so a slow tick doesn't double-fire.
+#   - Failures log at visible level (print with flush=True), not DEBUG.
+#
+# SQLite concurrency: producers open their own RW sqlite connections,
+# competing with db_writer. Acceptable because (a) producers run at
+# off-peak hours (00:15 → 04:10 UTC), (b) WAL mode + busy_timeout=5000
+# serializes correctly.
+ANALYSIS_JOBS = [
+    # (hour_utc, minute_utc, days, label, argv)
+    #   days: "daily" or "sunday"
+    (0, 15, "daily",  "daily_metrics",
+     [sys.executable, "-m", "surveillance.trend_forecaster", "--compute-today"]),
+    (0, 20, "daily",  "camouflage_metrics",
+     [sys.executable, "-m", "surveillance.camouflage_tracker", "--compute-today"]),
+    (0, 30, "daily",  "predictions",
+     [sys.executable, "-m", "surveillance.trend_forecaster", "--forecast", "--score"]),
+    (2, 0,  "daily",  "deployer_profiles",
+     [sys.executable, "-m", "surveillance.deployer_profiler", "--profile-all"]),
+    (3, 0,  "daily",  "bytecode_families",
+     [sys.executable, "-m", "surveillance.bytecode_families", "--cluster"]),
+    (4, 0,  "sunday", "deployer_similarity",
+     [sys.executable, "-m", "surveillance.deployer_profiler", "--cluster"]),
+]
+_JOB_TIMEOUT_SEC = 3600  # 1 h per producer; deployer_profiler is the slowest
+_analysis_last_fired: dict[str, str] = {}
+
+def _run_analysis_job(label: str, argv: list) -> None:
+    """Invoke a producer subprocess and log the outcome. Never raises."""
+    cmd_str = " ".join(argv[2:])  # drop python -m prefix for readability
+    print(f"[analysis_scheduler] firing {label}: {cmd_str}", flush=True)
+    try:
+        result = subprocess.run(
+            argv, capture_output=True, text=True, timeout=_JOB_TIMEOUT_SEC,
+        )
+    except subprocess.TimeoutExpired:
+        print(f"[analysis_scheduler] {label} TIMEOUT after {_JOB_TIMEOUT_SEC}s",
+              flush=True)
+        return
+    except Exception as e:
+        print(f"[analysis_scheduler] {label} EXCEPTION "
+              f"{type(e).__name__}: {e}", flush=True)
+        return
+    if result.returncode == 0:
+        print(f"[analysis_scheduler] {label} OK", flush=True)
+    else:
+        print(f"[analysis_scheduler] {label} FAILED rc={result.returncode}",
+              flush=True)
+        # Include tail of stderr for diagnosis
+        tail = (result.stderr or "")[-1000:]
+        if tail.strip():
+            print(f"[analysis_scheduler] {label} stderr tail:\n{tail}",
+                  flush=True)
+
+def _analysis_scheduler():
+    """Poll every minute; fire any job whose (hour, minute, dow) matches."""
+    import time as _t
+    # First tick log so operators see the scheduler is alive
+    print(f"Analysis scheduler started — {len(ANALYSIS_JOBS)} jobs configured",
+          flush=True)
+    for hour, minute, days, label, _ in ANALYSIS_JOBS:
+        print(f"  {hour:02d}:{minute:02d} UTC {days:6s}  {label}", flush=True)
+    while True:
+        try:
+            _t.sleep(60)
+            now = datetime.now(timezone.utc)
+            minute_key = now.strftime("%Y-%m-%d %H:%M")
+            for hour, minute, days, label, argv in ANALYSIS_JOBS:
+                if now.hour != hour or now.minute != minute:
+                    continue
+                if days == "sunday" and now.weekday() != 6:
+                    continue
+                if _analysis_last_fired.get(label) == minute_key:
+                    continue  # already fired this minute
+                _analysis_last_fired[label] = minute_key
+                _run_analysis_job(label, argv)
+        except Exception as e:
+            # Belt-and-braces: never let the scheduler thread die
+            print(f"[analysis_scheduler] tick error: "
+                  f"{type(e).__name__}: {e}", flush=True)
+
+threading.Thread(target=_analysis_scheduler, daemon=True).start()
+
 # Keep alive — restart any process that dies
 import time as _time
 
