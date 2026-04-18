@@ -198,6 +198,56 @@ Residual stale entries after delete: 0
 
 ---
 
+## Correction #6 — Documentation-Reality Gap on `risk_scores` Persistence
+**Date applied:** 2026-04-17
+**Scope:** Three edits to `claude.md`. No code change. No data change.
+
+### What we claimed
+`claude.md` documented `risk_scores` as a table in the production schema ("Computed | Stored potential scoring output") and listed `python -m surveillance.risk_scoring --score-all` in *Running Common Operations* as if it were a working producer command. Together these implied a persisted score table refreshed by a batch job.
+
+### What was actually true
+`surveillance/risk_scoring.py` is explicitly read-only analytics (module docstring: *"Creates no new tables"*). No INSERT/CREATE/UPDATE/DELETE statements anywhere in the file. The `risk_scores` table does not exist in the production DB and does not exist in the local 1.77 GB snapshot either. `/api/v1/risk/{chain}/{address}` calls `score_contract` **live** per request at `web/api_v1.py:818`, with measured p50 ≈ 80 ms and p99 around 1 s for contracts with heavy related-row joins. The `--score-all` CLI flag does not parse; the actual argparse flags are `--address`, `--top N`, `--family`.
+
+Full evidence in `reports/risk_scoring_persistence_audit.md`.
+
+### How was the error caught
+Wave 1 cache-invalidation audit (`reports/cache_invalidation_audit.md`) tried to enumerate staleness for every derived table named in `claude.md`. `SELECT COUNT(*) FROM risk_scores` failed with `no such table`. The dedicated follow-up confirmed risk_scoring.py is pure live computation and the doc describes a non-existent architecture.
+
+### Root cause
+`claude.md` was drafted from aspirational context — the L3 narrative materials and architecture intent — rather than measured codebase state. The same failure mode GoPlus commits when it returns `is_honeypot: 0` for a confirmed trap: documenting what should be true rather than what is true. This correction closes the claim; the broader discipline fix is proposed below.
+
+### What we changed
+Three edits to `claude.md`:
+
+| Location | Change |
+|---|---|
+| *Database Schema (Current Production State)* table | Removed the `\| risk_scores \| Computed \| Stored potential scoring output \|` row. |
+| *The Risk Scoring Model* section, below *Core interpretive rule* | Added: *"Persistence: `risk_scores` are computed live per API request. Not persisted. Historical tracking and bulk queries are not available in the current architecture. See Correction #6 (2026-04-17) for context; `/api/v1/risk/{chain}/{address}` calls `surveillance.risk_scoring.score_contract` per request, p50 ~80ms."* |
+| *Running Common Operations* — Analysis block | Replaced `python -m surveillance.risk_scoring --score-all` with the three flags that actually parse: `--address 0x<CONTRACT>`, `--top 100`, `--family <family_id>`. |
+| *Current Priority Items* | Added item #13: *"Evaluate hybrid cache architecture for `risk_scores` persistence — deferred until scheduler audit complete."* with decision criteria. |
+
+### Choice made: Story A, not Story B
+The persistence audit surfaced two consistent futures. **Story A**: accept live-compute as the design and edit the doc. **Story B**: build the producer, table, scheduler entry, and API read-through. Story A chosen because (a) it closes the discrepancy in minutes with no new surface, (b) Story B is the same class of work as the Class B scheduler finding — better to reason about both together after the scheduler audit lands, and (c) there is no measured customer pain on bulk screening today that justifies pre-scheduler work. Priority item #13 holds the door open for Story B if the pain shows up.
+
+### Effect on published numbers
+None. Zero rows moved. Zero API responses change. This is documentation alignment only.
+
+### Pattern worth naming
+This is the third correction in a short window representing three distinct failure classes:
+
+- **Correction #4 (2026-04-17)**: *Data classification error* — pipeline upgraded tier without carrying evidence metadata, producing 20,915 mislabels that had to be dissolved.
+- **Correction #5 (2026-04-17)**: *Cache invalidation gap* — derived data outliving the source mutation that should have invalidated it.
+- **Correction #6 (2026-04-17)**: *Documentation drift from reality* — the doc describes intended state, the code runs actual state, customers and future-us read the gap.
+
+A correction log that grows at this cadence is doing its job. The alternative — silent drift, undocumented gaps, stale claims — is exactly what Layer 3 measures in the systems it monitors. Our own discipline should match.
+
+### Open work
+- **`verify_claude_md.py` (proposed, not built):** a doc-test-suite script that asserts every claimed table exists, every claimed CLI flag parses, every claimed endpoint responds. Runs as a CI gate on `claude.md` changes. Cheap to build, prevents future Correction-#6-class entries. Not added to the priority list yet — awaiting user call on whether to promote it.
+- **One other CLI line in `claude.md` is broken**: `python -m surveillance.case_file --address 0x[CONTRACT]` uses `--address`, but the actual module takes `address` as a positional argument. Noticed during validation for this correction. Not fixed in this entry because the user's scope was explicitly three edits; flagged here for the next pass or the `verify_claude_md.py` script to catch.
+- **Story B still available.** If bulk-screening demand or longitudinal score tracking becomes a customer requirement, priority item #13 scopes the persistence work cleanly.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.
