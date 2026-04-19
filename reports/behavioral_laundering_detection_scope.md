@@ -9,16 +9,29 @@
 
 ## Pattern index
 
-| ID | Name | Investigation status | Detection readiness | Next step |
+| ID | Name | Investigation status | Signal strength | Next step |
 |---|---|---|---|---|
-| A | Reputation-building sacrifices | Not yet investigated | — | Phase 1 query per Part 2 handoff |
-| B | Temporal pattern normalization | Not yet investigated | — | Phase 2 query per Part 2 handoff |
-| C | Funding-chain laundering via CEX | Not yet investigated | Requires RPC budget | Phase 3 (blocked on Alchemy approval) |
-| D | Cross-chain reputation import | Partially validated via EXTRACTION_004 (Rhea) | Weak; on-chain method unclear | Phase 4 (Etherscan approved, not run) |
-| E | Fake legitimate projects | Not yet investigated | — | Phase 5 (methodology proposal) |
+| A | Reputation-building sacrifices | Scanned 2026-04-18 | 4 structural candidates of 5,810 deployers | Re-scan at corpus age ≥ 90 days; build `deployer_trajectory_analyzer` only if re-scan widens |
+| B | Temporal pattern normalization | Scanned 2026-04-18 | 0 candidates; 29 deployers total meet sustained-schedule filter | Re-scan at ≥ 60 days + add weekend_activity_ratio profile column |
+| C | Funding-chain laundering via CEX | Scanned 2026-04-18 (SQL only) | 0 strict, 4 relaxed candidates; RPC trace not yet spent | Approve ~20 Alchemy calls for one-hop-back trace on the 4 relaxed candidates |
+| D | Cross-chain reputation import | Scanned 2026-04-18 (Etherscan v2) | **54/100 hit rate — strongest supported pattern** | Propose `mainnet_first_tx` column on `deployers`, added via `auto_funder_tracer` |
+| E | Fake legitimate projects | Methodology proposed 2026-04-18; no scan | — | Precondition: corpus ≥ 60 days + weekly recurring RPC budget approval |
 | **F** | **Advisor-parasite extraction** | **Scanned 2026-04-18, negative** | **Blocked on Transfer-event indexer** | **Re-scan when corpus age ≥ 90 days** |
 
-Patterns A–E remain in the state the Part 2 handoff scoped. Pattern F is the first pattern where both the investigation *and* the first scan have been run; the rest of this document is Pattern F memorialization.
+All six patterns now have either a first-pass scan or a documented methodology. Full per-pattern reports at `reports/reputation_sacrifice_candidates.md` (A), `temporal_normalization_candidates.md` (B), `cex_laundered_funding.md` (C), `cross_chain_import_candidates.md` (D), `fake_project_detection_methodology.md` (E), `advisor_parasite_candidates.md` (F).
+
+### Cross-pattern overlaps already identified
+
+- **`0x4885631c7335290adcdc4b6b95f97549f5a40edd`** — Pattern C candidate (CEX-funded + 13 suspected contracts, 0 confirmed) AND Pattern D candidate (Ethereum-mainnet history 44 days pre-dates L2 first-seen). Two laundering-signal surfaces on one entity. Worth being the canonical case-study if you want to show multi-signal attribution.
+
+### Overall verdict on behavioral laundering in the current corpus
+
+Pattern D is the standout: **54% of high-risk recent L2 deployers have pre-existing mainnet identity we weren't linking.** Patterns A and C are narrow but clean (small candidate lists). Patterns B, E, F are corpus-age-limited — the fingerprints unfold over months, and our 30-day window isn't long enough for them to accumulate signal.
+
+**Production action that follows from these scans, if approved:**
+1. **Pattern D → ship `mainnet_first_tx` enrichment.** ~50 LoC added to `auto_funder_tracer`, one ALTER TABLE, one Etherscan call per new deployer. Immediate 54%-of-high-risk-deployers uplift in cross-chain awareness.
+2. **Pattern C → spend 20 Alchemy calls** on one-hop-back trace of the 4 candidates. Either surfaces a trap-adjacent origin (confirming the pattern) or doesn't (narrowing the scope).
+3. **Patterns A, B, E, F** stand by for re-scan at corpus age ≥ 60–90 days.
 
 ---
 
