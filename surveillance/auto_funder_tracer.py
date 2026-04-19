@@ -17,7 +17,10 @@ Read-only on-chain. Writes only to deployers.funding_trail.
 import asyncio
 import json
 import logging
+import os
 import sqlite3
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from typing import Optional, Set
 
@@ -26,6 +29,17 @@ from web3 import AsyncWeb3
 from surveillance import db
 
 logger = logging.getLogger("surveillance.auto_funder")
+
+# Pattern D enrichment: one Etherscan v2 multichain call per new deployer
+# to record Ethereum-mainnet first-seen timestamp. 54% of high-risk recent
+# L2 deployers had pre-existing mainnet identities we weren't linking
+# (behavioral_laundering_detection_scope.md). Free-tier Etherscan v2
+# supports 5 req/s × 100k req/day — well above our ~1-3k new-deployer rate.
+_ETHERSCAN_V2_URL = "https://api.etherscan.io/v2/api"
+_ETHERSCAN_V2_KEY = (
+    os.environ.get("ETHERSCAN_V2_KEY")
+    or os.environ.get("ARBISCAN_API_KEY", "")  # same key works for v2 multichain
+)
 
 # Known org wallets for instant flagging
 ORG_WALLETS = {
@@ -94,6 +108,45 @@ class AutoFunderTracer:
             except Exception as e:
                 logger.debug("Funder trace failed for %s: %s", addr[:14], e)
 
+    @staticmethod
+    def _fetch_mainnet_first_tx(addr: str) -> Optional[str]:
+        """Pattern D enrichment — one Etherscan v2 call returns earliest-tx
+        timestamp for `addr` on Ethereum mainnet (chainid=1). Returns None
+        on no-history, timeout, or API error. Never raises."""
+        if not _ETHERSCAN_V2_KEY:
+            return None
+        params = {
+            "chainid": "1",
+            "module": "account",
+            "action": "txlist",
+            "address": addr,
+            "startblock": "0",
+            "endblock": "99999999",
+            "page": "1",
+            "offset": "1",
+            "sort": "asc",
+            "apikey": _ETHERSCAN_V2_KEY,
+        }
+        url = f"{_ETHERSCAN_V2_URL}?{urllib.parse.urlencode(params)}"
+        try:
+            with urllib.request.urlopen(url, timeout=8) as resp:
+                data = json.loads(resp.read())
+        except Exception:
+            return None
+        if data.get("status") != "1":
+            # "No transactions found" returns status=0; either way, no mainnet history
+            return None
+        txs = data.get("result") or []
+        if not txs:
+            return None
+        ts = txs[0].get("timeStamp")
+        if not ts:
+            return None
+        try:
+            return datetime.fromtimestamp(int(ts), tz=timezone.utc).isoformat()
+        except Exception:
+            return None
+
     async def _trace_deployer(self, w3: AsyncWeb3, deployer: str) -> None:
         """Trace the first ETH inflow to a deployer address."""
         # Use the web3 provider's HTTP endpoint for alchemy_getAssetTransfers
@@ -151,6 +204,23 @@ class AutoFunderTracer:
                 "ORG LINK: deployer %s funded by %s (%s:%s)",
                 deployer[:14], funder[:14], org_id, org_role,
             )
+
+        # Pattern D enrichment: check Ethereum mainnet first-tx. Idempotent
+        # across chains (same address → same mainnet history), so skip if
+        # already populated by a prior chain's tracer.
+        existing = self.conn.execute(
+            "SELECT mainnet_first_tx FROM deployers WHERE deployer_address = ?",
+            (deployer,),
+        ).fetchone()
+        if existing is None or existing[0] is None:
+            # Wrap the blocking HTTP call so it doesn't stall the async loop
+            mainnet_first = await asyncio.to_thread(self._fetch_mainnet_first_tx, deployer)
+            if mainnet_first:
+                trail["mainnet_first_tx"] = mainnet_first
+                self.conn.execute(
+                    "UPDATE deployers SET mainnet_first_tx = ? WHERE deployer_address = ?",
+                    (mainnet_first, deployer),
+                )
 
         # Store the trail
         self.conn.execute(

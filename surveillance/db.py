@@ -498,6 +498,20 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
         )
         conn.commit()
 
+    # Migration: deployers.mainnet_first_tx for Pattern D enrichment.
+    # Populated by auto_funder_tracer via one Etherscan v2 API call per
+    # new deployer. See behavioral_laundering_detection_scope.md Pattern D
+    # for the 54% cross-chain-import hit rate that justifies this column.
+    try:
+        conn.execute("SELECT mainnet_first_tx FROM deployers LIMIT 1")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE deployers ADD COLUMN mainnet_first_tx TEXT")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_deployers_mainnet_first "
+            "ON deployers(mainnet_first_tx)"
+        )
+        conn.commit()
+
     return conn
 
 
