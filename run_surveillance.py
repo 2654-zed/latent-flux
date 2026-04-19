@@ -975,6 +975,33 @@ class StatsHandler(BaseHTTPRequestHandler):
             con.close()
             self._json(200, {"marked": total, "addresses": addresses})
 
+        elif self.path == "/admin/sync-mainnet-first-tx":
+            # Batch UPDATE deployers.mainnet_first_tx from a local backfill.
+            # Expects {"updates": {"0xaddr": "0xtxhash_or_empty", ...}}.
+            # UPDATE-only: does not create new deployer rows.
+            updates = data.get("updates", {})
+            if not updates:
+                self._json(400, {"error": "updates dict required: {address: mainnet_first_tx}"})
+                return
+            con = sqlite3.connect(DB_PATH, timeout=60)
+            try:
+                con.execute("PRAGMA busy_timeout=60000")
+                updated = 0
+                missing = 0
+                for addr, tx in updates.items():
+                    cur = con.execute(
+                        "UPDATE deployers SET mainnet_first_tx = ? WHERE LOWER(deployer_address) = ?",
+                        (tx, addr.lower()),
+                    )
+                    if cur.rowcount > 0:
+                        updated += cur.rowcount
+                    else:
+                        missing += 1
+                con.commit()
+            finally:
+                con.close()
+            self._json(200, {"updated": updated, "missing": missing, "submitted": len(updates)})
+
         elif self.path == "/admin/entity-type":
             # Batch update entity_type for multiple addresses
             updates = data.get("updates", {})  # {address: entity_type}
