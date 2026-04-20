@@ -421,6 +421,52 @@ The audit also exposed a secondary structural issue: `contracts.confidence_tier`
 - **PPV per detection_method.** We measured PPV at the tier level; we didn't split by `detection_method`. It's possible one detection pathway is producing nearly all the noise. Worth splitting before the next round of decay-threshold tuning.
 - **"46% suspected" recompute.** Pending Railway sync. Once decayed, recompute the headline and either update CLAUDE.md priority #10 or mark it resolved.
 
+### Postscript — 2026-04-20 Railway result
+Manual migration + decay ran on Railway after an init_db failure-mode was uncovered (documented as Correction #10). Final Railway numbers:
+- Pre-decay: 64,987 suspected (52.27%).
+- Post-decay: 59,287 suspected (47.68%), 5,700 unanalyzed (4.58%).
+- Decayed by chain: base 4,191, arbitrum 1,509.
+- CLAUDE.md priority #10 ("recompute 46% suspected") is now effectively resolved — the published 46% figure is within 1.7pp of live after decay; no action required beyond the correction note here.
+
+---
+
+## Correction #10 — Railway init_db Migration Did Not Run; Caused ~60-Minute Write Outage
+
+**Date:** 2026-04-20
+**Context:** Shipping Correction #9 (confidence decay).
+
+### The claim (as previously implied)
+The existing auto-migration pattern in `surveillance/db.py` — wrap each schema change in `try: SELECT …; except sqlite3.OperationalError: ALTER TABLE …` — runs on every `init_db()` call at service startup, so any new migration added to `db.py` reaches production on the next deploy.
+
+### The truth (as observed)
+After pushing commit `329f917` (which added the `deployed_code_hash` migration's consumer — the contracts-table rebuild to extend the `confidence_tier` CHECK constraint), Railway write logs began emitting `table contracts has no column named deployed_code_hash` on every deployment INSERT. An SSH probe of Railway's DB confirmed the contracts table had **19 columns** (no `deployed_code_hash`, no `decayed_at`, no `prior_confidence_tier`, CHECK without `'unanalyzed'`) — i.e., **none of the three pending migrations had applied**, despite the new code being live and referencing the columns.
+
+### How this was caught
+Railway `/stats` last_heartbeat was stale (2026-04-19T22:32 UTC, ~22 hours old). `railway logs` showed a continuous stream of `db_writer` INSERT failures. An SSH probe into the live container confirmed the schema mismatch. Estimated outage duration: ~60 minutes of deployments that hit detectors and recorded logs but never persisted to `contracts` or the downstream tables that FK to it.
+
+### What changed
+1. Ran a manual one-shot migration script (`scripts/railway_migrate_contracts.py`) via `railway ssh`. The script ran all three contracts-table migrations — add `deployed_code_hash`, add `decayed_at` + `prior_confidence_tier`, rebuild with extended CHECK. 124,341 rows preserved.
+2. Writes resumed within the next heartbeat cycle; `/stats` reported fresh heartbeat at 20:33 UTC and incrementing contract counts.
+3. Decay applied on Railway: 5,700 rows decayed, suspected dropped to 47.68%.
+
+### Root cause — hypothesized, not confirmed
+The running `init_db()` path in production either:
+- failed silently before reaching the new migration block (e.g., a prior migration hit a lock at startup, the process retried, and a later migration never ran to completion); or
+- ran in a race with the db_writer process acquiring the connection first and holding the BEGIN IMMEDIATE lock through the window where init_db would have applied the ALTER TABLEs.
+
+Both hypotheses predict the same observed state. Distinguishing them requires log instrumentation that isn't currently in the code. Flagged as open work.
+
+### Effect on published numbers
+- ~60 minutes of deployment records lost. The contracts table is the gate for every downstream analysis (bytecode_classifier, behavioral scoring, etc.) — anything that depends on deployments from ~19:53–20:38 UTC on 2026-04-20 is incomplete.
+- No public statistic was published during the outage window. Daily aggregate jobs run at 00:15–04:10 UTC and will compute from tomorrow onward including the data gap.
+- `trap_events` and `alerts` tables are unaffected — they don't FK to `contracts`.
+
+### Open work
+- **Instrument `init_db()` with per-migration logging.** Every migration block should `print(f"[init_db] migration={name} ran=True/False", flush=True)` so the startup log shows which migrations fired, which were skipped as no-ops, and which were blocked. Without this, silent failures stay invisible.
+- **Add a contract-write-smoke test to service startup.** Attempt a synthetic INSERT (and rollback) to the contracts table immediately after init_db completes. If it fails, raise — don't let the service enter steady-state with a broken write path.
+- **Revisit db_writer / init_db ordering.** The main process and db_writer both open connections on startup. If either can acquire a write lock before init_db runs, migrations stall. Formalize init_db as a prerequisite that completes before any producer process starts.
+- **Replay lost deployments.** The ~60-minute window of dropped contracts can be partially reconstructed from WebSocket logs if they're retained. Low priority — the miss is small and the period has no known incidents.
+
 ---
 
 ## How to add the next entry
