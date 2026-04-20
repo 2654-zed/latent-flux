@@ -1460,6 +1460,23 @@ from surveillance.db_writer import run as _db_writer_run
 from surveillance.process_entries import monitor_entry as _monitor_entry
 from surveillance.process_entries import routing_entry as _routing_entry
 
+# ---- Prereq: init_db + write smoke test ----
+# Runs migrations in the parent before any child process opens the DB. This
+# serializes migration work (no races between db_writer + 3 monitors), and the
+# smoke test fails loudly if any column is missing before steady-state writes
+# would start silently erroring. See Correction #10.
+print("Running parent-process init_db + write smoke test...", flush=True)
+from surveillance import db as _surv_db
+try:
+    import pathlib as _pl
+    _prereq_conn = _surv_db.init_db(_pl.Path(DB_PATH))
+    _surv_db.verify_write_path(_prereq_conn)
+    _prereq_conn.close()
+    print("Prereq OK — spawning producer processes.", flush=True)
+except Exception as _prereq_err:
+    print(f"FATAL: init_db/write_smoke failed: {_prereq_err}", flush=True)
+    raise
+
 _write_queue = MPQueue()
 
 # Start writer process (must be first — creates/owns the DB connection)

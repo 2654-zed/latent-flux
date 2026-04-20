@@ -25,10 +25,74 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+_MIGRATION_LOG: list[tuple[str, str]] = []
+
+
+def _log_migration(name: str, status: str, detail: str = "") -> None:
+    """Record and print one migration outcome. Status is 'applied' | 'skip' | 'FAILED'."""
+    _MIGRATION_LOG.append((name, status))
+    line = f"[init_db] migration={name} status={status}"
+    if detail:
+        line += f" detail={detail}"
+    print(line, flush=True)
+
+
+def verify_write_path(conn: sqlite3.Connection) -> None:
+    """Smoke-test the contracts INSERT path without persisting a row.
+
+    Runs the same INSERT shape that insert_contract uses against a SAVEPOINT
+    that is always rolled back. Any missing column or CHECK constraint breakage
+    fails loudly at service startup instead of silently during steady-state
+    writes (see Correction #10).
+    """
+    conn.execute("SAVEPOINT write_smoke")
+    try:
+        # Ensure a dummy deployer exists so the FK is satisfied. The SAVEPOINT
+        # rollback reverts both inserts.
+        dummy_addr = "0x0000000000000000000000000000000000smoke"
+        now = _now_iso()
+        conn.execute(
+            "INSERT OR IGNORE INTO deployers (deployer_address, chain, first_seen, "
+            "last_seen, total_contracts_deployed) VALUES (?, 'arbitrum', ?, ?, 0)",
+            (dummy_addr, now, now),
+        )
+        conn.execute(
+            """
+            INSERT INTO contracts (
+                contract_address, chain, detection_method, detection_timestamp,
+                detection_block, confidence_tier, confidence_reason,
+                deployer_address, deployer_funding_source,
+                routing_presence, routing_first_seen,
+                has_asymmetric_transfer, has_conditional_revert,
+                has_unusual_fee_structure, bytecode_pattern_notes,
+                deployed_code_hash, last_updated
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "0x0000000000000000000000000000000000000smoke",
+                "arbitrum", "bytecode_pattern", now, 0,
+                "unknown", "smoke test",
+                dummy_addr, None,
+                0, None,
+                None, None, None, None,
+                None, now,
+            ),
+        )
+    finally:
+        conn.execute("ROLLBACK TO SAVEPOINT write_smoke")
+        conn.execute("RELEASE SAVEPOINT write_smoke")
+    print("[init_db] write_smoke=OK", flush=True)
+
+
 def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
-    """Create or open the database and apply schema if tables don't exist."""
+    """Create or open the database and apply schema if tables don't exist.
+
+    Migrations log their status via _log_migration so silent failures are
+    visible in the startup log. See Correction #10.
+    """
     db_path = db_path or DEFAULT_DB_PATH
     db_path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"[init_db] start db={db_path}", flush=True)
 
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
@@ -504,6 +568,7 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
     # for the 54% cross-chain-import hit rate that justifies this column.
     try:
         conn.execute("SELECT mainnet_first_tx FROM deployers LIMIT 1")
+        _log_migration("mainnet_first_tx", "skip")
     except sqlite3.OperationalError:
         conn.execute("ALTER TABLE deployers ADD COLUMN mainnet_first_tx TEXT")
         conn.execute(
@@ -511,6 +576,7 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
             "ON deployers(mainnet_first_tx)"
         )
         conn.commit()
+        _log_migration("mainnet_first_tx", "applied")
 
     # Migration: contracts.decayed_at + prior_confidence_tier for confidence decay.
     # When a 'suspected' contract ages past the decay threshold with zero
@@ -518,6 +584,7 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
     # columns preserve the audit trail. See P0 of exception-as-rule audit.
     try:
         conn.execute("SELECT decayed_at FROM contracts LIMIT 1")
+        _log_migration("decayed_at", "skip")
     except sqlite3.OperationalError:
         conn.execute("ALTER TABLE contracts ADD COLUMN decayed_at TEXT")
         conn.execute("ALTER TABLE contracts ADD COLUMN prior_confidence_tier TEXT")
@@ -526,6 +593,7 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
             "ON contracts(decayed_at)"
         )
         conn.commit()
+        _log_migration("decayed_at", "applied")
 
     # Migration: extend contracts.confidence_tier CHECK to allow 'unanalyzed'.
     # SQLite lacks ALTER CHECK, so this rebuilds the contracts table when the
@@ -589,12 +657,20 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
                 CREATE INDEX IF NOT EXISTS idx_contracts_decayed_at ON contracts(decayed_at);
             """)
             conn.commit()
-        except Exception:
+            _log_migration("contracts_check_unanalyzed", "applied")
+        except Exception as e:
             conn.rollback()
+            _log_migration("contracts_check_unanalyzed", "FAILED", detail=str(e)[:200])
             raise
         finally:
             conn.execute("PRAGMA foreign_keys=ON")
+    else:
+        _log_migration("contracts_check_unanalyzed", "skip")
 
+    print(f"[init_db] complete migrations={len(_MIGRATION_LOG)} "
+          f"applied={sum(1 for _,s in _MIGRATION_LOG if s=='applied')} "
+          f"skip={sum(1 for _,s in _MIGRATION_LOG if s=='skip')}",
+          flush=True)
     return conn
 
 
