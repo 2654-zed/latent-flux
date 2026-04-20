@@ -91,22 +91,63 @@ BRIDGE_CONTRACTS = {
     "0x27a16dc786820b16e5c9028b75b99f6f604b5d26": "Stargate (Base)",
 }
 
-# Org wallets — for INTERNAL classification
-ORG_WALLETS = {
-    "0xf186cb00e49e18491db5783ff04fae3818102ff7": "org_001:treasury",
-    "0xe93d64f3fbc352131e79fc5578cbe44b66697f86": "org_001:operator",
-    "0xfd51e33d44b376ef346d24a130a51035db09c1dc": "org_001:operator_2",
-    "0xc6962004f452be9203591991d15f6b388e09e8d0": "org_001:cashout",
-    "0x01989c93890aed05a63d179b03424997075b6acf": "org_001:exit_cex",
-    "0x8c826f795466e39acbff1bb4eeeb759609377ba1": "org_001:gas_station",
-    "0x360e68faccca8ca495c1b759fd9eee466db9fb32": "org_001:treasury_branch",
-    "0xfdaf1f1714810f8d88a57c9d551d442c68ace2bb": "org_001:laundry",
-    "0x96daa0b8a5499ea9323421ed0cda06b345caab73": "org_001:lp_staging",
-    "0x27920e8039d2b6e93e36f5d5f53b998e2e631a70": "org_001:lp_companion",
-    "0x51c72848c68a965f66fa7a88855f9f7784502a7f": "org_001:defi_exit_channel",
-    "0x238d7170f309a55b87a144a341bd6105897082ca": "org_002:treasury_senior",
-    "0xde8eb937cb5475eee5ac96dce6ba2d18e439c473": "org_002:treasury_junior",
-}
+# Org wallets are in the `org_wallets` DB table (see surveillance.org_registry).
+# This module reads the registry via a helper that returns the "org_id:role"
+# string expected by the legacy classify_destination() consumers below.
+from surveillance import org_registry as _org_registry
+
+
+def _org_wallet_label(address: str) -> "str | None":
+    """Return 'org_id:role' for a known org wallet, or None."""
+    hit = _org_registry.get_org_for_address(address)
+    if hit is None:
+        return None
+    return f"{hit[0]}:{hit[1]}"
+
+
+def _all_org_wallets_snapshot() -> dict[str, str]:
+    """Snapshot of the registry as a {address: 'org_id:role'} dict.
+
+    Preserves the legacy iteration semantics for callers that still loop over
+    the registry (address-prefix matching in extract_flows_from_extraction_events).
+    """
+    _org_registry._ensure_cache()
+    return {
+        addr: f"{org_id}:{role}"
+        for (addr, _chain), (org_id, role) in _org_registry._CACHE.items()
+    }
+
+
+class _ORG_WALLETS_LazyDict:
+    """Legacy shim: behaves like the old ORG_WALLETS dict, but reads the
+    registry live. `addr in ORG_WALLETS` and `ORG_WALLETS[addr]` both work."""
+
+    def __contains__(self, addr):
+        return _org_wallet_label(addr) is not None
+
+    def __getitem__(self, addr):
+        label = _org_wallet_label(addr)
+        if label is None:
+            raise KeyError(addr)
+        return label
+
+    def __iter__(self):
+        return iter(_all_org_wallets_snapshot())
+
+    def items(self):
+        return _all_org_wallets_snapshot().items()
+
+    def keys(self):
+        return _all_org_wallets_snapshot().keys()
+
+    def values(self):
+        return _all_org_wallets_snapshot().values()
+
+    def __len__(self):
+        return len(_all_org_wallets_snapshot())
+
+
+ORG_WALLETS = _ORG_WALLETS_LazyDict()
 
 
 def get_connection():

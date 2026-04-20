@@ -27,6 +27,7 @@ from typing import Optional, Set
 from web3 import AsyncWeb3
 
 from surveillance import db
+from surveillance import org_registry
 
 logger = logging.getLogger("surveillance.auto_funder")
 
@@ -41,17 +42,8 @@ _ETHERSCAN_V2_KEY = (
     or os.environ.get("ARBISCAN_API_KEY", "")  # same key works for v2 multichain
 )
 
-# Known org wallets for instant flagging
-ORG_WALLETS = {
-    "0xf186cb00e49e18491db5783ff04fae3818102ff7": ("org_001", "treasury"),
-    "0xe93d64f3fbc352131e79fc5578cbe44b66697f86": ("org_001", "operator"),
-    "0xfd51e33d44b376ef346d24a130a51035db09c1dc": ("org_001", "operator_2"),
-    "0xc6962004f452be9203591991d15f6b388e09e8d0": ("org_001", "cashout"),
-    "0x8c826f795466e39acbff1bb4eeeb759609377ba1": ("org_001", "gas_station"),
-    "0x360e68faccca8ca495c1b759fd9eee466db9fb32": ("org_001", "treasury_branch"),
-    "0x238d7170f309a55b87a144a341bd6105897082ca": ("org_002", "treasury_senior"),
-    "0xde8eb937cb5475eee5ac96dce6ba2d18e439c473": ("org_002", "treasury_junior"),
-}
+# Org wallets are in the `org_wallets` DB table (see surveillance.org_registry).
+# New groups are registered by INSERTing rows; no code change required.
 
 # Gas station threshold: funder that funds N+ distinct deployers
 GAS_STATION_THRESHOLD = 5
@@ -194,9 +186,10 @@ class AutoFunderTracer:
             "traced_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        # Check if funder is a known org wallet
-        if funder in ORG_WALLETS:
-            org_id, org_role = ORG_WALLETS[funder]
+        # Check if funder is a known org wallet (registry-backed)
+        org_hit = org_registry.get_org_for_address(funder)
+        if org_hit is not None:
+            org_id, org_role = org_hit
             trail["org_link"] = org_id
             trail["funder_role"] = org_role
             self.org_links_found += 1
@@ -327,9 +320,10 @@ class AutoFunderTracer:
                     fv = float(ht.get("value") or 0)
                     trail["funder_funders"].append({"address": ff, "value_eth": fv})
 
-                    # Check if funder's funder is a known org
-                    if ff in ORG_WALLETS:
-                        org_id, org_role = ORG_WALLETS[ff]
+                    # Check if funder's funder is a known org (registry-backed)
+                    org_hit_hop2 = org_registry.get_org_for_address(ff)
+                    if org_hit_hop2 is not None:
+                        org_id, org_role = org_hit_hop2
                         trail["org_link_hop2"] = org_id
                         logger.warning(
                             "ORG LINK (2-hop): deployer %s -> funder %s -> %s (%s:%s)",

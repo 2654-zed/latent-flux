@@ -667,6 +667,64 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
     else:
         _log_migration("contracts_check_unanalyzed", "skip")
 
+    # Migration: org_wallets registry. Replaces the ORG_WALLETS dicts in
+    # auto_funder_tracer.py and fund_tracer.py with a queryable table so
+    # new groups can be added without code changes. PK is (address, chain)
+    # because a single address can legitimately appear on multiple chains
+    # (CREATE2, cross-chain deployments). See P1 of exception-as-rule audit.
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='org_wallets'"
+    )
+    if cursor.fetchone() is None:
+        conn.executescript("""
+            CREATE TABLE org_wallets (
+                address      TEXT    NOT NULL,
+                chain        TEXT    NOT NULL DEFAULT 'arbitrum',
+                org_id       TEXT    NOT NULL,
+                role         TEXT    NOT NULL,
+                added_at     TEXT    NOT NULL,
+                added_by     TEXT    NOT NULL,
+                reason       TEXT,
+                PRIMARY KEY (address, chain)
+            );
+            CREATE INDEX idx_org_wallets_org_id ON org_wallets(org_id);
+        """)
+        conn.commit()
+        _log_migration("org_wallets_table", "applied")
+    else:
+        _log_migration("org_wallets_table", "skip")
+
+    # Migration: org_candidates — novel-org clustering output. Populated
+    # by surveillance.org_candidates which groups unclassified deployers by
+    # shared signals (funding source, gas fingerprint, timing). Rows here
+    # are Tier B inferential — promotion to org_wallets requires review.
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='org_candidates'"
+    )
+    if cursor.fetchone() is None:
+        conn.executescript("""
+            CREATE TABLE org_candidates (
+                id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+                candidate_id             TEXT    NOT NULL UNIQUE,
+                cluster_size             INTEGER NOT NULL,
+                deployer_addresses       TEXT    NOT NULL,
+                shared_funding_source    TEXT,
+                shared_gas_fingerprint   REAL,
+                shared_chain             TEXT,
+                first_seen               TEXT    NOT NULL,
+                last_seen                TEXT    NOT NULL,
+                detected_at              TEXT    NOT NULL,
+                status                   TEXT    NOT NULL DEFAULT 'pending',
+                notes                    TEXT
+            );
+            CREATE INDEX idx_org_candidates_status ON org_candidates(status);
+            CREATE INDEX idx_org_candidates_detected ON org_candidates(detected_at);
+        """)
+        conn.commit()
+        _log_migration("org_candidates_table", "applied")
+    else:
+        _log_migration("org_candidates_table", "skip")
+
     print(f"[init_db] complete migrations={len(_MIGRATION_LOG)} "
           f"applied={sum(1 for _,s in _MIGRATION_LOG if s=='applied')} "
           f"skip={sum(1 for _,s in _MIGRATION_LOG if s=='skip')}",

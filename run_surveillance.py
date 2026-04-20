@@ -1593,6 +1593,8 @@ ANALYSIS_JOBS = [
      [sys.executable, "-m", "surveillance.deployer_profiler", "--cluster"]),
     (4, 30, "daily",  "confidence_decay",
      [sys.executable, "-m", "surveillance.confidence_decay", "--apply"]),
+    (4, 45, "daily",  "org_candidates",
+     [sys.executable, "-m", "surveillance.org_candidates", "--apply"]),
 ]
 _JOB_TIMEOUT_SEC = 3600  # 1 h per producer; deployer_profiler is the slowest
 _analysis_last_fired: dict[str, str] = {}
