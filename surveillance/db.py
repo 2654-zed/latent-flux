@@ -512,6 +512,89 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
         )
         conn.commit()
 
+    # Migration: contracts.decayed_at + prior_confidence_tier for confidence decay.
+    # When a 'suspected' contract ages past the decay threshold with zero
+    # observable harm, confidence_tier is moved to 'unanalyzed' and these
+    # columns preserve the audit trail. See P0 of exception-as-rule audit.
+    try:
+        conn.execute("SELECT decayed_at FROM contracts LIMIT 1")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE contracts ADD COLUMN decayed_at TEXT")
+        conn.execute("ALTER TABLE contracts ADD COLUMN prior_confidence_tier TEXT")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_contracts_decayed_at "
+            "ON contracts(decayed_at)"
+        )
+        conn.commit()
+
+    # Migration: extend contracts.confidence_tier CHECK to allow 'unanalyzed'.
+    # SQLite lacks ALTER CHECK, so this rebuilds the contracts table when the
+    # old 3-value CHECK is still in place. Idempotent — skips when 'unanalyzed'
+    # is already present in the existing CHECK definition.
+    current_sql = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='contracts'"
+    ).fetchone()
+    if current_sql and "'unanalyzed'" not in current_sql[0]:
+        conn.execute("PRAGMA busy_timeout=60000")
+        conn.execute("PRAGMA foreign_keys=OFF")
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            conn.executescript("""
+                CREATE TABLE contracts_new (
+                    contract_address    TEXT    NOT NULL PRIMARY KEY,
+                    chain               TEXT    NOT NULL DEFAULT 'arbitrum',
+                    detection_method    TEXT    NOT NULL CHECK (detection_method IN (
+                                            'bytecode_pattern', 'behavioral_trigger',
+                                            'deployer_history', 'routing_anomaly'
+                                        )),
+                    detection_timestamp TEXT    NOT NULL,
+                    detection_block     INTEGER NOT NULL,
+                    confidence_tier     TEXT    NOT NULL DEFAULT 'unknown' CHECK (confidence_tier IN (
+                                            'unknown', 'suspected', 'confirmed', 'unanalyzed'
+                                        )),
+                    confidence_reason   TEXT    NOT NULL CHECK (length(confidence_reason) > 0),
+                    confirmation_tx_hash    TEXT,
+                    confirmation_timestamp  TEXT,
+                    confirmation_block      INTEGER,
+                    deployer_address        TEXT NOT NULL,
+                    deployer_funding_source TEXT,
+                    routing_presence    INTEGER NOT NULL DEFAULT 0,
+                    routing_first_seen  TEXT,
+                    has_asymmetric_transfer  INTEGER,
+                    has_conditional_revert   INTEGER,
+                    has_unusual_fee_structure INTEGER,
+                    bytecode_pattern_notes   TEXT,
+                    last_updated        TEXT    NOT NULL,
+                    deployed_code_hash  TEXT,
+                    decayed_at          TEXT,
+                    prior_confidence_tier TEXT,
+                    FOREIGN KEY (deployer_address) REFERENCES deployers(deployer_address)
+                );
+                INSERT INTO contracts_new SELECT
+                    contract_address, chain, detection_method, detection_timestamp,
+                    detection_block, confidence_tier, confidence_reason,
+                    confirmation_tx_hash, confirmation_timestamp, confirmation_block,
+                    deployer_address, deployer_funding_source, routing_presence,
+                    routing_first_seen, has_asymmetric_transfer, has_conditional_revert,
+                    has_unusual_fee_structure, bytecode_pattern_notes, last_updated,
+                    deployed_code_hash, decayed_at, prior_confidence_tier
+                FROM contracts;
+                DROP TABLE contracts;
+                ALTER TABLE contracts_new RENAME TO contracts;
+                CREATE INDEX IF NOT EXISTS idx_contracts_deployer ON contracts(deployer_address);
+                CREATE INDEX IF NOT EXISTS idx_contracts_confidence_tier ON contracts(confidence_tier);
+                CREATE INDEX IF NOT EXISTS idx_contracts_detection_timestamp ON contracts(detection_timestamp);
+                CREATE INDEX IF NOT EXISTS idx_contracts_routing_presence ON contracts(routing_presence);
+                CREATE INDEX IF NOT EXISTS idx_contracts_code_hash ON contracts(deployed_code_hash);
+                CREATE INDEX IF NOT EXISTS idx_contracts_decayed_at ON contracts(decayed_at);
+            """)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.execute("PRAGMA foreign_keys=ON")
+
     return conn
 
 

@@ -379,6 +379,50 @@ Today's activity-pull surfaced an A7B9 event on Base with the improbable $17.7B 
 
 ---
 
+## Correction #9 — "Suspected" Confidence Tier Was 99.98% Noise at 30-Day Horizon
+
+**Date:** 2026-04-19
+**Motivating audit:** exception-as-rule review of Layer 3 framework (P0 finding).
+
+### The claim (as previously implied)
+The `confidence_tier = 'suspected'` label applied to contracts flagged by bytecode-pattern / behavioral-trigger / routing-anomaly detection meant "this contract is likely adversarial based on its static/behavioral signals, pending observable confirmation." Tier was published in `/api/v1/contract/{...}` and rolled up into corpus-wide statistics ("46% suspected" cited in CLAUDE.md priority #10).
+
+### The truth (as measured)
+Diagnostic run 2026-04-19 on the local 124,341-row corpus:
+
+| confidence_tier | count | with observable trap_events | observable-harm rate |
+|---|---|---|---|
+| confirmed | 579 | 482 | 83.2% |
+| suspected | 43,985 | 8 | 0.02% |
+| suspected, aged ≥ 30 days | 3,797 | 0 | 0.0% |
+
+At the 30-day horizon, `suspected` has zero observable harm correlation. The label was functioning as "we ran detectors on this and something pattern-matched" rather than "this contract is likely adversarial." It aggregated detector-trip noise, not predictive signal. Published as a risk classification, it overstated Layer 3's predictive claim by orders of magnitude.
+
+### How this was caught
+The exception-as-rule audit took the user's diagnostic recipe — "score contracts CRITICAL, track 90-day outcomes, measure PPV" — and ran the analogue against `confidence_tier` + `trap_events`. The 0.02% rate for `suspected` vs 83.2% for `confirmed` revealed that the two labels are measuring fundamentally different things: `confirmed` means "observed to have caused loss," while `suspected` meant "detector fired." They were being served as graduated confidence tiers on the same scale. They aren't.
+
+The audit also exposed a secondary structural issue: `contracts.confidence_tier` had a 3-value CHECK constraint (`unknown`, `suspected`, `confirmed`), so there was no schema-level vocabulary for "we detected but nothing observable followed." The closed enum was itself a form of exception-as-rule — the schema forced every detected contract into a predictive category.
+
+### What changed
+1. Schema migration (`surveillance/db.py`): extended `confidence_tier` CHECK to include `unanalyzed`. Required a full `contracts` table rebuild (SQLite has no `ALTER CHECK`). Added `decayed_at TEXT` and `prior_confidence_tier TEXT` columns with `idx_contracts_decayed_at` index.
+2. New module `surveillance/confidence_decay.py`: moves `suspected` contracts aged ≥30 days with zero `trap_events` linkage to `confidence_tier = 'unanalyzed'`, preserving the original tier in `prior_confidence_tier` and timestamp in `decayed_at`. CLI: `--dry-run`, `--apply`, `--age-days N`.
+3. Scheduler (`run_surveillance.py`): nightly at 04:30 UTC.
+4. First local apply: 4,888 contracts decayed (3,727 base + 1,161 arbitrum). Post-decay distribution: suspected 39,097 (31.44%), unanalyzed 4,888 (3.93%).
+
+### Effect on published numbers
+- **"46% suspected" (CLAUDE.md priority #10 anchor):** not directly recomputed yet because that figure reflected Railway state at an earlier point; local now shows 35.37% → 31.44% post-decay. After Railway sync + first scheduled decay, the corpus-wide statistic should be recomputed and published. Any public page citing "46% suspected" needs an update alongside a pointer to this correction.
+- **`/api/v1/contract/{chain}/{addr}`:** contracts that decayed now return `confidence_tier: "unanalyzed"` instead of `"suspected"`. The `prior_confidence_tier` + `decayed_at` fields are available for anyone who wants the audit trail. Deductive fields (`bytecode_pattern_notes`, `has_asymmetric_transfer`, etc.) are unchanged — they record what was detected, not what was predicted.
+- **Re-promotion path:** if a decayed contract later fires a `trap_events` row, nothing currently re-upgrades it back to `suspected`. That asymmetry is deliberate for now — decay should be sticky unless we see harm. Re-promotion logic is flagged as open work.
+
+### Open work
+- **Re-promotion trigger.** A decayed contract that later produces observable harm should move out of `unanalyzed`. Natural place is in the trap_events write path: on insert, check if `contracts.decayed_at IS NOT NULL` and promote to `confirmed` if so. Separate follow-up.
+- **Railway sync.** Schema migration + decay module shipped to `master`; scheduler will fire at 04:30 UTC Railway-time on the next day the build is live. Manual invocation (via `railway run python -m surveillance.confidence_decay --apply`) or an admin endpoint is the faster path if we want pre-scheduler decay on prod.
+- **Other detectors may have the same pathology.** The audit found that `suspected` was over-broad for *our* detectors at 30 days, but different detectors may need different decay horizons. `routing_anomaly` detections might resolve faster than `bytecode_pattern` detections. Per-detector decay windows are a future refinement.
+- **PPV per detection_method.** We measured PPV at the tier level; we didn't split by `detection_method`. It's possible one detection pathway is producing nearly all the noise. Worth splitting before the next round of decay-threshold tuning.
+- **"46% suspected" recompute.** Pending Railway sync. Once decayed, recompute the headline and either update CLAUDE.md priority #10 or mark it resolved.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.
