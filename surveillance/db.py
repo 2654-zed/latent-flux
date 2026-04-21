@@ -740,6 +740,18 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
     else:
         _log_migration("org_candidates_table", "skip")
 
+    # Migration: extraction_events.event_type_suggestion for P5 classifier.
+    # Shadow field populated by surveillance.extraction_classifier. Divergence
+    # between documented event_type and suggestion surfaces labeling drift.
+    try:
+        conn.execute("SELECT event_type_suggestion FROM extraction_events LIMIT 1")
+        _log_migration("extraction_event_type_suggestion", "skip")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE extraction_events ADD COLUMN event_type_suggestion TEXT")
+        conn.execute("ALTER TABLE extraction_events ADD COLUMN event_type_suggestion_confidence REAL")
+        conn.commit()
+        _log_migration("extraction_event_type_suggestion", "applied")
+
     print(f"[init_db] complete migrations={len(_MIGRATION_LOG)} "
           f"applied={sum(1 for _,s in _MIGRATION_LOG if s=='applied')} "
           f"skip={sum(1 for _,s in _MIGRATION_LOG if s=='skip')}",
