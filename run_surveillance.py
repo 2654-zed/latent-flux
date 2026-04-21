@@ -972,16 +972,21 @@ class StatsHandler(BaseHTTPRequestHandler):
             if not reason or len(reason) < 10:
                 self._json(400, {"error": "reason required (>= 10 chars); see Correction #14"})
                 return
-            con = sqlite3.connect(DB_PATH, timeout=30)
-            con.execute("PRAGMA busy_timeout=30000")
+            # Two connections: a read-only connection for the pre-flight
+            # SELECT (non-blocking in WAL mode), and short per-address write
+            # transactions that each commit individually so contention with
+            # db_writer resolves in the SQLite busy-timeout window instead
+            # of blocking on an explicit BEGIN IMMEDIATE held across all
+            # addresses.
+            ro = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=15)
+            wr = sqlite3.connect(DB_PATH, timeout=30)
+            wr.execute("PRAGMA busy_timeout=30000")
             try:
-                con.execute("BEGIN IMMEDIATE")
                 now_iso = datetime.now(timezone.utc).isoformat()
                 marked = 0
                 audit_rows = 0
                 for addr in addresses:
-                    # Collect alert context for the audit row before we flag
-                    ctx = con.execute(
+                    ctx = ro.execute(
                         "SELECT COUNT(*) AS n, "
                         "       GROUP_CONCAT(DISTINCT alert_type) AS types "
                         "FROM alerts WHERE LOWER(address) = ? "
@@ -991,13 +996,13 @@ class StatsHandler(BaseHTTPRequestHandler):
                     n_alerts = ctx[0] if ctx else 0
                     alert_types = ctx[1] if ctx else ""
                     if n_alerts == 0:
-                        continue  # nothing to mark, don't write a phantom audit row
-                    con.execute(
+                        continue
+                    wr.execute(
                         "UPDATE alerts SET false_positive = 1 WHERE LOWER(address) = ?",
                         (addr,),
                     )
-                    marked += con.total_changes if con.total_changes > 0 else n_alerts
-                    con.execute(
+                    marked += wr.total_changes if wr.total_changes > 0 else n_alerts
+                    wr.execute(
                         """INSERT OR REPLACE INTO false_positives
                            (contract_address, chain, original_tier, original_patterns,
                             fp_reason, fp_method, fp_confidence, detector_blamed, assessed_at)
@@ -1005,14 +1010,15 @@ class StatsHandler(BaseHTTPRequestHandler):
                                    1.0, ?, ?)""",
                         (addr, alert_types or "", reason, detector_blamed, now_iso),
                     )
+                    wr.commit()
                     audit_rows += 1
-                con.commit()
             except Exception as e:
-                con.rollback()
+                wr.rollback()
                 self._json(500, {"error": f"mark-fp failed: {type(e).__name__}: {e}"})
                 return
             finally:
-                con.close()
+                ro.close()
+                wr.close()
             self._json(200, {
                 "marked": marked, "audit_rows_written": audit_rows,
                 "addresses": addresses, "reason": reason,
