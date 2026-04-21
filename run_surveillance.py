@@ -972,7 +972,8 @@ class StatsHandler(BaseHTTPRequestHandler):
             if not reason or len(reason) < 10:
                 self._json(400, {"error": "reason required (>= 10 chars); see Correction #14"})
                 return
-            con = sqlite3.connect(DB_PATH)
+            con = sqlite3.connect(DB_PATH, timeout=30)
+            con.execute("PRAGMA busy_timeout=30000")
             try:
                 con.execute("BEGIN IMMEDIATE")
                 now_iso = datetime.now(timezone.utc).isoformat()
