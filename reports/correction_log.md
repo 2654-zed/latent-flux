@@ -469,6 +469,41 @@ Both hypotheses predict the same observed state. Distinguishing them requires lo
 
 ---
 
+## Correction #11 — Org Classification Was a Hardcoded Allowlist
+
+**Date:** 2026-04-20
+**Motivating audit:** exception-as-rule review, P1.
+
+### The claim (as previously implied)
+CLAUDE.md's schema table listed `org_wallets — Organization wallet mappings` as an existing DB table. Layer 3 outputs referenced `org_001`, `org_002`, `org_003`, `org_004` as if these were the output of an organizational-discovery system capable of surfacing novel groups as they appeared.
+
+### The truth (as measured)
+No `org_wallets` table existed. Organizational classification was a dict literal `ORG_WALLETS` duplicated across `auto_funder_tracer.py` (8 entries) and `fund_tracer.py` (13 entries). The union is 13 wallets across 2 org_ids (`org_001` = 11 wallets, `org_002` = 2). org_003 and org_004 were referenced in reporting modules (`daily_report.py`, `diamond_model.py`) but had zero wallet-level entries; they existed as case labels without membership data. Any novel criminal group operating on different timezone, gas fingerprint, or funding pattern would not surface as a novel org — it would produce unlinked `suspected` contracts that never accrue to an `org_id`.
+
+### How this was caught
+Exception-as-rule audit grep'd for `ORG_WALLETS\s*=\s*\{` across `surveillance/` and found the two identical dict literals. Cross-referenced against CLAUDE.md's schema table (which claimed the DB table existed). Pulled the actual schema — no `org_wallets` table present.
+
+### What changed
+1. Schema: added `org_wallets (address, chain, org_id, role, added_at, added_by, reason)` and `org_candidates (candidate_id, cluster_size, deployer_addresses, shared_funding_source, shared_gas_fingerprint, shared_chain, first_seen, last_seen, detected_at, status, notes)` tables. Both migrations instrumented via `_log_migration`.
+2. `surveillance/org_registry.py`: cached DB-backed lookup replacing the dict literals. 5-min TTL. CLI with `--seed` for bootstrap and `--list` for dump.
+3. `surveillance/auto_funder_tracer.py` and `surveillance/fund_tracer.py`: both dict literals removed; lookups go through `org_registry.get_org_for_address()`. `fund_tracer.py` retains a `_ORG_WALLETS_LazyDict` shim so `addr in ORG_WALLETS` and `ORG_WALLETS[addr]` still work in the address-prefix matcher.
+4. `surveillance/org_candidates.py`: novel-org candidate detector. Groups deployers by shared `funding_trail.funder` within a 72h window, filters clusters outside 3–50 members (below = noise, above = CEX/faucet). Emits `org_candidates` rows for review. Tier B inferential.
+5. Seeded 13 wallets on local + Railway via `--seed`.
+6. Scheduler job at 04:45 UTC daily.
+
+### Effect on published numbers
+- **"4 organizations mapped"** in CLAUDE.md is technically accurate as a count of documented cases, but the coverage claim is narrower than the wording implies. The four orgs are hand-investigated cases; wallet-level membership exists only for org_001 (11) and org_002 (2). This correction doesn't change any quantitative public stat but sharpens what "organizations mapped" means.
+- First Railway candidate scan: **324 clusters of 3–40 deployers** surfaced as novel-org candidates. Top clusters are all Base-chain, all gas-station-shaped (one funder → many short-lived deployers). None have been promoted to `org_wallets`; all carry `status='pending'` pending review.
+- The existence of 324 pending candidates is itself a measurable gap in prior coverage. If even 5% promote to real orgs after review, the org count roughly quadruples.
+
+### Open work
+- **Review the 324 candidates.** Promotion workflow: investigator inspects the cluster's deployed contracts / destination flows / on-chain timing, and if the pattern matches an org profile, inserts members into `org_wallets` with `added_by='manual_review_YYYY-MM-DD'`. Otherwise sets `status='dismissed'` with a `notes` explanation.
+- **Promotion admin endpoint.** An `/admin/promote-candidate` that takes a `candidate_id` + `org_id` and atomically INSERTs members + updates candidate status would make the review workflow ergonomic. Not shipped.
+- **Extend signals beyond funder.** The detector currently uses shared `funder` as the clustering key. Additional signals that would sharpen precision when populated: `typical_gas_price_gwei`, deployer-similarity fingerprints (already computed in `deployer_similarity`), bytecode-family membership, timezone-inferred activity windows.
+- **Merge org_candidates and deployer_similarity.** There's conceptual overlap between "these deployers are behaviorally similar" and "these deployers share organizational infrastructure." Not currently cross-referenced. Could fold into the candidate detector as a second signal layer.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.
