@@ -48,10 +48,27 @@ def _query(sql, fetchone=False):
 
 class StatsHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.path == "/health" or self.path == "/":
+            # Liveness probe — always returns 200 so Railway's healthcheck
+            # succeeds even when the DB is unusable. The real health state
+            # lives in /stats; this endpoint exists to keep the container
+            # alive during /admin/upload-db recovery windows.
+            self._json(200, {"status": "alive"})
+            return
         if self.path == "/stats":
-            # Single connection, all fresh queries, no caching
-            con = _ro_connect()
-            c = con.cursor()
+            # Single connection, all fresh queries, no caching.
+            # Wrapped so DB unreachability reports 200 with degraded shape
+            # instead of 500 — the container must stay up for /admin/upload-db.
+            try:
+                con = _ro_connect()
+                c = con.cursor()
+            except sqlite3.OperationalError as _db_err:
+                self._json(200, {
+                    "status": "degraded",
+                    "error": f"db_unreachable: {_db_err}",
+                    "message": "DB unavailable; container is up for admin recovery only",
+                })
+                return
 
             stats = {
                 "contracts": dict(c.execute(
