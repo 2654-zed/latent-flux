@@ -1,7 +1,27 @@
-"""Camouflage Tracker — computes daily camouflage metrics for contracts.
+"""Camouflage Tracker — computes daily low-revert metrics for contracts.
 
-Classifies contracts by revert rate into camouflaged (<10%), moderate (10-50%),
-and overt (>50%) categories, then stores aggregate metrics per day.
+Classifies contracts by revert rate into three bands:
+  low-revert    (<10%)   — legacy name 'camouflaged' (see Correction #13)
+  moderate      (10-50%)
+  overt         (>50%)
+
+Two population-level ratios are stored per day:
+
+  camouflage_ratio           — fraction of ALL active contracts with <10% revert.
+                               Historical name; preserved for continuity but
+                               the name overstates the claim — legitimate
+                               routers are also low-revert, so this number
+                               says more about contract-design distributions
+                               than adversary strategy.
+
+  adversary_low_revert_ratio — fraction restricted to contracts with
+                               confidence_tier in ('confirmed','suspected').
+                               This is what the "70-79% Nash equilibrium"
+                               interpretation actually needs: if adversaries
+                               concentrate in the low-revert band at a
+                               different rate than the general population,
+                               the equilibrium claim is load-bearing; if the
+                               rates match, it is not.
 """
 
 import argparse
@@ -39,13 +59,15 @@ def compute_day(conn: sqlite3.Connection, day: str) -> Optional[dict]:
         Dict of metrics or None if no qualifying contracts.
     """
     rows = conn.execute("""
-        SELECT contract_address,
+        SELECT te.contract_address,
             COUNT(*) as tx_count,
-            COUNT(DISTINCT interacting_address) as callers,
-            ROUND(SUM(CASE WHEN is_reverted=1 THEN 1.0 ELSE 0 END)/COUNT(*)*100, 1) as revert_pct
-        FROM transaction_events
-        WHERE DATE(timestamp) = ?
-        GROUP BY contract_address
+            COUNT(DISTINCT te.interacting_address) as callers,
+            ROUND(SUM(CASE WHEN te.is_reverted=1 THEN 1.0 ELSE 0 END)/COUNT(*)*100, 1) as revert_pct,
+            (SELECT c.confidence_tier FROM contracts c
+             WHERE c.contract_address = te.contract_address) as confidence_tier
+        FROM transaction_events te
+        WHERE DATE(te.timestamp) = ?
+        GROUP BY te.contract_address
         HAVING COUNT(*) >= 10
     """, (day,)).fetchall()
 
@@ -62,6 +84,15 @@ def compute_day(conn: sqlite3.Connection, day: str) -> Optional[dict]:
     total_cam_victims = sum(r["callers"] for r in camouflaged)
     total_overt_victims = sum(r["callers"] for r in overt)
 
+    # Adversary-scoped low-revert ratio: restrict to contracts Layer 3 has
+    # flagged as confirmed/suspected. This is the ratio that tests the
+    # Nash-equilibrium interpretation; the population-level ratio does not.
+    adversary_rows = [r for r in rows
+                      if r["confidence_tier"] in ("confirmed", "suspected")]
+    adv_total = len(adversary_rows)
+    adv_low_revert = sum(1 for r in adversary_rows if r["revert_pct"] < 10)
+    adv_low_revert_ratio = round(adv_low_revert / adv_total, 4) if adv_total else 0
+
     metrics = {
         "date": day,
         "chain": "ethereum",
@@ -75,16 +106,23 @@ def compute_day(conn: sqlite3.Connection, day: str) -> Optional[dict]:
         "avg_overt_callers": round(avg_overt_callers, 1),
         "total_camouflaged_victims": total_cam_victims,
         "total_overt_victims": total_overt_victims,
+        "adversary_total_contracts": adv_total,
+        "adversary_low_revert_count": adv_low_revert,
+        "adversary_low_revert_ratio": adv_low_revert_ratio,
     }
 
     conn.execute("""
         INSERT OR REPLACE INTO camouflage_metrics
             (date, chain, total_active_contracts, camouflaged_count, overt_count,
              moderate_count, camouflage_ratio, overt_ratio, avg_camouflaged_callers,
-             avg_overt_callers, total_camouflaged_victims, total_overt_victims)
+             avg_overt_callers, total_camouflaged_victims, total_overt_victims,
+             adversary_total_contracts, adversary_low_revert_count,
+             adversary_low_revert_ratio)
         VALUES (:date, :chain, :total_active_contracts, :camouflaged_count, :overt_count,
                 :moderate_count, :camouflage_ratio, :overt_ratio, :avg_camouflaged_callers,
-                :avg_overt_callers, :total_camouflaged_victims, :total_overt_victims)
+                :avg_overt_callers, :total_camouflaged_victims, :total_overt_victims,
+                :adversary_total_contracts, :adversary_low_revert_count,
+                :adversary_low_revert_ratio)
     """, metrics)
     conn.commit()
     return metrics

@@ -1517,7 +1517,8 @@ async def ecosystem_stats():
             AND (db.first_seen > da.last_seen OR da.first_seen > db.last_seen)
         """).fetchone()[0]
 
-        # Camouflage: compute live from transaction_events (contracts with 10+ tx)
+        # Camouflage: compute live from transaction_events (contracts with 10+ tx).
+        # Two ratios — population and adversary-scoped — see Correction #13.
         cam = conn.execute("""
             SELECT COUNT(*) as total,
                    SUM(CASE WHEN rr < 0.10 THEN 1 ELSE 0 END) as camo
@@ -1528,6 +1529,20 @@ async def ecosystem_stats():
             )
         """).fetchone()
         cam_ratio = round(cam[1] / cam[0], 3) if cam and cam[0] > 0 else None
+
+        adv_cam = conn.execute("""
+            SELECT COUNT(*) as total,
+                   SUM(CASE WHEN rr < 0.10 THEN 1 ELSE 0 END) as camo
+            FROM (
+                SELECT te.contract_address,
+                       CAST(SUM(CASE WHEN te.is_reverted=1 THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as rr
+                FROM transaction_events te
+                JOIN contracts c ON c.contract_address = te.contract_address
+                WHERE c.confidence_tier IN ('confirmed', 'suspected')
+                GROUP BY te.contract_address HAVING COUNT(*) >= 10
+            )
+        """).fetchone()
+        adv_cam_ratio = round(adv_cam[1] / adv_cam[0], 3) if adv_cam and adv_cam[0] > 0 else None
 
         return JSONResponse(_ok({
             "corpus": {
@@ -1540,7 +1555,9 @@ async def ecosystem_stats():
                 "confirmed_threats": confirmed,
                 "suspected_threats": suspected,
                 "camouflage_ratio": cam_ratio,
-                "camouflage_note": "Fraction of contracts (10+ interactions) with <10% revert rate",
+                "camouflage_note": "Fraction of ALL contracts (10+ interactions) with <10% revert rate — includes legitimate routers. See Correction #13.",
+                "adversary_low_revert_ratio": adv_cam_ratio,
+                "adversary_low_revert_note": "Same ratio restricted to suspected/confirmed contracts. Tests the Nash-equilibrium interpretation.",
                 "behavioral_confirmations_24h": traps_24h,
             },
             "organizations": {
@@ -1639,22 +1656,53 @@ async def methodology_confidence():
 
 @router.get("/methodology/camouflage")
 async def methodology_camouflage():
-    """Published camouflage ratio methodology. Priority 2b."""
+    """Published camouflage methodology. See Correction #13 (2026-04-20)."""
     return JSONResponse({"status": "ok", "data": {
-        "metric": "camouflage_ratio",
-        "definition": (
-            "Fraction of contracts with 10+ interactions that maintain "
-            "revert rates below 10%."
-        ),
+        "metrics": {
+            "camouflage_ratio": {
+                "definition": (
+                    "Fraction of ALL contracts with 10+ interactions in a day "
+                    "that maintain revert rates below 10%. This is a "
+                    "population-level ratio, not an adversary-specific one."
+                ),
+                "caveat": (
+                    "The name is retained for historical continuity but the "
+                    "metric overstates the adversarial claim. Legitimate DEX "
+                    "routers and bridges are also low-revert, so the ratio "
+                    "reflects contract-design distributions in the broader "
+                    "ecosystem, not just adversary strategy. See Correction #13."
+                ),
+            },
+            "adversary_low_revert_ratio": {
+                "definition": (
+                    "Fraction of contracts with confidence_tier in "
+                    "('confirmed', 'suspected') and 10+ interactions in a "
+                    "day that maintain revert rates below 10%. Introduced "
+                    "2026-04-20 (Correction #13) to test the "
+                    "Nash-equilibrium interpretation honestly."
+                ),
+                "use": (
+                    "If this ratio tracks camouflage_ratio closely, the "
+                    "adversary-specific claim collapses into the general "
+                    "distribution. If it diverges, the equilibrium "
+                    "interpretation is load-bearing."
+                ),
+            },
+        },
         "threshold_justification": (
             "10% was chosen because contracts below this threshold "
             "attract 4.5x more unique victims than overt traps (>50% "
             "revert rate). Empirical from two-week assessment: "
-            "camouflaged contracts averaged 66 victims vs 15 for overt. "
+            "low-revert contracts averaged 66 victims vs 15 for overt. "
             "The multiplier is stable across chains (Base 4.2x, "
             "Arbitrum 4.8x) and weeks (W1 4.3x, W2 4.7x)."
         ),
-        "current_value": "79.2% (production, stable across 23 days)",
+        "historical_anchor": (
+            "camouflage_ratio observed at 70-79% across 23+ days pre-"
+            "Correction-#13. Whether that stability reflects adversary "
+            "Nash equilibrium or ecosystem contract-design baseline is "
+            "only answerable via adversary_low_revert_ratio comparison."
+        ),
         "epistemic": (
             "MIXED — the revert rate computation is deductive (arithmetic "
             "on on-chain receipts). The 10% threshold is a policy choice "

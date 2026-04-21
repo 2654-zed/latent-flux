@@ -694,6 +694,21 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
     else:
         _log_migration("org_wallets_table", "skip")
 
+    # Migration: camouflage_metrics.adversary_low_revert_ratio for Correction #13.
+    # The existing `camouflage_ratio` measures low-revert fraction across ALL
+    # active contracts — but legitimate routers are also low-revert. The
+    # adversary-scoped ratio restricts the numerator+denominator to
+    # suspected/confirmed contracts to test the Nash-equilibrium claim honestly.
+    try:
+        conn.execute("SELECT adversary_low_revert_ratio FROM camouflage_metrics LIMIT 1")
+        _log_migration("adversary_low_revert_ratio", "skip")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE camouflage_metrics ADD COLUMN adversary_low_revert_ratio REAL")
+        conn.execute("ALTER TABLE camouflage_metrics ADD COLUMN adversary_total_contracts INTEGER")
+        conn.execute("ALTER TABLE camouflage_metrics ADD COLUMN adversary_low_revert_count INTEGER")
+        conn.commit()
+        _log_migration("adversary_low_revert_ratio", "applied")
+
     # Migration: org_candidates — novel-org clustering output. Populated
     # by surveillance.org_candidates which groups unclassified deployers by
     # shared signals (funding source, gas fingerprint, timing). Rows here
