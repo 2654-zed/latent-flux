@@ -504,6 +504,51 @@ Exception-as-rule audit grep'd for `ORG_WALLETS\s*=\s*\{` across `surveillance/`
 
 ---
 
+## Correction #12 — Observation Capability Primitive Was Not Computed
+
+**Date:** 2026-04-20
+**Motivating audit:** exception-as-rule review, P2.
+
+### The claim (as previously implied)
+CLAUDE.md's *Adversarial Topology Framework* section names five primitives for evaluating any contract: position, permissions, trust bindings, mutability, observation capability. Each is described as load-bearing, and the interpretive rule states that "a node with privileged position, broad permissions, high mutability, strong trust binding, and zero malicious behavior is at MAXIMUM stored potential — not minimum risk."
+
+### The truth (as measured)
+`risk_scoring.py` computed four components into `stored_potential`: `approval_scope + capability + deployer_risk + org_context`. Volatility applied as a multiplier; realized_value as a divisor. Observation capability was named in the framework but **nowhere in the scoring code** — a pure observer-class contract (an oracle with broad user-intent visibility; a router that sees aggregated signed intent) scored MINIMAL despite being at the framework's maximum-stored-potential corner.
+
+### How this was caught
+Exception-as-rule audit grep'd `risk_scoring.py` for each of the five primitive names. Four matched concrete scoring functions; observation capability matched nothing. The math `stored_potential = approval_score + capability_score + deployer_score + org_score` at line 856 (pre-P2) confirmed a four-component sum. The framework's rhetorical five-primitive claim did not match the code's four-primitive computation.
+
+### What changed
+1. `_compute_observation_capability(conn, address) -> (int, dict)` added at line ~695 of `risk_scoring.py`. Four signals:
+   - **A** (0–8) — `bytecode_pattern_notes` contains `CALLER` / `TIMESTAMP` / `TXORIGIN` / `ORIGIN` markers.
+   - **B** (0–8) — log-scaled distinct interacting-EOA count (<10=0, 10–100=2, 100–1k=4, 1k–10k=6, 10k+=8).
+   - **C** (0–8) — present in `infrastructure_registry` with classification/notes containing `router`, `aggregator`, `bundler`, `oracle`, `endpoint`, `transmitter`, `relay`, `relayer`.
+   - **Edge** (+1) — contract has any `approval_watchlist` Permit2 row.
+2. `stored_potential` ceiling raised from 100 to 125. Tier boundaries unchanged (CRITICAL ≥50, HIGH ≥20, MEDIUM ≥8, LOW ≥3). Observation-heavy contracts score higher; this is the correction, not a recalibration artifact.
+3. API `/api/v1/risk/{chain}/{addr}` response adds `observation_capability_score` at the top level and `observation_capability` under `components`. Additive — existing keys preserved.
+4. No new DB columns — `observation_capability` is computed live per request alongside the rest of the scoring model, consistent with Correction #6.
+
+### Effect on published numbers
+- Validation on Railway's top 10 contracts by distinct-EOA count (an in-corpus proxy for observation-heavy infrastructure) — all are confirmed/suspected traps that have interacted with 1,000+ unique users. Samples after P2:
+
+| contract | EOAs | obs score | stored | tier |
+|---|---|---|---|---|
+| `0xfc26…03ce` | 5,107 | 6 | 22 | HIGH |
+| `0x752c…c858` | 4,869 | 15 | 68 | CRITICAL |
+| `0x8321…2e17` | 3,444 | 6 | 36 | LOW |
+| `0x9818…6732` | 1,758 | 14 | 29 | CRITICAL |
+
+- External infrastructure (Chainlink ETH/USD, Uniswap V3 SwapRouter, LayerZero EndpointV2, etc.) was attempted but none are in Layer 3's `contracts` table — Layer 3 records new deployments observed since March 2026, not pre-existing infrastructure. The primitive is correctly defined for in-corpus contracts and cannot re-score off-corpus ones without an ingest-side change.
+- Zero `risk_score` values shipped publicly before this correction have been regenerated. Persistence was never computed (`risk_scores` is computed live per request; see Correction #6). The first request after deploy returns the new schema.
+
+### Open work
+- **Include observation_capability in batch_score pre-filter.** The lightweight pass at `risk_scoring.py:889` pre-ranks by bytecode-signal count only. High-EOA-but-no-bytecode-signals contracts could be under-ranked in top-N queries. Revisit if a consumer reports missing obvious observation-heavy cases.
+- **Extend infrastructure_registry beyond the 12 CCTP + retrospective Kelp entries.** Signal C currently fires on very few contracts. A seeding pass for Uniswap routers, Aave pools, LayerZero endpoints, 1inch aggregation, Chainlink aggregators, Gelato, Stargate would make Signal C meaningful for more scored contracts. Flagged as a P4-adjacent item.
+- **Signals D and E (deferred from P2 scope):** event-emission address-typed arg detection, and proxy-contract compounding with `proxy_upgrade_watcher`. Deferred pending either an event-log indexing pass or `proxy_upgrade_watcher` Railway deploy (CLAUDE.md priority #4).
+- **`/methodology/stored-potential` copy update.** The public methodology endpoint documents the scoring components. Needs a copy change to state the 5-component model and list the observation signals. Not in scope for this correction.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.
