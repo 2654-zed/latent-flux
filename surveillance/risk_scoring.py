@@ -3,7 +3,13 @@ Layer 3 — Stored Potential Risk Scoring Model
 
 Computes a composite risk score for flagged contracts based on:
   stored_potential = approval_scope + capability + deployer_risk + org_context
+                   + observation_capability
   risk_score = (stored_potential * volatility) / max(realized_value, 1)
+
+observation_capability was added 2026-04-20 (Correction #12). Prior to that,
+the framework named five primitives but the scoring code computed four;
+observer-class contracts (oracles, routers with broad visibility) scored
+MINIMAL despite being at maximum stored potential per the framework.
 
 High stored_potential + low realized_value + high volatility = HIGHEST RISK.
 Contracts that have accumulated permissions/capabilities but haven't extracted
@@ -691,6 +697,101 @@ def _compute_realized_value(conn: sqlite3.Connection, address: str) -> tuple[int
 
 
 # ------------------------------------------------------------------
+# Component 5: Observation Capability Score (0-25)
+# ------------------------------------------------------------------
+
+_OBS_BYTECODE_MARKERS = ("CALLER", "TIMESTAMP", "TXORIGIN", "TX.ORIGIN", "ORIGIN")
+_OBS_INFRA_ROLES = ("router", "aggregator", "bundler", "oracle", "endpoint",
+                    "messagetransmitter", "transmitter", "relay", "relayer")
+
+
+def _compute_observation_capability(conn: sqlite3.Connection, address: str) -> tuple[int, dict]:
+    """Score based on what user-activity context this contract can observe.
+
+    Exception-as-rule audit P2 finding: the framework names five primitives
+    (position, permissions, trust bindings, mutability, observation) but the
+    scoring model only computes four. A read-only oracle with broad visibility
+    into user intent should be at maximum stored potential per the framework's
+    definition; without this component it scored MINIMAL. See Correction #12.
+
+    Signals (signals D, E deferred from the original spec):
+      A — bytecode pattern notes contain CALLER/TIMESTAMP/TXORIGIN markers
+      B — log-scaled distinct EOA count (breadth of observation)
+      C — present in infrastructure_registry as router/aggregator/bundler/oracle
+      edge — +1 if the contract interacts with Permit2 (sees signed-intent flow)
+    """
+    components: dict[str, Any] = {}
+    addr = address.lower()
+    score = 0
+
+    row = conn.execute(
+        "SELECT bytecode_pattern_notes FROM contracts WHERE contract_address = ?",
+        (addr,),
+    ).fetchone()
+    if row is None:
+        return 0, {"reason": "contract not found"}
+
+    # Signal A — bytecode observation markers (0-8)
+    notes_upper = (row["bytecode_pattern_notes"] or "").upper()
+    matched = [m for m in _OBS_BYTECODE_MARKERS if m in notes_upper]
+    if matched:
+        score += 8
+        components["bytecode_observation_markers"] = matched
+
+    # Signal B — distinct EOA count, log-scaled (0-8)
+    eoa_row = conn.execute(
+        "SELECT COUNT(DISTINCT interacting_address) AS n "
+        "FROM transaction_events WHERE contract_address = ?",
+        (addr,),
+    ).fetchone()
+    distinct_eoas = int(eoa_row["n"] or 0) if eoa_row else 0
+    components["distinct_eoas"] = distinct_eoas
+    if distinct_eoas >= 10000:
+        score += 8
+        components["eoa_tier"] = "10k+"
+    elif distinct_eoas >= 1000:
+        score += 6
+        components["eoa_tier"] = "1k-10k"
+    elif distinct_eoas >= 100:
+        score += 4
+        components["eoa_tier"] = "100-1k"
+    elif distinct_eoas >= 10:
+        score += 2
+        components["eoa_tier"] = "10-100"
+    else:
+        components["eoa_tier"] = "<10"
+
+    # Signal C — infrastructure registry as observation-capable role (0-8)
+    if _table_exists(conn, "infrastructure_registry"):
+        infra = conn.execute(
+            "SELECT classification, notes FROM infrastructure_registry "
+            "WHERE address = ?",
+            (addr,),
+        ).fetchone()
+        if infra:
+            text = " ".join(
+                str(v or "").lower() for v in (infra["classification"], infra["notes"])
+            )
+            matched_role = [r for r in _OBS_INFRA_ROLES if r in text]
+            if matched_role:
+                score += 8
+                components["infrastructure_role_match"] = matched_role
+
+    # Edge — Permit2 interaction bump (+1)
+    if _table_exists(conn, "approval_watchlist"):
+        permit2 = conn.execute(
+            "SELECT 1 FROM approval_watchlist "
+            "WHERE contract_address = ? LIMIT 1",
+            (addr,),
+        ).fetchone()
+        if permit2:
+            score += 1
+            components["permit2_seen"] = True
+
+    return min(score, 25), components
+
+
+# ------------------------------------------------------------------
 # Component 6: Volatility Multiplier
 # ------------------------------------------------------------------
 
@@ -850,10 +951,12 @@ def score_contract(conn: sqlite3.Connection, contract_address: str) -> dict[str,
     capability_score, capability_comp = _compute_capability(conn, addr)
     deployer_score, deployer_comp = _compute_deployer_risk(conn, addr)
     org_score, org_comp = _compute_org_context(conn, addr)
+    observation_score, observation_comp = _compute_observation_capability(conn, addr)
     realized, realized_comp = _compute_realized_value(conn, addr)
     volatility, volatility_comp = _compute_volatility(conn, addr)
 
-    stored_potential = approval_score + capability_score + deployer_score + org_score
+    stored_potential = (approval_score + capability_score + deployer_score
+                        + org_score + observation_score)
     risk_score = (stored_potential * volatility) / max(realized, 1)
 
     return {
@@ -863,6 +966,7 @@ def score_contract(conn: sqlite3.Connection, contract_address: str) -> dict[str,
         "capability_score": capability_score,
         "deployer_risk_score": deployer_score,
         "org_context_score": org_score,
+        "observation_capability_score": observation_score,
         "realized_value": realized,
         "volatility": volatility,
         "risk_score": round(risk_score, 2),
@@ -872,6 +976,7 @@ def score_contract(conn: sqlite3.Connection, contract_address: str) -> dict[str,
             "capability": capability_comp,
             "deployer_risk": deployer_comp,
             "org_context": org_comp,
+            "observation_capability": observation_comp,
             "realized_value": realized_comp,
             "volatility": volatility_comp,
         },
