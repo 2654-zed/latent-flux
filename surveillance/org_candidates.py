@@ -66,95 +66,106 @@ def _parse_funding_list(raw: str) -> list[str]:
     return [str(x).lower() for x in v]
 
 
+def _parse_funder_from_trail(raw: str) -> "str | None":
+    """funding_trail column is a JSON object with a 'funder' key."""
+    if not raw:
+        return None
+    try:
+        d = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    f = d.get("funder") if isinstance(d, dict) else None
+    return f.lower() if isinstance(f, str) else None
+
+
 def compute_clusters(conn: sqlite3.Connection, *,
                      min_size: int = DEFAULT_MIN_SIZE,
                      gas_tolerance_gwei: float = DEFAULT_GAS_TOLERANCE_GWEI,
                      window_hours: int = DEFAULT_WINDOW_HOURS,
                      ) -> list[dict]:
-    """Group deployers by shared funding source + tight gas band. Return candidate clusters."""
+    """Group deployers by shared funder. Return candidate clusters.
+
+    Signals used (live data shape as of 2026-04-20):
+      - funding_trail.funder — set by auto_funder_tracer, 1-hop upstream address
+      - first_seen — deployer creation timestamp, for the time window gate
+      - typical_gas_price_gwei — optional refinement when populated
+
+    The gas fingerprint is applied as a soft narrowing only: if a cluster has
+    >=2 members with gas data and they fall within the tolerance, report the
+    mean+span. Otherwise the cluster still promotes on funder + time alone.
+    The hard filters are: (a) shared funder (b) >=min_size (c) all members
+    within window_hours of the cluster median timestamp.
+    """
     known = _known_org_addresses(conn)
 
-    # Pull every deployer with a funding source AND a gas fingerprint
     rows = conn.execute(
         """
-        SELECT deployer_address, chain, funding_sources, typical_gas_price_gwei,
+        SELECT deployer_address, chain, funding_trail, typical_gas_price_gwei,
                first_seen, last_seen, entity_type
         FROM deployers
-        WHERE funding_sources IS NOT NULL
-          AND funding_sources != ''
-          AND funding_sources != '[]'
-          AND typical_gas_price_gwei IS NOT NULL
+        WHERE funding_trail IS NOT NULL
+          AND funding_trail != ''
         """
     ).fetchall()
 
-    # Group by each unique funding-source address encountered
     by_funder: dict[str, list[dict]] = {}
     for r in rows:
         addr = r[0].lower()
         if addr in known:
             continue  # skip already-classified wallets
-        funders = _parse_funding_list(r[2])
-        for f in funders:
-            f_low = f.lower()
-            if f_low in known:
-                continue  # don't seed clusters from known org treasury
-            by_funder.setdefault(f_low, []).append({
-                "deployer": addr,
-                "chain": r[1],
-                "funding_source": f_low,
-                "gas": float(r[3]),
-                "first_seen": r[4],
-                "last_seen": r[5],
-                "entity_type": r[6],
-            })
+        funder = _parse_funder_from_trail(r[2])
+        if not funder or funder in known:
+            continue  # no funder data, or funder is already a known org wallet
+        by_funder.setdefault(funder, []).append({
+            "deployer": addr,
+            "chain": r[1],
+            "funding_source": funder,
+            "gas": float(r[3]) if r[3] is not None else None,
+            "first_seen": r[4],
+            "last_seen": r[5],
+            "entity_type": r[6],
+        })
 
-    # For each funder group, find sub-clusters within the gas band + time window
     clusters: list[dict] = []
     window_sec = window_hours * 3600
     for funder, members in by_funder.items():
         if len(members) < min_size:
             continue
-        # sort by gas so banding is linear-time
-        members.sort(key=lambda m: m["gas"])
-        i = 0
-        while i < len(members):
-            band_start_gas = members[i]["gas"]
-            j = i
-            while j < len(members) and members[j]["gas"] - band_start_gas <= gas_tolerance_gwei:
-                j += 1
-            band = members[i:j]
-            if len(band) >= min_size:
-                # filter band by time window — only keep members whose first_seen
-                # falls within +/- window from the median
-                ts = []
-                for m in band:
-                    try:
-                        ts.append(datetime.fromisoformat(m["first_seen"].replace("Z", "+00:00")))
-                    except (ValueError, AttributeError):
-                        pass
-                if len(ts) >= min_size:
-                    ts.sort()
-                    median = ts[len(ts) // 2]
-                    in_window = [
-                        m for m, t in zip(band, ts)
-                        if abs((t - median).total_seconds()) <= window_sec
-                    ]
-                    if len(in_window) >= min_size:
-                        gases = [m["gas"] for m in in_window]
-                        chains = sorted({m["chain"] for m in in_window})
-                        clusters.append({
-                            "funding_source": funder,
-                            "members": in_window,
-                            "size": len(in_window),
-                            "gas_mean": sum(gases) / len(gases),
-                            "gas_span": max(gases) - min(gases),
-                            "chain": chains[0] if len(chains) == 1 else ",".join(chains),
-                            "first_seen": min(m["first_seen"] for m in in_window),
-                            "last_seen": max(m["last_seen"] for m in in_window),
-                        })
-            i = j if j > i else i + 1
+        # Time-window gate: keep members within +/- window_hours of the median first_seen
+        ts_by_member = []
+        for m in members:
+            try:
+                ts_by_member.append((m, datetime.fromisoformat(
+                    (m["first_seen"] or "").replace("Z", "+00:00")
+                )))
+            except (ValueError, AttributeError):
+                pass
+        if len(ts_by_member) < min_size:
+            continue
+        ts_sorted = sorted(ts_by_member, key=lambda p: p[1])
+        median = ts_sorted[len(ts_sorted) // 2][1]
+        in_window = [m for m, t in ts_by_member
+                     if abs((t - median).total_seconds()) <= window_sec]
+        if len(in_window) < min_size:
+            continue
 
-    # Dedupe — if the same set of deployers surfaces under two different funders
+        chains = sorted({m["chain"] for m in in_window})
+        gases = [m["gas"] for m in in_window if m["gas"] is not None]
+        gas_mean = sum(gases) / len(gases) if gases else None
+        gas_span = (max(gases) - min(gases)) if len(gases) >= 2 else None
+
+        clusters.append({
+            "funding_source": funder,
+            "members": in_window,
+            "size": len(in_window),
+            "gas_mean": gas_mean,
+            "gas_span": gas_span,
+            "chain": chains[0] if len(chains) == 1 else ",".join(chains),
+            "first_seen": min(m["first_seen"] for m in in_window),
+            "last_seen": max(m["last_seen"] for m in in_window),
+        })
+
+    # Dedupe — same member set under multiple funders is unexpected but guard
     seen: set = set()
     out = []
     for c in clusters:
@@ -163,7 +174,7 @@ def compute_clusters(conn: sqlite3.Connection, *,
             continue
         seen.add(key)
         out.append(c)
-    out.sort(key=lambda c: (-c["size"], c["gas_mean"]))
+    out.sort(key=lambda c: -c["size"])
     return out
 
 
@@ -230,8 +241,12 @@ def main():
           f"(min_size={args.min_size}, gas_tol={args.gas_tolerance_gwei}, "
           f"window={args.window_hours}h)")
     for c in clusters[:10]:
+        if c["gas_mean"] is not None:
+            gas_str = f"gas={c['gas_mean']:.3f}+/-{(c['gas_span'] or 0):.3f}"
+        else:
+            gas_str = "gas=n/a"
         print(f"  size={c['size']:>3}  funder={c['funding_source']}  "
-              f"gas={c['gas_mean']:.3f}+/-{c['gas_span']:.3f}  chain={c['chain']}")
+              f"{gas_str}  chain={c['chain']}")
     if args.dry_run:
         conn.close()
         return
