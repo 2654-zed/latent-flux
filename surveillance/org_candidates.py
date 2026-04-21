@@ -43,6 +43,7 @@ from pathlib import Path
 DB_PATH = Path(__file__).resolve().parent / "data" / "surveillance.db"
 
 DEFAULT_MIN_SIZE = 3
+DEFAULT_MAX_SIZE = 50   # clusters larger than this are CEX hot wallets / faucets
 DEFAULT_GAS_TOLERANCE_GWEI = 0.05
 DEFAULT_WINDOW_HOURS = 72
 
@@ -80,6 +81,7 @@ def _parse_funder_from_trail(raw: str) -> "str | None":
 
 def compute_clusters(conn: sqlite3.Connection, *,
                      min_size: int = DEFAULT_MIN_SIZE,
+                     max_size: int = DEFAULT_MAX_SIZE,
                      gas_tolerance_gwei: float = DEFAULT_GAS_TOLERANCE_GWEI,
                      window_hours: int = DEFAULT_WINDOW_HOURS,
                      ) -> list[dict]:
@@ -116,7 +118,12 @@ def compute_clusters(conn: sqlite3.Connection, *,
         funder = _parse_funder_from_trail(r[2])
         if not funder or funder in known:
             continue  # no funder data, or funder is already a known org wallet
-        by_funder.setdefault(funder, []).append({
+        # Quick guard: once a funder has too many deployees, it's a CEX or
+        # faucet, not an org candidate — stop appending to save work.
+        bucket = by_funder.setdefault(funder, [])
+        if len(bucket) >= max_size * 2:  # allow 2x headroom for time-window filtering
+            continue
+        bucket.append({
             "deployer": addr,
             "chain": r[1],
             "funding_source": funder,
@@ -131,6 +138,8 @@ def compute_clusters(conn: sqlite3.Connection, *,
     for funder, members in by_funder.items():
         if len(members) < min_size:
             continue
+        if len(members) > max_size:
+            continue  # CEX / faucet / public funder — not a candidate
         # Time-window gate: keep members within +/- window_hours of the median first_seen
         ts_by_member = []
         for m in members:
@@ -224,6 +233,8 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--min-size", type=int, default=DEFAULT_MIN_SIZE)
+    ap.add_argument("--max-size", type=int, default=DEFAULT_MAX_SIZE,
+                    help="Skip clusters larger than this (likely CEX / faucet).")
     ap.add_argument("--gas-tolerance-gwei", type=float, default=DEFAULT_GAS_TOLERANCE_GWEI)
     ap.add_argument("--window-hours", type=int, default=DEFAULT_WINDOW_HOURS)
     ap.add_argument("--db", type=str, default=str(DB_PATH))
@@ -233,13 +244,13 @@ def main():
 
     conn = sqlite3.connect(args.db, timeout=30)
     clusters = compute_clusters(
-        conn, min_size=args.min_size,
+        conn, min_size=args.min_size, max_size=args.max_size,
         gas_tolerance_gwei=args.gas_tolerance_gwei,
         window_hours=args.window_hours,
     )
     print(f"[org_candidates] {len(clusters)} clusters found "
-          f"(min_size={args.min_size}, gas_tol={args.gas_tolerance_gwei}, "
-          f"window={args.window_hours}h)")
+          f"(min_size={args.min_size}, max_size={args.max_size}, "
+          f"gas_tol={args.gas_tolerance_gwei}, window={args.window_hours}h)")
     for c in clusters[:10]:
         if c["gas_mean"] is not None:
             gas_str = f"gas={c['gas_mean']:.3f}+/-{(c['gas_span'] or 0):.3f}"
