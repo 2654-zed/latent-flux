@@ -1528,35 +1528,53 @@ from surveillance.process_entries import routing_entry as _routing_entry
 # would start silently erroring. See Correction #10.
 print("Running parent-process init_db + write smoke test...", flush=True)
 from surveillance import db as _surv_db
+_PREREQ_OK = False
 try:
     import pathlib as _pl
     _prereq_conn = _surv_db.init_db(_pl.Path(DB_PATH))
     _surv_db.verify_write_path(_prereq_conn)
     _prereq_conn.close()
+    _PREREQ_OK = True
     print("Prereq OK — spawning producer processes.", flush=True)
+except sqlite3.OperationalError as _db_err:
+    # DB is unreadable / corrupt at the file level. The correct recovery
+    # path is POST /admin/upload-db, which requires the HTTP server to
+    # stay reachable. Log loudly, skip producer spawn, keep the process
+    # alive in degraded mode so /admin/upload-db can accept a clean DB.
+    print(f"DEGRADED: DB unusable ({_db_err!r}). "
+          f"Producers NOT spawned. /admin/upload-db ready to accept replacement.",
+          flush=True)
 except Exception as _prereq_err:
     print(f"FATAL: init_db/write_smoke failed: {_prereq_err}", flush=True)
     raise
 
 _write_queue = MPQueue()
 
-# Start writer process (must be first — creates/owns the DB connection)
-_writer_proc = Process(
-    target=_db_writer_run,
-    args=(DB_PATH, _write_queue),
-    daemon=True,
-    name="db_writer",
-)
-_writer_proc.start()
-print(f"DB writer process started (pid={_writer_proc.pid})", flush=True)
+if _PREREQ_OK:
+    # Start writer process (must be first — creates/owns the DB connection)
+    _writer_proc = Process(
+        target=_db_writer_run,
+        args=(DB_PATH, _write_queue),
+        daemon=True,
+        name="db_writer",
+    )
+    _writer_proc.start()
+    print(f"DB writer process started (pid={_writer_proc.pid})", flush=True)
+else:
+    _writer_proc = None
+    print("DB writer NOT started (DB unusable).", flush=True)
 
 
 # Start surveillance components
 processes = []
+if not _PREREQ_OK:
+    print("Skipping producer spawn — DB unusable. HTTP server remains up for "
+          "admin recovery (/admin/upload-db). Run a healthy deploy once the "
+          "DB is restored.", flush=True)
 
 # Arbitrum deployment monitor
 arb_wss = os.environ.get("ARB_WSS_URL", "")
-if arb_wss:
+if arb_wss and _PREREQ_OK:
     p = Process(target=_monitor_entry, args=("arbitrum", arb_wss, _write_queue),
                 daemon=True, name="monitor_arbitrum")
     p.start()
@@ -1565,7 +1583,7 @@ if arb_wss:
 
 # Base deployment monitor
 base_wss = os.environ.get("BASE_WSS_URL", "")
-if base_wss:
+if base_wss and _PREREQ_OK:
     p = Process(target=_monitor_entry, args=("base", base_wss, _write_queue),
                 daemon=True, name="monitor_base")
     p.start()
@@ -1574,7 +1592,7 @@ if base_wss:
 
 # Optimism deployment monitor
 op_wss = os.environ.get("OP_WSS_URL", "")
-if op_wss:
+if op_wss and _PREREQ_OK:
     p = Process(target=_monitor_entry, args=("optimism", op_wss, _write_queue),
                 daemon=True, name="monitor_optimism")
     p.start()
@@ -1583,13 +1601,13 @@ if op_wss:
 
 # Routing monitor
 oneinch_key = os.environ.get("ONEINCH_API_KEY", "")
-if oneinch_key:
+if oneinch_key and _PREREQ_OK:
     p = Process(target=_routing_entry, args=(oneinch_key, _write_queue),
                 daemon=True, name="routing_monitor")
     p.start()
     processes.append(("routing", p))
     print(f"Routing monitor started (pid={p.pid})", flush=True)
-else:
+elif _PREREQ_OK:
     # Routing monitor without API key — start in standalone mode
     routing = subprocess.Popen(
         [sys.executable, "-m", "surveillance.routing_monitor"],
