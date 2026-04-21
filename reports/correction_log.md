@@ -549,6 +549,56 @@ Exception-as-rule audit grep'd `risk_scoring.py` for each of the five primitive 
 
 ---
 
+## Correction #13 — "Camouflage Ratio" Was Measuring Contract-Design, Not Adversary Strategy
+
+**Date:** 2026-04-20
+**Motivating audit:** exception-as-rule review, P3.
+
+### The claim (as previously implied)
+The `camouflage_ratio` metric — fraction of active contracts with <10% revert rate — was published at 70-79% and described as reflecting adversary camouflage strategy. The interpretive shorthand was "Nash equilibrium": a stable fraction of adversarial contracts hiding as low-revert because that's where victim traffic lives. `/methodology/camouflage` published the threshold justification (4.5x more victims for <10% revert than >50% revert) and presented the headline figure as a measurement of adversary behavior.
+
+### The truth (as measured)
+The metric was a **population-level arithmetic** — numerator and denominator both included every active contract with 10+ interactions, legitimate or adversarial. The definition in the module docstring correctly said "contracts with low revert rates" but the name, methodology endpoint, and downstream reports framed it as an adversary-specific signal.
+
+When the metric is restricted to contracts Layer 3 has actually flagged as adversarial, the picture inverts:
+
+| cohort | total | low-revert (<10%) | ratio |
+|---|---|---|---|
+| ALL active contracts (≥10 tx lifetime) | 912 | 579 | **63.5%** |
+| suspected + confirmed | 896 | 566 | **63.2%** |
+| confirmed only | 312 | 78 | **25.0%** |
+
+Two findings:
+
+1. **Population and "adversary" (suspected+confirmed) ratios are 0.3pp apart.** The suspected+confirmed cohort almost entirely overlaps the ≥10-tx population (896 of 912, or 98.2%). Layer 3's high-activity corpus IS dominated by flagged contracts, so the two ratios are structurally identical — the "adversary" measurement is functionally measuring the population.
+
+2. **Confirmed-only ratio is 25.0% — 38.5pp LOWER than the population.** Contracts with the strongest adversarial evidence revert *more*, not less. This is the inverse of the Nash-equilibrium interpretation. It is also the structurally expected finding: a confirmed trap is a contract that reverts on the adversary bot's extraction attempt, so high-revert is a *feature* of the adversary design, not a liability to camouflage against.
+
+The headline "70-79% stable across 23 days" figure cited in `/methodology/camouflage` does not reproduce against today's corpus (63.5%). Whether that's drift, corpus composition change, or the prior figure being wrong at the time is not determinable from the code; all three hypotheses are consistent with a population-level metric that was never pinned to adversary-specific data.
+
+### How this was caught
+Exception-as-rule audit traced the SQL in `camouflage_tracker.py:compute_day`. The `rows = conn.execute(...)` query selected every contract with 10+ tx on a day — no confidence_tier filter. The numerator (`camouflaged`) was filtered only by revert rate. With legitimate DEX routers also low-revert, the ratio measured low-revert contract design across the whole ecosystem, not adversary disguise. The interpretation in the methodology endpoint read the output as if the denominator were adversary-scoped.
+
+### What changed
+1. Schema: added three columns to `camouflage_metrics` — `adversary_low_revert_ratio`, `adversary_total_contracts`, `adversary_low_revert_count`. Kept `camouflage_ratio` column for historical continuity.
+2. `surveillance/camouflage_tracker.py`: compute_day now joins `contracts` to compute both metrics per day. Module docstring rewritten to separate the population metric (retained, renamed-in-spirit to "low-revert ratio") from the adversary-scoped one.
+3. `web/api_v1.py` `/methodology/camouflage`: replaced single-metric response with a dual-metric response explicitly flagging that `camouflage_ratio` overstates the adversarial claim and pointing to `adversary_low_revert_ratio` as the honest test.
+4. `web/api_v1.py` `/stats`: `detection` block now includes both ratios live.
+5. `scripts/camouflage_comparison.py`: standalone diagnostic for one-shot comparisons.
+
+### Effect on published numbers
+- **"70-79% Nash equilibrium" figure** is superseded. The live general-population ratio is 63.5% today. The confirmed-adversary ratio is 25.0%. Any external material citing 70-79% as an adversary-specific statistic needs an update.
+- **Interpretation reversal:** the framework's prior framing — that adversaries concentrate in low-revert as camouflage — is not supported by the data. Confirmed adversaries are disproportionately *high*-revert (75% of them). This makes sense: most Layer 3-confirmed traps are reversion-traps that fail bot extractions loudly. The camouflage-as-disguise intuition applied to a different adversary class (silent-settlement contracts) than the one Layer 3 predominantly detects.
+- **`/methodology/camouflage`** response has changed shape. Consumers parsing the old `metric` + `current_value` + `definition` fields see a new `metrics` object and `historical_anchor` field instead. Additive change with backward-incompatible key removal — documented.
+
+### Open work
+- **Daily recompute.** The `adversary_low_revert_ratio` will be populated from the next scheduler fire (00:20 UTC); existing historical rows in `camouflage_metrics` have NULL for the new columns until a backfill runs. A `camouflage_tracker --compute-all` backfill would fill them.
+- **Where the 79.2% came from.** The original figure was calibrated during the two-week assessment. Whether the methodology shift (inclusion/exclusion of a narrower cohort) accounts for the drift, or whether early-period corpora had different composition, is a followup question for whoever owns the historical narrative.
+- **Does the 25% confirmed figure hold across chains?** The comparison above is corpus-wide. Per-chain breakdown might surface that one chain's confirmed traps have a different revert profile. Not investigated in this correction.
+- **Revisit `camouflage` language across L3_CONTEXT_* docs and external materials.** Inside the code it is now clear; outside the code the "camouflage" narrative survives in several places. This correction is the canonical reference for when to update them.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.
