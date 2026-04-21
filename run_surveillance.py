@@ -1789,8 +1789,8 @@ while True:
                 print(f"Process {name} restarted (pid={pid})", flush=True)
             else:
                 print(f"Cannot restart {name}", flush=True)
-    # Also check writer
-    if not _writer_proc.is_alive():
+    # Also check writer (if prereq allowed it to start)
+    if _writer_proc is not None and not _writer_proc.is_alive():
         print("DB writer died — restarting...", flush=True)
         _writer_proc = Process(target=_db_writer_run, args=(DB_PATH, _write_queue),
                                daemon=True, name="db_writer")
