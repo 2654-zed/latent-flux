@@ -560,6 +560,17 @@ class StatsHandler(BaseHTTPRequestHandler):
                 "permit_events", "proxy_implementations", "api_keys",
                 "api_watches", "approval_values", "contract_balances",
                 "external_benchmarks",
+                # Consumable-surface tables exposed for the Phase 1 trading research
+                # experiment (see Desktop/Trading/LAYER3_TRADING_EXPERIMENT.md, Addendum A #6).
+                # All seven are already documented as part of the consumable surface in
+                # docs/layer3_consumable_intelligence.md §1.6-§1.10.
+                "org_wallets",
+                "org_candidates",
+                "infrastructure_registry",
+                "bytecode_families",
+                "bytecode_family_members",
+                "trust_amplification",
+                "extraction_events",
             ]
             if table not in valid_tables:
                 self._json(400, {"error": f"table required, valid: {valid_tables}"})
