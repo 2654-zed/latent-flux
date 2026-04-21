@@ -641,6 +641,39 @@ Two operational notes from the smoke test:
 
 ---
 
+## Correction #15 — Extraction-Event Taxonomy Had No Classifier
+
+**Date:** 2026-04-20
+**Motivating audit:** exception-as-rule review, P5.
+
+### The claim (as previously implied)
+The `extraction_events.event_type` column was presented as a taxonomy — `full_pipeline_cycle`, `infrastructure_parasite`, `oracle_manipulation_lending_exploit`, etc. — that captured the mode of each documented theft event. The categories looked principled.
+
+### The truth (as measured)
+`event_type` was a free-text `TEXT` column with no CHECK constraint, no suggestion, and no external check on the hand-assigned label. Every one of EXTRACTION_001 through 008 was labeled by the investigator at INSERT time with nothing forcing the label to match a pre-enumerated vocabulary. A novel extraction event could be quietly shoehorned into an existing bucket, and nobody — including the person doing the labeling — would notice unless they happened to compare two events' code paths and find the labels didn't fit.
+
+### How this was caught
+Exception-as-rule audit checked for a classifier. There was none. The DDL confirmed free-text; the distinct `event_type` values across 5 local rows showed hand-variation already (`oracle_manipulation_lending_exploit` used for two different protocols, ok; but nothing structural enforced consistency).
+
+### What changed
+1. `surveillance/extraction_classifier.py`: rule-based classifier with a closed 7-value vocabulary. `suggest_type(summary, raw_transactions)` returns `(label, confidence, matched_patterns)`. Adding a new category requires editing `_RULES` — the change leaves git history and is reviewable.
+2. `surveillance/db.py`: migration for `extraction_events.event_type_suggestion` and `event_type_suggestion_confidence` shadow columns. The classifier writes the suggestion alongside the documented type; divergence is the actionable signal.
+3. CLI `--apply` backfills suggestions for existing rows.
+4. Classifier does *not* gate INSERTs. Existing INSERTs continue to work with hand-assigned `event_type`. The shadow column surfaces drift without requiring a workflow change.
+
+### Effect on published numbers
+- All 8 extraction events agree with the classifier after tuning (initial pass had 7/8 agreement with EXTRACTION_006 / Aethir flagged as ambiguous between `oft_adapter_admin_compromise` and `cross_chain_dvn_verification_failure`). The disagreement was informative: Aethir IS a LayerZero-OFT-adapter attack, and the original DVN-failure rule triggered on any LayerZero mention. Tightening the DVN rule to require verification-failure cooccurrence resolved it.
+- **The classifier's first-pass 7/8 was a successful detection of genuine ambiguity in the taxonomy**, not a failure of the classifier. Aethir and Kelp are both LayerZero-adjacent; their root causes differ (admin compromise vs DVN misconfiguration). The classifier caught the ambiguity that a human might have let slide.
+- No published numbers change. The `event_type` column is unchanged; the suggestion is additive.
+
+### Open work
+- **Extend vocabulary as new event-classes arrive.** Current 7 categories cover everything seen through EXTRACTION_008. A novel class (supply-chain compromise, reentrancy-via-hook, governance-vote-hijack, etc.) would initially classify as `unclassified` at low confidence; that's the signal to review and extend.
+- **Confidence threshold for auto-promotion.** Currently all classifications are shadow-only. A future workflow could auto-accept suggestions with confidence ≥ 0.8 and require review for lower. Not shipped.
+- **Re-run on any new extraction event at INSERT time.** Right now `--apply` is a manual CLI. Integrating the suggestion into the Bundle-INSERT scripts (`bundle_d_aethir_insert.py` pattern) would catch drift at write time, which is the best moment.
+- **Cross-chain attack class confusion is a real ontology problem.** LayerZero, Hyperbridge, Wormhole, Chainlink CCIP etc. all have similar surface — the failure modes (DVN, MMR, guardian signature, off-chain validator) are architecturally distinct but appear in summaries together. Worth considering a multi-label scheme where an event can carry multiple tags (e.g., `cross_chain + dvn_misconfig + oft_adapter`) rather than forcing a single bucket.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.
