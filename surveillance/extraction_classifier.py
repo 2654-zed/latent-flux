@@ -56,9 +56,9 @@ _RULES: list[tuple[str, list[str]]] = [
     ]),
     ("oft_adapter_admin_compromise", [
         r"\boft\s*adapter\b",
-        r"\badmin\b.*\b(compromis|privileg|takeover)\b",
-        r"\b(private key|eoa).*\b(compromis|leak|stolen)\b",
-        r"\b(owner|deployer).*\b(compromis|takeover)\b",
+        r"\b(admin|owner|deployer)\b.*\b(compromis|privileg|takeover|stolen|leak)\b",
+        r"\b(private key|eoa)\b.*\b(compromis|leak|stolen)\b",
+        r"\bgained\s+admin\b|\bmint\s+unlimited\b|\badmin\s+privileg\b",
     ]),
     ("cross_chain_proof_verification_bypass", [
         r"\bmerkle\s*mountain\s*range\b|\bmmr\b",
@@ -67,11 +67,13 @@ _RULES: list[tuple[str, list[str]]] = [
         r"\bbridge\b.*\b(proof|verification)\b.*\b(bug|bypass)\b",
     ]),
     ("cross_chain_dvn_verification_failure", [
-        r"\bdvn\b",
-        r"\blayerzero\b",
-        r"\bendpoint\s*v?\d*\b",
-        r"\b(forged|spoofed).*\b(cross.?chain|message|packet)\b",
+        # Require DVN or verification-failure context specifically, so a
+        # generic LayerZero mention (e.g., any OFT adapter) doesn't match.
+        r"\bdvn\b.*\b(misconfig|verif|fail|1-of-1|threshold)\b",
+        r"\b(forged|spoofed|fake)\b.*\b(cross.?chain|message|packet|lzreceive|_lzreceive)\b",
         r"\bsrceid\b|\bdsteid\b",
+        r"\blayerzero\b.*\b(verification|dvn|forged|spoofed)\b",
+        r"\b1-of-1\s*dvn\b|\bthreshold\s*dvn\b",
     ]),
 ]
 
