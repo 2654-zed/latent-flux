@@ -599,6 +599,48 @@ Exception-as-rule audit traced the SQL in `camouflage_tracker.py:compute_day`. T
 
 ---
 
+## Correction #14 — Silent FP Silencing Through the Admin Endpoint
+
+**Date:** 2026-04-20
+**Motivating audit:** exception-as-rule review, P4.
+
+### The claim (as previously implied)
+The `/admin/mark-false-positive` endpoint took a list of addresses and set `alerts.false_positive = 1` for every alert on those addresses. The expectation was that an operator used this only with justification, and that the justification surfaced somewhere — either in the `false_positives` audit table or in a correction log entry.
+
+### The truth (as measured)
+The endpoint accepted only `{"addresses": [...]}`. It wrote nothing to the `false_positives` audit table and required no reason. Local DB had 3,577 alerts flagged this way across 5 addresses (mostly Arbitrum WETH9 receiving transfers from org wallet `fdaf1f…`), with **zero matching audit rows**. These silenced alerts are read by `org_cycles.py:177` and `risk_scoring.py:522` to exclude them from organizational reasoning and risk scoring — so silent FP marking silently dropped evidence from those analyses.
+
+Railway had zero alerts with `false_positive = 1` — the silencing was local-DB only. The structural vulnerability in the endpoint was identical; nothing prevented the same thing on production if anyone had used the endpoint there.
+
+### How this was caught
+Exception-as-rule audit counted `alerts WHERE false_positive = 1` (local 3,577) and cross-joined against `false_positives` (12 rows, zero matching the flagged alert addresses). Traced the endpoint at `run_surveillance.py:960` and confirmed the write path had no reason field and no audit-row insert.
+
+### What changed
+1. **Endpoint is now hardened.** Accepts `addresses`, `reason` (required, ≥10 chars), and optional `detector_blamed` (default `"manual_review"`). Rejects missing/short reason with HTTP 400.
+2. **Atomic audit write.** For each address with pending alerts, the endpoint writes a `false_positives` row (`fp_method='admin_bulk_mark'`, capturing pre-flag alert count and distinct alert types in `original_patterns`) and commits per-address so contention with the long-lived `db_writer` resolves inside SQLite's busy-timeout window rather than blocking on an outer `BEGIN IMMEDIATE`.
+3. **Skips no-op addresses.** If an address has zero un-flagged alerts, no audit row is written.
+4. **Local backfill.** Ran a one-shot INSERT against the local DB to create 5 `false_positives` audit rows covering the historically silenced addresses, reason tagged `canonical_infrastructure_misfire` (org-wallet transfers that touched WETH9 / Uniswap V3 Router etc.). Railway had nothing to backfill.
+5. **Smoke-tested on Railway** after deploy:
+   - POST with no reason → 400.
+   - POST with reason=`"too short"` → 400.
+   - POST with valid reason against a dummy address with no alerts → 200 `{marked:0, audit_rows_written:0}`.
+
+Two operational notes from the smoke test:
+   - **Windows curl UTF-8 gotcha.** The first test body included an em-dash that got encoded as CP1252 `\x97` by the calling shell; the Python HTTP server's `.decode("utf-8")` raised `UnicodeDecodeError`. Call sites should send ASCII or force UTF-8.
+   - **Lock contention fix.** Initial patch used `BEGIN IMMEDIATE` across the whole address loop; this lost every lock contest against `db_writer` and returned 502. Final patch uses a read-only connection for the pre-flight SELECT and commits writes per address. Same atomicity for a single address, survives contention.
+
+### Effect on published numbers
+- No public statistics were ever published based on the silenced-alert population. The FP flag affected internal scoring exclusions (`org_cycles`, `risk_scoring`) on local DB only. Railway's numbers were never touched.
+- The local DB's `false_positives` audit table grew from 12 to 17 rows — the 5 new ones capture what had been silent-silenced.
+- `alerts.false_positive = 1` counts are unchanged; only the audit trail coverage improved.
+
+### Open work
+- **Audit coverage check as ongoing discipline.** Any future delta between `COUNT(DISTINCT address WHERE false_positive=1)` and `COUNT(DISTINCT contract_address IN false_positives)` indicates the endpoint got bypassed somehow or the backfill got dropped. A scheduled health check is a good idea.
+- **infrastructure_registry source-level suppression (partial scope).** The audit originally proposed adding an `infrastructure_registry` lookup in the LAUNDRY/CASHOUT detection path so canonical infra never generates the alert in the first place. The detection path turned out to be the Alchemy Notify webhook handler, whose alert types (`LAUNDRY_PIPELINE`, `CASHOUT_MOVEMENT`) fire only when watched org wallets are the `from` or `to` of a movement — the watched wallet is recorded as the alert `address`, not the counterparty. So the target of the flag isn't infrastructure; the current implementation doesn't produce the misfire pattern I originally described. Leaving this open in case a future detector IS vulnerable to the pattern.
+- **Deprecate `/admin/mark-false-positive` as bulk-mark.** For per-alert FP review, a different endpoint taking an alert ID and reason would be cleaner. The bulk-mark shape is rarely the right tool. Consider adding `/admin/mark-false-positive-alert` that takes `alert_id` + `reason`.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.
