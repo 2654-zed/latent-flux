@@ -958,22 +958,65 @@ class StatsHandler(BaseHTTPRequestHandler):
             })
 
         elif self.path == "/admin/mark-false-positive":
-            # Mark alerts as false positive by address
+            # Mark alerts as false positive by address with a reason.
+            # Correction #14: reason is now REQUIRED and is written to the
+            # `false_positives` audit table atomically with the alert flag.
+            # Silent bulk-mark (prior behavior) left a 3,577-row audit gap on
+            # local DB; this endpoint is hardened so the gap cannot recur.
             addresses = [a.lower() for a in data.get("addresses", [])]
+            reason = (data.get("reason") or "").strip()
+            detector_blamed = (data.get("detector_blamed") or "manual_review").strip()
             if not addresses:
                 self._json(400, {"error": "addresses list required"})
                 return
+            if not reason or len(reason) < 10:
+                self._json(400, {"error": "reason required (>= 10 chars); see Correction #14"})
+                return
             con = sqlite3.connect(DB_PATH)
-            total = 0
-            for addr in addresses:
-                con.execute(
-                    "UPDATE alerts SET false_positive = 1 WHERE LOWER(address) = ?",
-                    (addr,),
-                )
-                total += con.total_changes
-            con.commit()
-            con.close()
-            self._json(200, {"marked": total, "addresses": addresses})
+            try:
+                con.execute("BEGIN IMMEDIATE")
+                now_iso = datetime.now(timezone.utc).isoformat()
+                marked = 0
+                audit_rows = 0
+                for addr in addresses:
+                    # Collect alert context for the audit row before we flag
+                    ctx = con.execute(
+                        "SELECT COUNT(*) AS n, "
+                        "       GROUP_CONCAT(DISTINCT alert_type) AS types "
+                        "FROM alerts WHERE LOWER(address) = ? "
+                        "  AND COALESCE(false_positive,0) = 0",
+                        (addr,),
+                    ).fetchone()
+                    n_alerts = ctx[0] if ctx else 0
+                    alert_types = ctx[1] if ctx else ""
+                    if n_alerts == 0:
+                        continue  # nothing to mark, don't write a phantom audit row
+                    con.execute(
+                        "UPDATE alerts SET false_positive = 1 WHERE LOWER(address) = ?",
+                        (addr,),
+                    )
+                    marked += con.total_changes if con.total_changes > 0 else n_alerts
+                    con.execute(
+                        """INSERT OR REPLACE INTO false_positives
+                           (contract_address, chain, original_tier, original_patterns,
+                            fp_reason, fp_method, fp_confidence, detector_blamed, assessed_at)
+                           VALUES (?, 'unknown', 'alert_address', ?, ?, 'admin_bulk_mark',
+                                   1.0, ?, ?)""",
+                        (addr, alert_types or "", reason, detector_blamed, now_iso),
+                    )
+                    audit_rows += 1
+                con.commit()
+            except Exception as e:
+                con.rollback()
+                self._json(500, {"error": f"mark-fp failed: {type(e).__name__}: {e}"})
+                return
+            finally:
+                con.close()
+            self._json(200, {
+                "marked": marked, "audit_rows_written": audit_rows,
+                "addresses": addresses, "reason": reason,
+                "detector_blamed": detector_blamed,
+            })
 
         elif self.path == "/admin/sync-mainnet-first-tx":
             # Batch UPDATE deployers.mainnet_first_tx from a local backfill.
