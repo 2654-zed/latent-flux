@@ -688,7 +688,8 @@ class StatsHandler(BaseHTTPRequestHandler):
         body = self.rfile.read(content_length) if content_length else b"{}"
 
         # Binary upload endpoints — handle before JSON parsing
-        if self.path in ("/admin/upload-db", "/admin/upload-chunk", "/admin/finalize-upload"):
+        if self.path in ("/admin/upload-db", "/admin/upload-chunk",
+                         "/admin/finalize-upload", "/admin/truncate-staging"):
             token = os.environ.get("ADMIN_TOKEN", "")
             auth = self.headers.get("Authorization", "")
             if not token or auth != f"Bearer {token}":
@@ -720,6 +721,36 @@ class StatsHandler(BaseHTTPRequestHandler):
                     staging_body = f.read()
                 os.unlink(staging)
                 self._handle_upload_db(staging_body)
+            elif self.path == "/admin/truncate-staging":
+                # Truncate the staging file to a specified size. Used to
+                # recover from partial-write scenarios when the upload-chunk
+                # connection drops mid-write and the server-side size drifts
+                # past what the client has confirmed.
+                staging = DB_PATH + ".staging"
+                try:
+                    to_size = int(self.headers.get("X-Target-Size", "-1"))
+                    if to_size < 0:
+                        self._json(400, {"error": "X-Target-Size header required"})
+                        return
+                    if not os.path.exists(staging):
+                        if to_size == 0:
+                            self._json(200, {"status": "ok", "staging_size": 0,
+                                             "note": "no staging file (treated as size 0)"})
+                            return
+                        self._json(400, {"error": "no staging file to truncate"})
+                        return
+                    current = os.path.getsize(staging)
+                    if to_size > current:
+                        self._json(400, {
+                            "error": f"cannot truncate to {to_size} (current {current})"
+                        })
+                        return
+                    with open(staging, "r+b") as f:
+                        f.truncate(to_size)
+                    self._json(200, {"status": "ok", "staging_size": os.path.getsize(staging),
+                                     "was": current})
+                except Exception as e:
+                    self._json(500, {"error": str(e)})
             return
 
         try:
