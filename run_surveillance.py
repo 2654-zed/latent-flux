@@ -595,16 +595,53 @@ class StatsHandler(BaseHTTPRequestHandler):
             offset = int(params.get("offset", ["0"])[0])
             limit = int(params.get("limit", ["5000"])[0])
             limit = min(limit, 10000)
+            # Optional delta filters: since_id uses a numeric column,
+            # since_ts uses a timestamp/date column. Column defaults to
+            # 'id' for since_id and 'timestamp' for since_ts but can be
+            # overridden via cursor_col.
+            since_id = params.get("since_id", [""])[0]
+            since_ts = params.get("since_ts", [""])[0]
+            cursor_col = params.get("cursor_col", [""])[0]
+            where = ""
+            where_params: list = []
+            if since_id:
+                col = cursor_col or "id"
+                where = f" WHERE [{col}] > ?"
+                where_params = [int(since_id)]
+            elif since_ts:
+                col = cursor_col or "timestamp"
+                where = f" WHERE [{col}] > ?"
+                where_params = [since_ts]
+
             con = _ro_connect()
             con.row_factory = sqlite3.Row
-            rows = con.execute(
-                f"SELECT * FROM [{table}] LIMIT ? OFFSET ?", (limit, offset)
-            ).fetchall()
-            data = [dict(r) for r in rows]
-            total = con.execute(f"SELECT COUNT(*) FROM [{table}]").fetchone()[0]
+            try:
+                order = f" ORDER BY [{cursor_col}]" if cursor_col else (
+                    " ORDER BY id" if since_id else (" ORDER BY timestamp" if since_ts else "")
+                )
+                rows = con.execute(
+                    f"SELECT * FROM [{table}]{where}{order} LIMIT ? OFFSET ?",
+                    (*where_params, limit, offset),
+                ).fetchall()
+                data = [dict(r) for r in rows]
+                total_filtered = con.execute(
+                    f"SELECT COUNT(*) FROM [{table}]{where}", where_params
+                ).fetchone()[0]
+                total_all = con.execute(f"SELECT COUNT(*) FROM [{table}]").fetchone()[0]
+            except sqlite3.OperationalError as _e:
+                con.close()
+                self._json(400, {"error": f"query err: {_e}"})
+                return
             con.close()
-            self._json(200, {"table": table, "total": total, "offset": offset,
-                             "limit": limit, "count": len(data), "rows": data})
+            self._json(200, {
+                "table": table, "total_all": total_all,
+                "total_filtered": total_filtered,
+                "total": total_filtered,  # kept for backward compat
+                "offset": offset, "limit": limit,
+                "count": len(data), "rows": data,
+                "filter": {"since_id": since_id, "since_ts": since_ts,
+                           "cursor_col": cursor_col},
+            })
 
         elif self.path.startswith("/admin/prepare-snapshot"):
             # Create a consistent gzipped snapshot of the live DB on-volume.
