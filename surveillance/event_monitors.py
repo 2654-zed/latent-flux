@@ -769,33 +769,11 @@ class EventMonitors:
         except Exception as e:
             logger.debug("Org transfer insert failed: %s", e)
 
-    def _update_cex_candidate(self, to_addr: str, from_addr: str, ts: str) -> None:
-        """Track inflow/outflow ratio for CEX deposit pattern detection."""
-        try:
-            # Update receiver (inflow)
-            self.conn.execute("""
-                INSERT INTO cex_deposit_candidates (address, chain, unique_senders, total_inflows, total_outflows, first_seen, last_seen)
-                VALUES (?, ?, 1, 1, 0, ?, ?)
-                ON CONFLICT(address) DO UPDATE SET
-                    unique_senders = unique_senders + CASE
-                        WHEN address NOT IN (SELECT address FROM cex_deposit_candidates WHERE address = ?) THEN 1 ELSE 0 END,
-                    total_inflows = total_inflows + 1,
-                    last_seen = ?
-            """, (to_addr, self.chain, ts, ts, to_addr, ts))
-
-            # Update sender (outflow)
-            self.conn.execute("""
-                INSERT INTO cex_deposit_candidates (address, chain, unique_senders, total_inflows, total_outflows, first_seen, last_seen)
-                VALUES (?, ?, 0, 0, 1, ?, ?)
-                ON CONFLICT(address) DO UPDATE SET
-                    total_outflows = total_outflows + 1,
-                    last_seen = ?
-            """, (from_addr, self.chain, ts, ts, ts))
-
-            # Flag addresses with CEX pattern: 20+ unique senders, 0 outflows
-            # (checked periodically, not every tx)
-        except Exception:
-            pass  # High-volume table, suppress individual errors
+    # cex_deposit_candidates writer removed 2026-04-22. The table accumulated
+    # 2.69M rows with zero flags ever produced; flagger threshold was never
+    # met. Code retained in git history (see commit archaeology). Kept
+    # flag_cex_candidates as a no-op below for backward-compat with
+    # deployment_monitor.py callers until they are also cleaned up.
 
     async def _check_pair_created(self, w3: AsyncWeb3, block_number: int, ts: str) -> None:
         """Check for PairCreated events from DEX factories."""
@@ -852,7 +830,15 @@ class EventMonitors:
                 logger.debug("Pair creation insert failed: %s", e)
 
     def flag_cex_candidates(self) -> int:
-        """Flag addresses matching CEX deposit pattern. Call periodically."""
+        """No-op stub. cex_deposit_candidates was retired 2026-04-22
+        (never produced flagged rows; table dropped). Kept as a no-op so
+        deployment_monitor.py's periodic call does not KeyError. Remove
+        when deployment_monitor.py line ~616 call is also deleted."""
+        return 0
+
+    def _defunct_flag_cex_candidates(self) -> int:
+        """Historical implementation, retained under a renamed symbol so
+        it does not get accidentally invoked. See commit log for context."""
         try:
             result = self.conn.execute("""
                 UPDATE cex_deposit_candidates

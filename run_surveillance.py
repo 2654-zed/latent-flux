@@ -1692,11 +1692,12 @@ if _db_ok:
 
         _cleanup_conn.commit()
 
-        # 3. WAL checkpoint + VACUUM to reclaim disk space
+        # 3. WAL checkpoint (cheap, always useful). VACUUM moved to the
+        # weekly scheduler (Sunday 05:00 UTC via surveillance.weekly_vacuum)
+        # because it temporarily doubles disk usage and doesn't need to run
+        # on every restart. See task #71 / 2026-04-22 Pro-tier migration.
         _cleanup_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        print("  WAL checkpoint: TRUNCATE complete", flush=True)
-        _cleanup_conn.execute("VACUUM")
-        print("  VACUUM complete — disk space reclaimed", flush=True)
+        print("  WAL checkpoint: TRUNCATE complete (VACUUM deferred to weekly job)", flush=True)
 
         # 4. Set WAL auto-checkpoint to smaller threshold (500 pages = ~2MB)
         _cleanup_conn.execute("PRAGMA wal_autocheckpoint = 500")
@@ -1869,6 +1870,8 @@ ANALYSIS_JOBS = [
      [sys.executable, "-m", "surveillance.confidence_decay", "--apply"]),
     (4, 45, "daily",  "org_candidates",
      [sys.executable, "-m", "surveillance.org_candidates", "--apply"]),
+    (5, 0,  "sunday", "weekly_vacuum",
+     [sys.executable, "-m", "surveillance.weekly_vacuum"]),
 ]
 _JOB_TIMEOUT_SEC = 3600  # 1 h per producer; deployer_profiler is the slowest
 _analysis_last_fired: dict[str, str] = {}
