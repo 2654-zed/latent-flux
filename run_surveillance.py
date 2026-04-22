@@ -588,6 +588,25 @@ class StatsHandler(BaseHTTPRequestHandler):
                 "bytecode_family_members",
                 "trust_amplification",
                 "extraction_events",
+                # Delta-sync extension (2026-04-22): tables that were
+                # reachable to queries but not to /dump. Adding them so
+                # the Railway->local mirror pulls a complete corpus.
+                "x402_events",
+                "x402_permit2_exposure",
+                "x402_facilitators",
+                "behavioral_anomalies",
+                "predictions",
+                "drain_values",
+                "bot_sophistication",
+                "bait_profiles",
+                "strategy_lifecycle",
+                "camouflage_metrics",
+                "daily_metrics",
+                "detector_precision",
+                "bot_strategies",
+                "deployer_profiles",
+                "entity_classification",
+                "false_positives",
             ]
             if table not in valid_tables:
                 self._json(400, {"error": f"table required, valid: {valid_tables}"})

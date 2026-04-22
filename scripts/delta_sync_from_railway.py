@@ -105,6 +105,23 @@ TABLES = [
     ("extraction_events",         "ts", "observed_at", ["event_id"], "REPLACE"),
     ("approval_watchlist",        "ts", "logged_at", ["approve_tx_hash"], "REPLACE"),
     ("false_positives",           "ts", "assessed_at", ["contract_address"], "REPLACE"),
+
+    # Delta-sync extension (2026-04-22): previously 400ing — added now
+    ("x402_events",               "id", "id",                ["id"], "IGNORE"),
+    ("x402_permit2_exposure",     "id", "id",                ["id"], "REPLACE"),
+    ("x402_facilitators",         "ts", "last_seen",         ["facilitator_address"], "REPLACE"),
+    ("behavioral_anomalies",      "id", "id",                ["id"], "IGNORE"),
+    ("predictions",               "id", "id",                ["id"], "REPLACE"),
+    ("drain_values",              "ts", "scanned_at",        ["contract_address"], "REPLACE"),
+    ("bot_sophistication",        "ts", "classified_at",     ["address"], "REPLACE"),
+    ("bait_profiles",             "id", "id",                ["id"], "REPLACE"),
+    ("strategy_lifecycle",        "id", "id",                ["id"], "REPLACE"),
+    ("camouflage_metrics",        "id", "id",                ["id"], "REPLACE"),
+    ("daily_metrics",             "id", "id",                ["id"], "REPLACE"),
+    ("detector_precision",        "ts", "date",              ["detector_name", "date"], "REPLACE"),
+    ("bot_strategies",            "id", "id",                ["id"], "REPLACE"),
+    ("timelock_countdowns",       "ts", "detected_at",       ["contract_address"], "REPLACE"),
+    ("sload_patterns",            "ts", "categorized_at",    ["contract_address"], "REPLACE"),
 ]
 
 
