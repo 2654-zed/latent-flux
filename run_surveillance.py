@@ -606,6 +606,97 @@ class StatsHandler(BaseHTTPRequestHandler):
             self._json(200, {"table": table, "total": total, "offset": offset,
                              "limit": limit, "count": len(data), "rows": data})
 
+        elif self.path.startswith("/admin/prepare-snapshot"):
+            # Create a consistent gzipped snapshot of the live DB on-volume.
+            # Uses sqlite3.Connection.backup() (online backup API) so the
+            # service's writes continue without blocking. Result is written
+            # to DB_PATH + ".mirror.gz". Returns size. Clients then use
+            # /admin/download-chunk to pull the file piece by piece.
+            import urllib.parse
+            parsed = urllib.parse.urlparse(self.path)
+            params = urllib.parse.parse_qs(parsed.query)
+            token = os.environ.get("ADMIN_TOKEN", "")
+            req_token = params.get("token", [""])[0]
+            if not token or req_token != token:
+                self._json(403, {"error": "forbidden"})
+                return
+            try:
+                import gzip
+                src_path = DB_PATH
+                tmp_raw = DB_PATH + ".mirror.raw"
+                final_gz = DB_PATH + ".mirror.gz"
+                # Step 1: online-backup to a fresh file (consistent snapshot
+                # even under concurrent writes)
+                src = sqlite3.connect(src_path, timeout=30)
+                dst = sqlite3.connect(tmp_raw, timeout=30)
+                src.backup(dst)
+                dst.close()
+                src.close()
+                # Step 2: gzip it (streaming, low memory)
+                if os.path.exists(final_gz):
+                    os.unlink(final_gz)
+                with open(tmp_raw, "rb") as fin, gzip.open(final_gz, "wb", compresslevel=6) as fout:
+                    while True:
+                        chunk = fin.read(4 * 1024 * 1024)
+                        if not chunk:
+                            break
+                        fout.write(chunk)
+                raw_size = os.path.getsize(tmp_raw)
+                os.unlink(tmp_raw)
+                gz_size = os.path.getsize(final_gz)
+                self._json(200, {
+                    "status": "ok",
+                    "mirror_path": final_gz,
+                    "raw_size_bytes": raw_size,
+                    "gz_size_bytes": gz_size,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                })
+            except Exception as e:
+                self._json(500, {"error": str(e)})
+
+        elif self.path.startswith("/admin/download-chunk"):
+            # Stream a byte-range of DB_PATH.mirror.gz. Uses offset/size
+            # query params for resumability. Response is raw binary.
+            import urllib.parse
+            parsed = urllib.parse.urlparse(self.path)
+            params = urllib.parse.parse_qs(parsed.query)
+            token = os.environ.get("ADMIN_TOKEN", "")
+            req_token = params.get("token", [""])[0]
+            if not token or req_token != token:
+                self._json(403, {"error": "forbidden"})
+                return
+            mirror = DB_PATH + ".mirror.gz"
+            if not os.path.exists(mirror):
+                self._json(404, {"error": "no mirror prepared; POST /admin/prepare-snapshot first"})
+                return
+            try:
+                offset = int(params.get("offset", ["0"])[0])
+                size = int(params.get("size", ["4194304"])[0])  # 4 MB default
+                size = min(size, 16 * 1024 * 1024)  # cap at 16 MB per chunk
+                total = os.path.getsize(mirror)
+                if offset >= total:
+                    # End of file — empty body with size info
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/octet-stream")
+                    self.send_header("X-Total-Size", str(total))
+                    self.send_header("X-Chunk-Offset", str(offset))
+                    self.send_header("X-Chunk-Size", "0")
+                    self.end_headers()
+                    return
+                with open(mirror, "rb") as f:
+                    f.seek(offset)
+                    buf = f.read(size)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("X-Total-Size", str(total))
+                self.send_header("X-Chunk-Offset", str(offset))
+                self.send_header("X-Chunk-Size", str(len(buf)))
+                self.send_header("Content-Length", str(len(buf)))
+                self.end_headers()
+                self.wfile.write(buf)
+            except Exception as e:
+                self._json(500, {"error": str(e)})
+
         elif self.path.startswith("/old-dump"):
             # Dump from an old mounted volume for data recovery.
             # Mount old volume at /app/old_data, then query like /dump.
