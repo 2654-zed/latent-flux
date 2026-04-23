@@ -1872,6 +1872,10 @@ ANALYSIS_JOBS = [
      [sys.executable, "-m", "surveillance.org_candidates", "--apply"]),
     (5, 0,  "sunday", "weekly_vacuum",
      [sys.executable, "-m", "surveillance.weekly_vacuum"]),
+    (5, 15, "daily",  "tier2_cluster_watch",
+     [sys.executable, "-m", "surveillance.tier2_cluster_watch"]),
+    (5, 30, "daily",  "solo_operator_detector",
+     [sys.executable, "-m", "surveillance.solo_operator_detector", "--apply"]),
 ]
 _JOB_TIMEOUT_SEC = 3600  # 1 h per producer; deployer_profiler is the slowest
 _analysis_last_fired: dict[str, str] = {}
