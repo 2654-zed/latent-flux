@@ -726,6 +726,67 @@ None. Zero rows moved. Zero API responses change. Documentation alignment only.
 
 ---
 
+## Correction #17 — Trust Amplification 14.2× Was a Dissolved-Family Baseline Artifact + Stale FP Rows on Confirmed Contracts
+
+**Date applied:** 2026-04-25
+**Scope (docs):** Trust Amplification Factor entry in `docs/lexicon.md` revised with a methodological caveat. The 14.2× figure for `0xd4624228` is no longer cited as a current measurement.
+**Scope (code):** `surveillance/false_positive_tracker.py` gains a guard that skips contracts with any `trap_events` row.
+**Scope (data):** 7 stale rows retracted from `false_positives` (local + Railway).
+
+### What we claimed
+Two coupled claims, both surfacing from a check-up on `0xd4624228` (the canonical Trust Amplification Factor anchor):
+
+1. **Trust Amplification Factor empirical anchor.** The lexicon (and decks downstream of it) cited "14.2× amplification, 2,910 victims, 98.7% router-delivered traffic" for `0xd4624228` as the canonical measured instance of TAF.
+2. **False-positives audit table.** The `false_positives` audit table was presented as an FP signal layer. A contract with a row in it is — by the table's name and downstream consumer expectation — an investigator-validated false positive.
+
+### What was actually true
+
+**On the 14.2× figure.** `surveillance/trust_amplification.py` computes `amplification = callers_per_day / family_avg_callers_per_day`. When the contract has no `bytecode_family_members` row, the formula falls back to a self-baseline of 1.0×. `0xd4624228`'s 14.2× was computed when the contract was a member of the `T2-eaef6a5d` bytecode family — the same family that was dissolved by Correction #3 (2026-04-16) after being identified as a NULL-bucket methodology artifact. When the family dissolved, the contract lost its comparator baseline. Subsequent runs of the producer would have reset amplification to 1.0× (self-baseline). A check-up run on 2026-04-25 produced no row at all: the contract has only 2 transaction events in the post-monitoring-start window, dropping it below the producer's 50-caller minimum. The 2,910-victim and ~97%-router-traffic figures remain Tier A direct counts and are unaffected. The 14.2× multiplier specifically is **a Correction #3 cascade**: the artifact baseline that produced it was retroactively invalidated when the NULL-bucket family was dissolved.
+
+**On the FP audit table.** A check on contracts with both `confidence_tier='confirmed'` and a `false_positives` row surfaced 8 conflicts; 7 of them have at least one `trap_events` row (proven harm). All 7 FP rows were written in a single batch on 2026-03-30T02:38:31.581742+00:00. The FP scanner (`false_positive_tracker.py`) filters its candidate set on `confidence_tier = 'suspected'`, but the contracts in question had been promoted to `'confirmed'` between FP-scanner runs without their FP rows being invalidated. The same class of bug as Correction #5 (cache transplant staleness): post-write mutation of related state without invalidating the prior assertion.
+
+The seven stale rows:
+
+| contract | fp_method | trap_events | observation |
+|---|---|---|---|
+| `0xd4624228...` | sustained_traffic | 31 | The TAF anchor — high-traffic + low-revert is the parasite's signature |
+| `0x0becff44...` | balanced_interaction | 19 | 1,073 callers, 9 selectors — diverse-interface heuristic fired on a confirmed harvester |
+| `0x54a03956...` | sustained_traffic | 5 | 498 callers over 3 days, 0.6% revert |
+| `0x39d411e0...` | weak_detector_only | 3 | 37 callers, 9.2% revert; CALLER-only pattern read as access-control |
+| `0x18d0bd91...` | weak_detector_only | 2 | 52 callers, 5% revert; same shape |
+| `0xf2b2b76e...` | sustained_traffic | 1 | 124 callers over 5 days |
+| `0x01bba1aa...` | balanced_interaction | 1 | 64 selectors — diverse interface on a confirmed-harm contract |
+
+Three of the seven (`sustained_traffic` cases) demonstrate exactly the failure mode the [Camouflage Ratio](../docs/lexicon.md#camouflage-ratio) and [Trust Amplification Factor](../docs/lexicon.md#trust-amplification-factor) entries describe: **infrastructure-parasite contracts produce high-traffic, low-revert patterns by design**, and the heuristic that catches legitimate-token false positives reads that signature as evidence of legitimacy. The heuristic has no defense against operators who calibrate against it.
+
+### How was the error caught
+A user-prompted check-up on the `0xd4624228` Trust Amplification Factor anchor entry. The lexicon's "14.2× amplification" figure was inspected against the corpus's current `trust_amplification` row (showing 1.0×), the discrepancy was traced to the producer formula's family-baseline dependency, and the dependency was traced to the Correction #3 NULL-bucket dissolution. The same check-up surfaced the contradicting `false_positives` row, which was traced to the FP scanner's heuristic firing on the parasite's defining surface.
+
+### What we changed
+
+| Component | Change |
+|---|---|
+| `surveillance/false_positive_tracker.py` `scan_false_positives` | New guard inside the scan loop: any contract with at least one `trap_events` row is skipped. Observed-harm overrides heuristic FP signal. Defense-in-depth alongside the existing `confidence_tier = 'suspected'` SQL filter. |
+| `scripts/retract_stale_fp_rows.py` (new) | Idempotent migration with dry-run default. Retracts `false_positives` rows where the contract is currently `'confirmed'` and has at least one `trap_events` row. Also un-silences any `alerts.false_positive=1` rows on those contracts (no rows in scope this run; defensive for future). |
+| `false_positives` table (data, local + Railway) | 7 rows retracted. 0 alerts un-silenced. |
+| `docs/lexicon.md` Trust Amplification Factor entry | Added "**Methodological caveat (2026-04-25)**" paragraph between Extended description and Empirical grounding. The 14.2× figure is no longer cited as a current measurement. The `2,910 victims` and `~97% router-delivered traffic` counts retained as Tier A direct measurements. Producer formula made explicit (`callers_per_day ÷ family_avg_callers_per_day`) along with the 1.0× fallback. |
+
+### Effect on published numbers
+- `false_positives` row count drops by 7 (local + Railway).
+- 0 alerts re-surfaced (the FP audit table is independent of `alerts.false_positive`; no alerts had been silenced as a downstream effect of the 7 stale rows).
+- TAF lexicon entry: 14.2× moved from "canonical measured instance" framing to "originally reported, dissolved-family artifact." The 2,910-victim and ~97%-router-traffic measurements remain canonical.
+
+### Pattern worth naming
+This is the second instance of a Correction #3 cascade. Correction #5 surfaced the cache-transplant staleness that was the same pattern at the cache layer. Correction #17 surfaces a methodology-baseline staleness at the producer-output layer. The shape is: **derived data outliving the assumption that justified it**. When `T2-eaef6a5d` was dissolved as a NULL bucket, every signal computed against that bucket as a comparator silently lost its meaning. Future corrections of this class should be flagged at the time the dissolution happens, not surfaced months later through anchor-point check-ups.
+
+### Open work
+- **Audit other producer outputs that depended on `T2-eaef6a5d`-family baselines.** TAF is one signal; the camouflage tracker, trust amplification alerts, and any per-family aggregate downstream of `bytecode_families` may have analogous staleness. A targeted scan of producer modules for `family_avg`-style baseline lookups is the natural follow-up.
+- **The 1 remaining contract with confirmed tier + FP row but zero trap_events** (`0xef17f86e44d8e2718287da08eb26dcd3953156ce`, fp_method `balanced_interaction`, 41 selectors, 64 callers, 4.5% revert) is not in scope for this retraction. It is either a legitimate token mis-promoted to confirmed via a different path, or a parasite without observed bot-trapping. Holding for separate review.
+- **Re-snapshot the `0xd4624228` figures from the deck source** (`Layer3_Intelligence_Platform_1.pptx` slide 5). If the deck cites 14.2× as a current measurement, the deck needs the same caveat the lexicon now carries.
+- **The producer's DELETE-and-rebuild semantics** (`DELETE FROM trust_amplification` at the start of every run) means contracts that drop below the 50-caller minimum lose their row entirely. Historical TAF measurements are not preserved by the producer; they exist only in narrative documentation. Worth deciding whether to archive snapshots before each rebuild.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.
