@@ -1,6 +1,6 @@
 # Layer 3 Lexicon
 
-**Version:** 2026-04-18 (living document; update when new framework-level observations emerge)
+**Version:** 2026-04-25 (living document; update when new framework-level observations emerge)
 **Purpose:** Canonical definitional reference for Layer 3 methodology. Every entry specifies the term's definition, extended meaning, empirical grounding in the corpus where applicable, and cross-references. Intended for internal use and eventual external publication.
 **Discipline:** Each entry is either (a) deductive from on-chain corpus evidence, (b) inferential with explicit methodology application, or (c) framework-level observation with clear analytical basis. No entry is asserted without basis.
 
@@ -23,6 +23,8 @@
 - [Pattern D — Cross-Chain Reputation Import](#pattern-d--cross-chain-reputation-import)
 - [Pattern E — Fake Legitimate Projects](#pattern-e--fake-legitimate-projects)
 - [Pattern F — Advisor-Parasite Pattern](#pattern-f--advisor-parasite-pattern)
+- [Pristine Solo Operator](#pristine-solo-operator)
+- [Infrastructure-Scale Operator](#infrastructure-scale-operator)
 
 ### Structural and Psychological
 - [Participatory Asymmetry / Predatory Literacy](#participatory-asymmetry--predatory-literacy)
@@ -30,6 +32,7 @@
 - [Cost-Habituation Asymmetry](#cost-habituation-asymmetry)
 - [Micro-Cost Habituation](#micro-cost-habituation)
 - [Cognitive Load Concentration](#cognitive-load-concentration)
+- [Tuition Extraction Markets](#tuition-extraction-markets)
 
 ### Ecosystem-Level
 - [The Proofreading Trap](#the-proofreading-trap)
@@ -45,6 +48,7 @@
 - [Configuration-Level Vulnerability](#configuration-level-vulnerability)
 - [Verification-Path Trust Failure](#verification-path-trust-failure)
 - [Pooled Custody Amplification](#pooled-custody-amplification)
+- [Cross-Domain Compositional Harm](#cross-domain-compositional-harm)
 
 ### Commercial / Positioning
 - [The Detection Gap as Product](#the-detection-gap-as-product)
@@ -84,7 +88,7 @@
 - Applied to MetaMask Snaps as the canonical off-chain case (`l3-narrative/Standing_Next_To_The_Safe.pptx`): proves the framework catches non-blockchain stored potential.
 - Every Extraction Event (001–008) can be scored against these primitives; Kelp and Drift are the strongest instances.
 
-**Cross-references.** [Stored Potential](#stored-potential), [Pooled Custody Amplification](#pooled-custody-amplification) (position + permissions combination), [Operational Layer Attack](#operational-layer-attack) (when mutability and trust bindings fail).
+**Cross-references.** [Stored Potential](#stored-potential), [Pooled Custody Amplification](#pooled-custody-amplification) (position + permissions combination), [Operational Layer Attack](#operational-layer-attack) (when mutability and trust bindings fail), [Infrastructure-Scale Operator](#infrastructure-scale-operator) (position primitive at the funder layer — exclusion logic re-purposed as cover).
 
 ---
 
@@ -100,7 +104,7 @@
 - **Corrections #4 (velocity escalation mislabel)** and **#6 (risk_scores doc-reality gap)** are internal analogs — our OWN code had compositional failures where individual pieces worked but the combination silently drifted.
 - Deck: `l3-narrative/Compositional_Zero_Days.pptx` catalogs 8 named compositional attack constructions.
 
-**Cross-references.** [Configuration-Level Vulnerability](#configuration-level-vulnerability), [Verification-Path Trust Failure](#verification-path-trust-failure), [The Proofreading Trap](#the-proofreading-trap).
+**Cross-references.** [Configuration-Level Vulnerability](#configuration-level-vulnerability), [Verification-Path Trust Failure](#verification-path-trust-failure), [The Proofreading Trap](#the-proofreading-trap), [Cross-Domain Compositional Harm](#cross-domain-compositional-harm) (the cross-domain extension of this concept).
 
 ---
 
@@ -115,7 +119,7 @@
 - Producer runs nightly per Correction #7 scheduler (03:00 UTC).
 - API surface: served at `/api/v1/contract/{addr}` via the `computed_at` metadata block with freshness timestamp.
 
-**Cross-references.** [The Detection Gap as Product](#the-detection-gap-as-product), [Pattern F — Advisor-Parasite Pattern](#pattern-f--advisor-parasite-pattern) (the per-user analog of trust amplification), [Camouflage Ratio](#camouflage-ratio).
+**Cross-references.** [The Detection Gap as Product](#the-detection-gap-as-product), [Pattern F — Advisor-Parasite Pattern](#pattern-f--advisor-parasite-pattern) (the per-user analog of trust amplification), [Camouflage Ratio](#camouflage-ratio), [Cross-Domain Compositional Harm](#cross-domain-compositional-harm) (the off-chain analog where amplification crosses identity systems), [Tuition Extraction Markets](#tuition-extraction-markets) (the market structure the amplification operates within).
 
 ---
 
@@ -125,12 +129,14 @@
 
 **Extended description.** Interpreted as a Nash equilibrium — operators calibrate against detection tools at scale. Running too aggressive (high revert rate) loses victims to detection; running too conservative loses efficiency. The market converges on the temperature at which exploitation is optimally invisible. Stable across Base (~82%), Arbitrum (~70%), and Optimism, across two weeks of observation, and across four mapped organizations.
 
+**Methodological caveat (2026-04-25).** The camouflage ratio's stability is computed across the surveilled subset of the L2 deployer population, of which approximately 31.5% of the active subset is downstream of the top-12 funder cluster (see [Infrastructure-Scale Operator](#infrastructure-scale-operator)). The "stable across operators" framing must be read as "stable across the surveilled population, of which a substantial fraction may be one funder cluster's downstream." Re-running the camouflage statistic against a top-12-excluded cohort is the next methodological step before the equilibrium claim can be cited at corpus-wide resolution.
+
 **Empirical grounding.**
 - `camouflage_metrics` table populated nightly via `surveillance/camouflage_tracker.py`. Corpus-wide ratio stable at 79.2% across the initial 9-day run (2026-03-17 through 2026-03-25) before the producer cron died (fixed in Correction #7).
 - Dataset: 5,845 camouflaged victims vs 233 overt-trap victims (25:1 ratio).
 - Deck: `l3-narrative/Digital_Physics_Blockchain_Security.pptx` slide 7 frames this as a behavioral equilibrium, not a bug.
 
-**Cross-references.** [Trust Amplification Factor](#trust-amplification-factor), [Behavioral Laundering](#behavioral-laundering), [Publishing-Induced Recursive Evasion](#publishing-induced-recursive-evasion) (the feedback loop that produces the equilibrium).
+**Cross-references.** [Trust Amplification Factor](#trust-amplification-factor), [Behavioral Laundering](#behavioral-laundering), [Publishing-Induced Recursive Evasion](#publishing-induced-recursive-evasion) (the feedback loop that produces the equilibrium), [Infrastructure-Scale Operator](#infrastructure-scale-operator) (the corpus-dominance finding that requires the camouflage ratio to be re-computed against a cluster-excluded cohort).
 
 ---
 
@@ -148,7 +154,7 @@
 - Pattern F scanned negative against the 30-day corpus but structurally scoped (`reports/advisor_parasite_candidates.md`).
 - Other patterns (A, B, C, E) scoped and partially scanned; see individual pattern entries below.
 
-**Cross-references.** All Pattern entries below. [Camouflage Ratio](#camouflage-ratio). [Strategy Lifecycle](#strategy-lifecycle) (how laundering patterns propagate).
+**Cross-references.** All Pattern entries below. [Camouflage Ratio](#camouflage-ratio). [Strategy Lifecycle](#strategy-lifecycle) (how laundering patterns propagate). [Pristine Solo Operator](#pristine-solo-operator) and [Infrastructure-Scale Operator](#infrastructure-scale-operator) (deployer-layer and funder-layer instances of behavioral laundering, both shipped 2026-04-25).
 
 ---
 
@@ -211,7 +217,7 @@
 - Production-ready enrichment shipped: Correction-adjacent work added `deployers.mainnet_first_tx` column and one Etherscan v2 call per new deployer in `auto_funder_tracer` (2026-04-18, commit `9d1d337`). Backfill for existing 36k+ deployers running at time of writing.
 - Also validated in **EXTRACTION_004 (Rhea)**: the Rhea Subject Wallet was funded via `intents.near` cross-chain bridge — the NEAR analog of Pattern D (cross-chain import *via bridge* rather than *via address-reuse*).
 
-**Cross-references.** [Pattern F — Advisor-Parasite Pattern](#pattern-f--advisor-parasite-pattern) (orthogonal — victim-extraction cadence), [Intelligence-as-Compounding-Asset](#intelligence-as-compounding-asset) (Pattern D enrichment grows in value as more addresses accumulate history).
+**Cross-references.** [Pattern F — Advisor-Parasite Pattern](#pattern-f--advisor-parasite-pattern) (orthogonal — victim-extraction cadence), [Intelligence-as-Compounding-Asset](#intelligence-as-compounding-asset) (Pattern D enrichment grows in value as more addresses accumulate history), [Pristine Solo Operator](#pristine-solo-operator) (related but distinct — Pattern D imports active mainnet reputation; pristine-solo exploits dormant mainnet age).
 
 ---
 
@@ -244,6 +250,41 @@
 - Re-scan triggers: (a) corpus age ≥ 90 days, (b) Transfer-event indexer deployed for ≥ 30 days, (c) `infrastructure_registry` grown to ~50 entries.
 
 **Cross-references.** [Trust Amplification Factor](#trust-amplification-factor), [Cognitive Load Concentration](#cognitive-load-concentration), [Participatory Asymmetry](#participatory-asymmetry--predatory-literacy).
+
+---
+
+### Pristine Solo Operator
+
+**Definition.** A deployer with a long mainnet history (typically >1 year, often >4 years) that has been dormant or low-activity at the mainnet layer, suddenly surfacing as the operator of a small (1–5 contract) high-confidence trap fleet on L2. The combination of a long pre-existing wallet age and a small recent operational footprint defeats both age-based clustering (deployer is not "new") and fleet-size-based clustering (deployer is not "prolific").
+
+**Extended description.** A specific instance of [Stored Potential](#stored-potential) at the deployer level. The wallet's mainnet vintage is a stored capability — a long-lived address that confers reputational legitimacy in any system that weights age as a trust signal. When activated against L2 with a small trap fleet, the operator captures the trust premium of an aged wallet without the behavioral baseline a long-active wallet would produce. Detection signal is the conjunction: `mainnet_first_tx` >365d before L2 `first_seen`, fleet between 1–5 contracts, ≥1 confirmed trap, and the deployer is not already classified as part of an `org_wallets`, `org_candidates`, or `solo_operator_candidates` entry.
+
+**Empirical grounding.**
+- Detector module shipped 2026-04-25: `surveillance/pristine_solo_detector.py`. Scheduled daily at 5:45 UTC.
+- New table `pristine_solo_candidates` with pending/promoted/dismissed workflow.
+- First-day surface: 11 candidates locally, 13 on Railway.
+- Top finds by mainnet gap: `0x80b12bd0` (2,498-day gap = 6.8 years), `0xa2a01b4a` (2,314 days, fleet 4 on Arbitrum), `0x147b8869` (1,777 days, fleet 4), `0xf6c99cec` (≈1,750 days). All four promoted to watchlist HIGH.
+- `0x80b12bd0` specifically tied to the `0x752c5a95` harvester investigation.
+
+**Cross-references.** [Stored Potential](#stored-potential) (the concept this operationalizes at the deployer layer), [Pattern D — Cross-Chain Reputation Import](#pattern-d--cross-chain-reputation-import) (related but distinct: Pattern D imports active mainnet reputation; pristine-solo exploits dormant mainnet age), [Behavioral Laundering](#behavioral-laundering).
+
+---
+
+### Infrastructure-Scale Operator
+
+**Definition.** An operator class that deliberately funds enough downstream deployer wallets to be classified as benign infrastructure (CEX, faucet, exchange hot wallet) by clustering heuristics that exclude high-fanout addresses. The exclusion logic that protects analysts from CEX/faucet noise is the same logic that hides this operator class.
+
+**Extended description.** A direct counter-calibration against organizational mapping methodology. Org_xxx detection in Layer 3's prior framework targets cells of dozens to low hundreds of deployers. The infrastructure-scale operator scales an order of magnitude past that threshold specifically to defeat the heuristic. Per-funder profile diversity within the infrastructure-scale class suggests at least three operational sub-types: pre-stage warehouses (zero detection signal in funded fleet), stockpile (high suspected, zero confirmed), and live-extraction (high confirmed). Whether a single infrastructure-scale operator runs all three sub-types compartmentalized for opsec, or whether the funder-cluster represents a multi-tenant wallet/infrastructure rental service, is an open question pending cross-funder downstream-deployer overlap analysis.
+
+**Empirical grounding.**
+- Discovered 2026-04-25 via funder probe of `0xf70da978` starting from `0x604be06b`'s funding chain.
+- Top funder `0xf70da978` alone: 2,684 funded deployers, 6,971 contracts, 109 confirmed traps, 873 suspected. Larger than every existing org_xxx in the corpus combined.
+- Top-12 funder fanouts identified: combined 14,650 deployers, ~36% of 41,538-deployer corpus, ~31.5% of active deployer population.
+- Per-funder profile diversity validated 2026-04-25 (full breakdown in `reports/funder_cluster_diagnostic_2026-04-25.md`). Examples: `0xc43f317e` (1,562 deployers, 0 confirmed, 0 suspected — pre-stage warehouse); `0xfd92f4e9` (2,187 deployers, 0 confirmed, 675 suspected — stockpile); `0xf70da978` (109 confirmed, 873 suspected — live operator); `0x238d7170` (98% suspected ratio — anomalous fingerprint).
+- 4 of top-12 funders are L2-native with no mainnet history — deliberate `eth_depth` evasion. Account for 4,419 funded deployers. Untraceable with current mainnet-scoped tooling.
+- Detector class to be built separately from `org_candidates` (do not retrofit). Schema and signal requirements TBD pending cross-funder overlap probe.
+
+**Cross-references.** [Behavioral Laundering](#behavioral-laundering) (infrastructure scale is laundering at the funding-layer), [Adversarial Topology](#adversarial-topology) (position primitive: a funder concentrated enough to be excluded by heuristics is occupying the position designed for benign infrastructure), [Publishing-Induced Recursive Evasion](#publishing-induced-recursive-evasion) (the exclusion logic is itself a published methodology adversaries calibrate against).
 
 ---
 
@@ -287,7 +328,7 @@
 - **Micropayment relay pattern** observed on `0x68a96f41ff1e9f2e7b591a931a4ad224e7c07863` (benign x402 relayer): median per-tx $0.001, max $0.013, ~14K tx/day. Proves users have fully habituated to micropayment-scale friction. The same habituation enables micro-cost extraction to be invisible.
 - Deck: `l3-narrative/Anatomy_of_a_Liquidation.pptx` documents the $0.01 gas cost per drain — the economics work because attacker-per-tx-cost is dust.
 
-**Cross-references.** [Micro-Cost Habituation](#micro-cost-habituation) (the Weber-Fechner formalization), [Pattern F — Advisor-Parasite Pattern](#pattern-f--advisor-parasite-pattern) (operational exploitation of the habituation).
+**Cross-references.** [Micro-Cost Habituation](#micro-cost-habituation) (the Weber-Fechner formalization), [Pattern F — Advisor-Parasite Pattern](#pattern-f--advisor-parasite-pattern) (operational exploitation of the habituation), [Tuition Extraction Markets](#tuition-extraction-markets) (the market structure that this psychological mechanism sustains).
 
 ---
 
@@ -316,6 +357,21 @@
 - Extends to MetaMask Snaps case (`l3-narrative/Standing_Next_To_The_Safe.pptx`): users install with one decision and inherit surveillance capability they never reviewed after that one click.
 
 **Cross-references.** [Participatory Asymmetry](#participatory-asymmetry--predatory-literacy), [External Accountability Infrastructure](#external-accountability-infrastructure).
+
+---
+
+### Tuition Extraction Markets
+
+**Definition.** A market structure in which losses incurred by less-sophisticated participants are not waste but raw material — simultaneously funding the sophisticated participants' returns and providing the calibration data that produces their edge. The market's continued profitability for its sophisticated tier requires a continuous inflow of new participants whose losses serve both functions.
+
+**Extended description.** Generalizes Akerlof-style information asymmetry markets and the specifically adversarial version sometimes called "liquidity of fools" in quantitative finance. The defining feature is the double-counting of beginner losses: the same dollar that flows to the sophisticated participant as profit also flows back as information that sharpens the sophisticated participant's strategy against the next beginner. On-chain DeFi exhibits this structure clearly. Bot `0x84792c2a` in the corpus is illustrative: $4,412 in gas burned across 375K+ mostly-reverting transactions, operating not for direct profit but as a research instrument producing information that feeds a $5.75M MEV vault elsewhere — the visible loss is the substrate for invisible profit. The graduation rate from prey to predator is structurally low; this is a feature, not a flaw, because the predator layer's economics depend on a high prey-to-predator ratio. Frame distinct from [Victim-to-Predator Pipeline](#victim-to-predator-pipeline): that entry describes the unusual case of vertical migration; this entry describes the steady-state market structure that makes such migration both possible and rare.
+
+**Empirical grounding.**
+- `0x84792c2a`: 375K+ transactions, mostly reverts, $4,412 cumulative gas burn. Operator's parallel infrastructure includes the 2,739.89 ETH MEV vault at `0xa45b51` (`reports/mev_vault_0xa45b51_discovery.md`).
+- `0x3f4739d`: 5,029 reverts across 2 contracts, still running. Either incompetent or producing non-direct value (information, calibration, distraction) that the operator considers worth the gas burn.
+- [Camouflage Ratio](#camouflage-ratio) (~70-79% pre-Correction #13) is itself a measurement of how efficiently the predator layer is calibrated against the prey layer. The ratio's stability across chains and time is consistent with a market that maintains its predator/prey equilibrium structurally, not contingently.
+
+**Cross-references.** [Camouflage Ratio](#camouflage-ratio), [Trust Amplification Factor](#trust-amplification-factor) (a measurement of how much the predator layer's edge is amplified through trusted infrastructure), [Victim-to-Predator Pipeline](#victim-to-predator-pipeline), [Cost-Habituation Asymmetry](#cost-habituation-asymmetry) (a psychological mechanism that sustains the prey inflow).
 
 ---
 
@@ -360,7 +416,7 @@
 - `0x3f4739d` had 5,029 reverts, then deployed 39 contracts.
 - 25 bot candidates in our `bot_candidates` table also appear as deployers. The overlap is the pipeline.
 
-**Cross-references.** [The Self-Cannibalizing System](#the-self-cannibalizing-system), [Strategy Lifecycle](#strategy-lifecycle).
+**Cross-references.** [The Self-Cannibalizing System](#the-self-cannibalizing-system), [Strategy Lifecycle](#strategy-lifecycle), [Tuition Extraction Markets](#tuition-extraction-markets) (the steady-state market structure that makes this vertical migration both possible and rare).
 
 ---
 
@@ -435,7 +491,7 @@
 - Bybit ($1.5B, 2025) referenced in the decks as the canonical large-scale operational-layer attack.
 - Zerion DPRK social engineering (2026-04-10, ~$100K) as the smaller-scale current instance.
 
-**Cross-references.** [Verification-Path Trust Failure](#verification-path-trust-failure), [Configuration-Level Vulnerability](#configuration-level-vulnerability).
+**Cross-references.** [Verification-Path Trust Failure](#verification-path-trust-failure), [Configuration-Level Vulnerability](#configuration-level-vulnerability), [Cross-Domain Compositional Harm](#cross-domain-compositional-harm) (the case where the operational compromise crosses domains — Vercel/Context.ai chained Lumma Stealer → AWS → OAuth tokens → SSO).
 
 ---
 
@@ -449,7 +505,7 @@
 - **EXTRACTION_008 (Kelp)**: Configuration verified via historical `getConfig` at blocks 24,500,000–24,900,000 (Phase 3 of `reports/kelp_retrospective_replay.md`). Tier A deductive lead time ≥56.7 days.
 - **EXTRACTION_005 (Drift)**: governance-layer configuration variant — threshold reduction + timelock removal on 2026-03-27 was the phase transition that opened the attack window.
 
-**Cross-references.** [Verification-Path Trust Failure](#verification-path-trust-failure), [The Bug-Bounty Structural Gap](#the-bug-bounty-structural-gap).
+**Cross-references.** [Verification-Path Trust Failure](#verification-path-trust-failure), [The Bug-Bounty Structural Gap](#the-bug-bounty-structural-gap), [Cross-Domain Compositional Harm](#cross-domain-compositional-harm) (the off-chain analog where the configuration is at the application substrate — environment-variable visibility defaults, OAuth scope settings).
 
 ---
 
@@ -480,6 +536,22 @@
 - Contrast: a theoretical mint-burn exploit of the same adapter would not have been accepted by Aave because the newly-minted rsETH would have no backing — though in practice neither architecture is hardened against cross-chain verification failure.
 
 **Cross-references.** [Verification-Path Trust Failure](#verification-path-trust-failure), [Compositional Harm](#compositional-harm), [Configuration-Level Vulnerability](#configuration-level-vulnerability).
+
+---
+
+### Cross-Domain Compositional Harm
+
+**Definition.** Compositional harm where the components span the on-chain/off-chain boundary. Each component (a browser extension, an OAuth grant, an SSO trust path, an environment variable visibility default, a malware infection on an unrelated employee's machine) functions correctly within its own domain, and the harm emerges from the composition of correctly-functioning behaviors across domains that are not normally analyzed together.
+
+**Extended description.** Extends [Compositional Harm](#compositional-harm) beyond the on-chain substrate. Validates the framework's generality: the same structural failure pattern Layer 3 documents in DeFi appears at the application-substrate layer in mainstream cloud platforms, and the same analytical posture (audit the composition, not the components) is required in both. Worth noting: the off-chain version often has a higher trust-amplification factor because the trust hops cross identity systems (employee identity → enterprise SSO → platform identity → customer credentials) where each hop carries social trust, not just technical trust. Reviewers and academics already familiar with software supply chain attacks will recognize this pattern; the contribution is naming the cross-domain version as part of the same theoretical class as on-chain compositional harm rather than as a separate "supply chain" subgenre.
+
+**Empirical grounding.**
+- Vercel/Context.ai breach disclosed 2026-04-19. Documented chain: Lumma Stealer (delivered via Roblox exploit script, Feb 2026) → Context.ai employee credentials → Context.ai AWS environment → exfiltrated OAuth tokens for Context AI Office Suite consumer users → Vercel employee's personal Context.ai signup with "Allow All" Google Workspace scope → Vercel internal systems via SSO → enumeration of non-sensitive environment variables → bulk extraction of customer API keys, database credentials, GitHub tokens, cloud keys for customers with no relationship to Context.ai.
+- No CVE was exploited at any step. No vendor had a code-level vulnerability. Every component functioned as designed.
+- Vercel CEO publicly attributed attacker velocity to AI augmentation — first major incident disclosure to name AI-augmented adversary tradecraft on the record.
+- Trust-amplification analog: the affected Vercel customers had no direct relationship with Context.ai, demonstrating cross-domain trust amplification structurally identical to the Universal Router case in EXTRACTION_003 (`0xd4624228`).
+
+**Cross-references.** [Compositional Harm](#compositional-harm) (the parent concept), [Trust Amplification Factor](#trust-amplification-factor) (the quantification framework that applies to both on-chain and off-chain versions), [Configuration-Level Vulnerability](#configuration-level-vulnerability) (Vercel's environment-variable visibility default is a configuration-level instance), [Operational Layer Attack](#operational-layer-attack) (related class).
 
 ---
 

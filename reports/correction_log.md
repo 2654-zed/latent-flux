@@ -674,6 +674,58 @@ Exception-as-rule audit checked for a classifier. There was none. The DDL confir
 
 ---
 
+## Correction #16 — Lexicon Additions and Camouflage Ratio Methodological Caveat
+
+**Date applied:** 2026-04-25
+**Scope (docs):** Four new entries appended to `docs/lexicon.md`; one existing entry (Camouflage Ratio) revised with a methodological caveat paragraph and one additional cross-reference; index updated; bidirectional cross-references propagated to seven existing entries.
+**Scope (data / code):** None. Documentation alignment only.
+
+### What we claimed (implicitly, as of lexicon v2026-04-18)
+The lexicon's vocabulary was complete enough to describe the operator and harm classes Layer 3 surveils. The Camouflage Ratio entry framed the equilibrium claim as "stable across operators" without qualifying that the surveilled population's diversity assumption had been tested.
+
+### What was actually true
+Two empirical findings from this session require lexicon coverage that did not exist:
+
+1. **Pristine Solo Operator** (deployer-layer) — surfaced 2026-04-25 by `surveillance/pristine_solo_detector.py`. 11 candidates locally, 13 on Railway, with mainnet gaps from 377 days to 2,498 days. Class falls between Pattern D (active mainnet reputation import) and the small-cell `org_candidates` detector, and was not previously named.
+
+2. **Infrastructure-Scale Operator** (funder-layer) — surfaced 2026-04-25 from the funder-cluster diagnostic. 12 candidates from `surveillance/infrastructure_operator_detector.py` covering 11,006 deployers (26.5% of corpus), 26,514 contracts, and 24.5% of the corpus's confirmed traps. The class slips `org_candidates` because the >50-deployer exclusion logic was based on a falsified hypothesis ("clusters that big are CEX/faucet noise").
+
+3. **Cross-Domain Compositional Harm** (off-chain extension) — Vercel/Context.ai breach disclosed 2026-04-19 demonstrates the same compositional-harm pattern Layer 3 documents in DeFi, but with components spanning malware → cloud platform → SSO → customer credentials. No CVE involved; every component functioned as designed. Generalizes Compositional Harm beyond the on-chain substrate.
+
+4. **Tuition Extraction Markets** (structural framing) — generalizes the Akerlof / "liquidity of fools" model to the on-chain corpus. Distinct from Victim-to-Predator Pipeline: VtP describes the unusual case of vertical migration; TEM describes the steady-state market structure that makes such migration both possible and rare. Empirical anchor: bot `0x84792c2a` ($4,412 gas burn / 375K+ reverts feeding a $5.75M MEV vault elsewhere).
+
+5. **Camouflage Ratio caveat** — the funder-cluster diagnostic showed 31.5% of the active deployer population is downstream of the top-12 funder cluster. The "stable across operators" framing must therefore be qualified: it is "stable across the surveilled population, of which a substantial fraction may be one funder cluster's downstream." The original equilibrium claim is not retracted, but its corpus-wide resolution is conditional on a top-12-excluded re-run.
+
+### How was the error caught
+- The two new operator entries were forced by today's session: probing `0x604be06b`'s funder chain surfaced `0xf70da978` (2,684-deployer cluster), which prompted the 12-funder enumeration, which revealed the corpus-dominance problem.
+- The Cross-Domain entry was forced by the Vercel/Context.ai disclosure crossing the on-chain/off-chain boundary on a Layer-3-relevant theoretical surface (Compositional Harm).
+- The Camouflage Ratio caveat was forced by the dominance finding making the "across operators" framing measurably weaker than previously claimed.
+
+### What we changed
+
+| Component | Change |
+|---|---|
+| `docs/lexicon.md` Index | Added 4 new entries to their respective category indexes (Detection Methodology, Structural and Psychological, Attack Pattern). |
+| `docs/lexicon.md` body | Appended `### Pristine Solo Operator` and `### Infrastructure-Scale Operator` under Detection Methodology; appended `### Tuition Extraction Markets` under Structural and Psychological; appended `### Cross-Domain Compositional Harm` under Attack Pattern. Each entry follows the standard four-section format. |
+| `docs/lexicon.md` Camouflage Ratio | Inserted "**Methodological caveat (2026-04-25)**" paragraph between Extended description and Empirical grounding. Existing Extended description preserved verbatim. Cross-references line extended with one additional reference. |
+| `docs/lexicon.md` bidirectional refs | Compositional Harm, Adversarial Topology, Trust Amplification Factor, Behavioral Laundering, Pattern D, Cost-Habituation Asymmetry, Victim-to-Predator Pipeline, Configuration-Level Vulnerability, and Operational Layer Attack each gained one or more cross-references pointing at the new entries. |
+| `docs/lexicon.md` Version | Bumped from 2026-04-18 to 2026-04-25. |
+
+### Effect on published numbers
+None. Zero rows moved. Zero API responses change. Documentation alignment only.
+
+### Deliberately held out
+- **Adversarial Co-Tenancy** — the A/B operators sharing prey finding (`0x604be06b` and `0xc0ffeefeed`). Resolved as anecdote, not pattern, after pairwise probe across 903 operator pairs returned only that one pair at any meaningful overlap. Not lexicon-worthy.
+- **AI-Augmented Adversary Tradecraft** — interesting concept surfaced by the Vercel CEO's public attribution, but the corpus has no direct evidence of it operating at the on-chain layer yet. Hold for a future entry once there is empirical grounding.
+- **Prey-Driven Equilibrium Calibration** — the hypothesis that the Camouflage Ratio is prey-driven rather than market-driven. Hypothesis was tested by the pairwise overlap probe and did not generalize. Not ready for the lexicon.
+
+### Open work
+- **Re-compute Camouflage Ratio against a top-12-excluded cohort.** The equilibrium claim cannot be restored to corpus-wide resolution until this runs. Targeted as the next methodological step in the Camouflage Ratio entry's caveat paragraph.
+- **Build the `infrastructure_operators` entity class.** The detector ships candidates but the promotion target schema (peer of `org_wallets` with a different review workflow) is not yet defined. Holding for separate spec.
+- **Re-run other corpus-wide statistics** (disposable-deployer rate, bytecode-family diversity, suspected-tier base rate) against the top-12-excluded cohort, with the same caveat-or-restate discipline. The dominance finding implies these claims need re-verification, not silent retention.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.
