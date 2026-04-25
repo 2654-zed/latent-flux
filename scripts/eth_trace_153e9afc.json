@@ -1,0 +1,328 @@
+{
+  "address": "0x153e9afc5e6a1166e6cc89d8493f162c45e5cc62",
+  "chain": "ethereum",
+  "traced_at": "2026-04-24T22:29:33.938698+00:00",
+  "inbound": [
+    {
+      "from": "0xf605dbb5626dfc1448cee33e2e1221103021468f",
+      "value_eth": 0.1,
+      "tx_hash": "0x3e9ee747461c8a40716973c1546863ca7b7faa9830bfbbcabb464f46ff9b94b0",
+      "block": 20575011,
+      "timestamp": "2024-08-21T05:49:35.000Z",
+      "label": null
+    },
+    {
+      "from": "0xbdcb95a80d4c770fa811b1faf0bb4cf204d310b5",
+      "value_eth": 1.5,
+      "tx_hash": "0xa19cbbb6bf5b2ef1388b48ec2af8c66d32774be44a0b852be27457e4cff2c537",
+      "block": 20710477,
+      "timestamp": "2024-09-09T03:50:23.000Z",
+      "label": null
+    },
+    {
+      "from": "0xc9e9d3077785190d618743c6db6a944dd2711e88",
+      "value_eth": 1e-18,
+      "tx_hash": "0x1e2b9724dda419e445f4b0b402846b9192bdb191feb58c4d27f99572c3888004",
+      "block": 20711783,
+      "timestamp": "2024-09-09T08:12:47.000Z",
+      "label": null
+    },
+    {
+      "from": "0xcbe33df51c9d5949efa34935f3765f308dd7c727",
+      "value_eth": 1.26e-05,
+      "tx_hash": "0xbc803b6906db7c637bea1aa8de1e1e88c0efc00424d4e6623a827c2c0c473643",
+      "block": 20711851,
+      "timestamp": "2024-09-09T08:26:35.000Z",
+      "label": null
+    },
+    {
+      "from": "0xcbe33df51c9d5949efa34935f3765f308dd7c727",
+      "value_eth": 1e-18,
+      "tx_hash": "0x412fcb9d69dbae89e92ace9e6639f9c4b669f799113745ec221dd204f63b0d4f",
+      "block": 20712017,
+      "timestamp": "2024-09-09T08:59:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0xbdcb95a80d4c770fa811b1faf0bb4cf204d310b5",
+      "value_eth": 0.95755653,
+      "tx_hash": "0x88f0de2c33a5eec9671e1cb2d1b9d81ae1e62552a44ed95a65f33f91f86b20b2",
+      "block": 20724836,
+      "timestamp": "2024-09-11T03:58:35.000Z",
+      "label": null
+    },
+    {
+      "from": "0xbdcb95a80d4c770fa811b1faf0bb4cf204d310b5",
+      "value_eth": 1.0,
+      "tx_hash": "0x75a771a6009a73a211dc83203ba8e2ec30dd0648c340b78ef32de71dbeac24a8",
+      "block": 20767746,
+      "timestamp": "2024-09-17T03:47:47.000Z",
+      "label": null
+    },
+    {
+      "from": "0xbdcbabdba2bf4d74e3e030f7a217d281dad310b5",
+      "value_eth": 4.925e-05,
+      "tx_hash": "0x034bb4e4e20bde8405a9ae7cbfa71894ec1a065524318cb5434c3558ab86132d",
+      "block": 20767758,
+      "timestamp": "2024-09-17T03:50:11.000Z",
+      "label": null
+    },
+    {
+      "from": "0x2d69a3c5dc7c6451017ebcafc23265cd1f6d886c",
+      "value_eth": 1e-10,
+      "tx_hash": "0xd69a30728327fdd7c36154503224a21a21e331bbe200ce6e1d55f8a9d9a6a401",
+      "block": 20782140,
+      "timestamp": "2024-09-19T04:05:47.000Z",
+      "label": null
+    },
+    {
+      "from": "0x2d69a3c5dc7c6451017ebcafc23265cd1f6d886c",
+      "value_eth": 1e-10,
+      "tx_hash": "0x80ce641d4407c2c69a08deef730a8d3c83f98b68605fbd8dc64aedc9f7b53ec5",
+      "block": 20782141,
+      "timestamp": "2024-09-19T04:05:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0xbdcb95a80d4c770fa811b1faf0bb4cf204d310b5",
+      "value_eth": 1.20364871,
+      "tx_hash": "0x248e5fd0218040dd561b4705126cc5bf7b2126eb549df984e4aa6e4e3cb88229",
+      "block": 20811644,
+      "timestamp": "2024-09-23T06:57:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0xbdcbabdba2bf4d74e3e030f7a217d281dad310b5",
+      "value_eth": 1.8064e-05,
+      "tx_hash": "0x4164ed66e10c724504b625b633af5789e8224f254221d76ed7971e0d9cf8ae51",
+      "block": 20811654,
+      "timestamp": "2024-09-23T06:59:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0xcbee8b8c1c9949adc0e0a9c0129bada9f466ed1a",
+      "value_eth": 1e-10,
+      "tx_hash": "0xe958672317e6605c3944062dad35f9d373a9de236ede98d89741cfb606eccb4f",
+      "block": 20854120,
+      "timestamp": "2024-09-29T05:10:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0xbdcb95a80d4c770fa811b1faf0bb4cf204d310b5",
+      "value_eth": 2.0,
+      "tx_hash": "0xc3881010811b63898c58ea6dca447ecd81c4fddce6598ce6e6017e69edb78bfd",
+      "block": 20983291,
+      "timestamp": "2024-10-17T05:47:47.000Z",
+      "label": null
+    },
+    {
+      "from": "0xbdcb95a80d4c770fa811b1faf0bb4cf204d310b5",
+      "value_eth": 2.8,
+      "tx_hash": "0xf63e06472e675926f88e6a1bed289bc0b7ca74908d863ffc0256d26d8c2a92a8",
+      "block": 21076947,
+      "timestamp": "2024-10-30T07:23:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0xbdcb95a80d4c770fa811b1faf0bb4cf204d310b5",
+      "value_eth": 1.4,
+      "tx_hash": "0xa11bf0739c40d5f67e753bbef89df1dbd9e06eab31e25695febe7242ae11b928",
+      "block": 23689198,
+      "timestamp": "2025-10-30T09:06:47.000Z",
+      "label": null
+    },
+    {
+      "from": "0x8f2d08f6d299d2e5cc0463b3a4dbe319e2642872",
+      "value_eth": 1e-08,
+      "tx_hash": "0x0618ab8a526759f584190aa76e5be2647d4190324033ef601f7aa5e686a577f0",
+      "block": 23788565,
+      "timestamp": "2025-11-13T06:42:23.000Z",
+      "label": null
+    },
+    {
+      "from": "0x56f67dc80633bf67d4107279545cbaf76eac5ebb",
+      "value_eth": 1e-08,
+      "tx_hash": "0x51710edc2112c410813d63d9411b3d2d33e71c5e4e8261e94211643c3d8199ca",
+      "block": 23788579,
+      "timestamp": "2025-11-13T06:45:11.000Z",
+      "label": null
+    },
+    {
+      "from": "0xa9c8f77527a4507dd7baa461f49bd2aff2480320",
+      "value_eth": 1e-08,
+      "tx_hash": "0x21894dfcb74e70b6264cea7dc0162f9bd0b0c2d99efd615e523d5d5899c0c0f2",
+      "block": 23788592,
+      "timestamp": "2025-11-13T06:47:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0x1334cfde171f7383d03daa88163796a2676b5524",
+      "value_eth": 1e-08,
+      "tx_hash": "0x4ad49633a619e9e8966dfda4c6a209f7af76034d7ab6b6115ea9e22f9e2ee34d",
+      "block": 23839268,
+      "timestamp": "2025-11-20T09:09:59.000Z",
+      "label": null
+    }
+  ],
+  "outbound": [
+    {
+      "to": "0xcd1a1d29f4f9bb32a3756442721704d3c91b1270",
+      "value_eth": 0.96,
+      "tx_hash": "0x590e1039c313ebf4a009f0b360d96903284353c3dbf9b22ec4e76e7dcaaabd16",
+      "block": 24289042,
+      "timestamp": "2026-01-22T08:09:59.000Z",
+      "label": null
+    },
+    {
+      "to": "0x84db3d1de9a43aa144c21b248ad31a1c83d8334d",
+      "value_eth": 0.7,
+      "tx_hash": "0xc77cabb113cd0bedb67df95bc7f9e53f985042781483300add821f6dc5855a81",
+      "block": 23695955,
+      "timestamp": "2025-10-31T07:49:59.000Z",
+      "label": null
+    },
+    {
+      "to": "0x4b8d7afe87042a3177d10d05c17dd8a0b505719a",
+      "value_eth": 0.7,
+      "tx_hash": "0x30652da3c011aa356ee1d07cea0800ec64d7fb494c8d178b3e13e69745c99fa4",
+      "block": 23695939,
+      "timestamp": "2025-10-31T07:46:35.000Z",
+      "label": null
+    },
+    {
+      "to": "0x007abdd190137f614701a6216fd703329afbcdf1",
+      "value_eth": 0.25731895,
+      "tx_hash": "0x4957d1a7a36df2c89cdb0c68583b58ce36151397218dfd32db5814770a5df08e",
+      "block": 21083820,
+      "timestamp": "2024-10-31T06:27:59.000Z",
+      "label": null
+    },
+    {
+      "to": "0xcbeeca5083c452ede1e316d02422a568ce96ed1a",
+      "value_eth": 0.01617874,
+      "tx_hash": "0xc7490bae8c5f8c377ee20c1c716fe95315c72e6b0fc6bd59cbdbd8c57a0fa63b",
+      "block": 21083815,
+      "timestamp": "2024-10-31T06:26:59.000Z",
+      "label": null
+    },
+    {
+      "to": "0xcbeeca5083c452ede1e316d02422a568ce96ed1a",
+      "value_eth": 0.4472265,
+      "tx_hash": "0x8f6ed3646990efc014371ccb7a5827aea46771bc8194e37e8fe81df1edc06399",
+      "block": 21083812,
+      "timestamp": "2024-10-31T06:26:23.000Z",
+      "label": null
+    },
+    {
+      "to": "0xf59c62bfc68ed68340cadaaf59b7a569d9fd734c",
+      "value_eth": 2.0,
+      "tx_hash": "0x806b6956158d6d1ec7760090221f5477e70e1c30b4238b00947e32d020899a9f",
+      "block": 21083802,
+      "timestamp": "2024-10-31T06:24:11.000Z",
+      "label": null
+    },
+    {
+      "to": "0x2eefd02dcc0d863d10047ecfd68f08f4185b4d95",
+      "value_eth": 2.0,
+      "tx_hash": "0x948f90951bb21ca512a90b9a7b33f0ea2d54a45403d0951dff5ebb659897cef4",
+      "block": 20984105,
+      "timestamp": "2024-10-17T08:31:11.000Z",
+      "label": null
+    },
+    {
+      "to": "0x007abdd190137f614701a6216fd703329afbcdf1",
+      "value_eth": 0.36317353,
+      "tx_hash": "0xa84c4f2299b0a265612cc6c4880ddb95f999e85439490fbfa6e9131f27946922",
+      "block": 20817658,
+      "timestamp": "2024-09-24T03:07:23.000Z",
+      "label": null
+    },
+    {
+      "to": "0xcbeeca5083c452ede1e316d02422a568ce96ed1a",
+      "value_eth": 0.01400085,
+      "tx_hash": "0xa7b9a5dd5c48f90383b201e90cea7d5cb11fb2c057390f931ca7985a176d4251",
+      "block": 20817656,
+      "timestamp": "2024-09-24T03:06:59.000Z",
+      "label": null
+    },
+    {
+      "to": "0xcbeeca5083c452ede1e316d02422a568ce96ed1a",
+      "value_eth": 0.82647433,
+      "tx_hash": "0x05debe78b6b4014651b83b83846321fc65c8e784e9b9da0457281f2860b51ba8",
+      "block": 20817655,
+      "timestamp": "2024-09-24T03:06:47.000Z",
+      "label": null
+    },
+    {
+      "to": "0x53866d68a5aeeaafe173867704b07f1af442c4da",
+      "value_eth": 1.0,
+      "tx_hash": "0x24b2616cc36a296cb6f6af9f7d654137440308dd417d8943420e2c5ea8d001bb",
+      "block": 20782932,
+      "timestamp": "2024-09-19T06:45:23.000Z",
+      "label": null
+    },
+    {
+      "to": "0xcbeeca5083c452ede1e316d02422a568ce96ed1a",
+      "value_eth": 0.01071004,
+      "tx_hash": "0x58788f4818932c31d070dfd44c97b59da5546460b3e6c1bdf77dfca67ebc857f",
+      "block": 20726348,
+      "timestamp": "2024-09-11T09:02:23.000Z",
+      "label": null
+    },
+    {
+      "to": "0xcbeeca5083c452ede1e316d02422a568ce96ed1a",
+      "value_eth": 0.66322888,
+      "tx_hash": "0x3474e2d517b7a3e7e6a6971567a906daa5c9b169a02439bbd0b870b67e27a62f",
+      "block": 20726344,
+      "timestamp": "2024-09-11T09:01:35.000Z",
+      "label": null
+    },
+    {
+      "to": "0x007abdd190137f614701a6216fd703329afbcdf1",
+      "value_eth": 0.28361761,
+      "tx_hash": "0x60f13822016c48866b8249e9b742bcde9249be1a2c0aa8558507be9557a337cc",
+      "block": 20726343,
+      "timestamp": "2024-09-11T09:01:23.000Z",
+      "label": null
+    },
+    {
+      "to": "0xcbe3aa13f36ae364afc2fb6843c6307c9c4ac727",
+      "value_eth": 1.26,
+      "tx_hash": "0x698cbdcefd2052c29917ade91e2687cc623597b94643d222200ec0c3ef0b9376",
+      "block": 20711834,
+      "timestamp": "2024-09-09T08:23:11.000Z",
+      "label": null
+    },
+    {
+      "to": "0xd1917932a7db6af687b523d5db5d7f5c2734763f",
+      "value_eth": 0.03,
+      "tx_hash": "0x8cdd82795fe546d75b34c29230bd19acee33d1c780fcf8f4446c73bba13da251",
+      "block": 20711684,
+      "timestamp": "2024-09-09T07:52:47.000Z",
+      "label": null
+    }
+  ],
+  "bridge_activity": [],
+  "cex_connections": [],
+  "funding_hops": [
+    {
+      "hop": 1,
+      "from": "0xf605dbb5626dfc1448cee33e2e1221103021468f",
+      "to": "0x153e9afc5e6a1166e6cc89d8493f162c45e5cc62",
+      "value_eth": 0.1,
+      "tx_hash": "0x3e9ee747461c8a40716973c1546863ca7b7faa9830bfbbcabb464f46ff9b94b0",
+      "timestamp": "2024-08-21T05:49:35.000Z",
+      "label": null
+    },
+    {
+      "hop": 2,
+      "from": "0xbdcb95a80d4c770fa811b1faf0bb4cf204d310b5",
+      "to": "0xf605dbb5626dfc1448cee33e2e1221103021468f",
+      "value_eth": 30.0,
+      "tx_hash": "0xd392ac999ea10a89e2d72d34d9aa1044d2489d2d4256c572968594010a561386",
+      "timestamp": "2024-03-26T02:35:11.000Z",
+      "label": null
+    }
+  ],
+  "labels_found": []
+}
