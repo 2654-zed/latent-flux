@@ -1,0 +1,70 @@
+{
+  "address": "0x238d7170f309a55b87a144a341bd6105897082ca",
+  "chain": "ethereum",
+  "traced_at": "2026-04-25T05:38:00.338127+00:00",
+  "inbound": [
+    {
+      "from": "0xfb5ddfb89d678a4e2ffedfa6827dffc088b29345",
+      "value_eth": 1e-08,
+      "tx_hash": "0x8c3891122ca6adb8cdedf475be2e14af596e7b8b3c8b52df7be859d136ce07ac",
+      "block": 23764266,
+      "timestamp": "2025-11-09T21:04:11.000Z",
+      "label": null
+    },
+    {
+      "from": "0x723dae2c008813f079d6ce3165c4c2be101c7e08",
+      "value_eth": 1e-08,
+      "tx_hash": "0x73c6dbad9ceb920ce651f81e72b8a10876058d2f0511c18bb069a02d171ae0d6",
+      "block": 23765002,
+      "timestamp": "2025-11-09T23:31:47.000Z",
+      "label": null
+    },
+    {
+      "from": "0xd7b665a5069d9b27b9eeadb721392369c917ada4",
+      "value_eth": 1e-08,
+      "tx_hash": "0x26bbe9bff322b4cb86a9fbc5933b39e2009ab5dd508abbacb66f0f633e73216d",
+      "block": 23765297,
+      "timestamp": "2025-11-10T00:31:11.000Z",
+      "label": null
+    },
+    {
+      "from": "0xeac20ee34751d1e06252214bfa6de642f7b53492",
+      "value_eth": 1e-08,
+      "tx_hash": "0x534fa866d60fdacc65d4723b80f7d26b4585a9c6706266d78fae3a8b40821410",
+      "block": 23767539,
+      "timestamp": "2025-11-10T08:02:23.000Z",
+      "label": null
+    },
+    {
+      "from": "0xc5f9d52e47152b616ca5f91b4402e821344eb82d",
+      "value_eth": 1e-08,
+      "tx_hash": "0x9ee5ed97e5277f547afebe955fe920f3c36c3c37f62f0af2be183bc00825b44b",
+      "block": 23767674,
+      "timestamp": "2025-11-10T08:29:23.000Z",
+      "label": null
+    },
+    {
+      "from": "0xb8b4f21c525dce597a0d0859c45dd128e02b83ed",
+      "value_eth": 1e-08,
+      "tx_hash": "0xff07e89c46f69993417cdb0c56cc280913db1b5af612faec2ce5446d4680a236",
+      "block": 23767790,
+      "timestamp": "2025-11-10T08:52:47.000Z",
+      "label": null
+    }
+  ],
+  "outbound": [],
+  "bridge_activity": [],
+  "cex_connections": [],
+  "funding_hops": [
+    {
+      "hop": 1,
+      "from": "0xfb5ddfb89d678a4e2ffedfa6827dffc088b29345",
+      "to": "0x238d7170f309a55b87a144a341bd6105897082ca",
+      "value_eth": 1e-08,
+      "tx_hash": "0x8c3891122ca6adb8cdedf475be2e14af596e7b8b3c8b52df7be859d136ce07ac",
+      "timestamp": "2025-11-09T21:04:11.000Z",
+      "label": null
+    }
+  ],
+  "labels_found": []
+}

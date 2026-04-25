@@ -1,0 +1,38 @@
+{
+  "address": "0xde8eb937cb5475eee5ac96dce6ba2d18e439c473",
+  "chain": "ethereum",
+  "traced_at": "2026-04-25T05:37:55.307501+00:00",
+  "inbound": [
+    {
+      "from": "0x380eb3c923ab4242a03594b3510b81dd12840ef9",
+      "value_eth": 1e-08,
+      "tx_hash": "0x12db45945761a37034eb1974078b996b3f75277cc126b2a6b3bdc89f999eb338",
+      "block": 23767598,
+      "timestamp": "2025-11-10T08:14:11.000Z",
+      "label": null
+    },
+    {
+      "from": "0x0e1c23d38b9325e3eada8f1d45cc3e433b109a95",
+      "value_eth": 1e-08,
+      "tx_hash": "0x3dc94e28ae26966e2567495f323d2257d60e626b5fa77b8c69bd0e7118902825",
+      "block": 23768336,
+      "timestamp": "2025-11-10T10:42:23.000Z",
+      "label": null
+    }
+  ],
+  "outbound": [],
+  "bridge_activity": [],
+  "cex_connections": [],
+  "funding_hops": [
+    {
+      "hop": 1,
+      "from": "0x380eb3c923ab4242a03594b3510b81dd12840ef9",
+      "to": "0xde8eb937cb5475eee5ac96dce6ba2d18e439c473",
+      "value_eth": 1e-08,
+      "tx_hash": "0x12db45945761a37034eb1974078b996b3f75277cc126b2a6b3bdc89f999eb338",
+      "timestamp": "2025-11-10T08:14:11.000Z",
+      "label": null
+    }
+  ],
+  "labels_found": []
+}

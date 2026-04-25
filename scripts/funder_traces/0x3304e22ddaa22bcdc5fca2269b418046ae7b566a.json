@@ -1,0 +1,182 @@
+{
+  "address": "0x3304e22ddaa22bcdc5fca2269b418046ae7b566a",
+  "chain": "ethereum",
+  "traced_at": "2026-04-25T05:37:48.128097+00:00",
+  "inbound": [
+    {
+      "from": "0x8da37eadbbe52e7d17724732471cd734346710e2",
+      "value_eth": 0.009129158964878698,
+      "tx_hash": "0xfb4ea3ce0c460b5b7c4ea4be707d05190d89e1106e7c3c6b0d4ec7e5fb40867b",
+      "block": 19518887,
+      "timestamp": "2024-03-26T13:23:23.000Z",
+      "label": null
+    },
+    {
+      "from": "0xa61bc343ed67bfef5b4a921a0f349f715ea5fa76",
+      "value_eth": 0.003045919103853666,
+      "tx_hash": "0xc00bb48b1140c432a046f4ed9a52062ad92d5aa09139a35ed785878c020d3867",
+      "block": 19663648,
+      "timestamp": "2024-04-15T21:40:35.000Z",
+      "label": null
+    },
+    {
+      "from": "0x6d3c5e09048eab27698bb8dd26641d1ffe68a872",
+      "value_eth": 0.03233525,
+      "tx_hash": "0x36366c9fd5bac8421144a928a366f83a3b24ae5336f3c74e7da0b0ee26fb4e87",
+      "block": 19673503,
+      "timestamp": "2024-04-17T06:48:23.000Z",
+      "label": null
+    },
+    {
+      "from": "0x9696f59e4d72e237be84ffd425dcad154bf96976",
+      "value_eth": 0.00797638,
+      "tx_hash": "0x544494ab768a91c77d788c81175235930d2e83691b5b720068be4adfeaa927a9",
+      "block": 19792382,
+      "timestamp": "2024-05-03T21:50:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0x1dad2a29c5aa623b84ff4faaf87e1f39d6c9a3f2",
+      "value_eth": 0.000121285235522738,
+      "tx_hash": "0x73fd80d06610df9ef700afe0a22dfc5cf2c57367cc76c02586052cc4dff7fd19",
+      "block": 20072369,
+      "timestamp": "2024-06-12T01:08:47.000Z",
+      "label": null
+    },
+    {
+      "from": "0x40fe63d3eab9395071fa9d2f8e0bf3b06ca4fed6",
+      "value_eth": 0.002859894890456901,
+      "tx_hash": "0x0ef9757a544f1be7bc279308cbbec292d824746264dd446de30b87da8b4dde69",
+      "block": 21294354,
+      "timestamp": "2024-11-29T15:50:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0xbd5ec858ba63b70b758ce295d3a6ee4d9de92c75",
+      "value_eth": 1e-06,
+      "tx_hash": "0x2aef27135533c0fbd34b9ab51e87d280a6cf15fdfd7d3d75d44a6d34ef60ada8",
+      "block": 21798549,
+      "timestamp": "2025-02-08T01:34:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0x83ce0daecd4a51b6cb422bef81029e2caa1b3e76",
+      "value_eth": 4.8e-17,
+      "tx_hash": "0xa837faf02b84990130eaa1f1b45e2a6dcf6118b5a8959d7d402e6536841ee4f3",
+      "block": 22722969,
+      "timestamp": "2025-06-17T08:14:47.000Z",
+      "label": null
+    },
+    {
+      "from": "0xb37da9cb096a4332ccc1a5d3361eced134dee2a5",
+      "value_eth": 0.00151537,
+      "tx_hash": "0xc09b7eeb58d02f2357437004d514ac269f2db3fb7d6ebdf5bd297b446bc5ea3b",
+      "block": 22725425,
+      "timestamp": "2025-06-17T16:29:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0x9ac2bb1c8f2c1ffbd84cb9308fc172d8f7734510",
+      "value_eth": 2e-18,
+      "tx_hash": "0xf20cd415e6f9313a9b7e4f120ed566f63d133641db476738e68a35e33f69e83a",
+      "block": 22728238,
+      "timestamp": "2025-06-18T01:57:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0x0ddd4b41a232efa79e782a64f5dec95e4e40dea6",
+      "value_eth": 1.7e-17,
+      "tx_hash": "0x4f823c3252feab3b9c970f65bdbe78bff287c53927160c64a1a5ba0cb9b43c15",
+      "block": 22728627,
+      "timestamp": "2025-06-18T03:16:11.000Z",
+      "label": null
+    },
+    {
+      "from": "0x30194a700b60cfdcd84616694fd4351a609459f3",
+      "value_eth": 4.5e-17,
+      "tx_hash": "0xfb446f4bb53abcc9d42576da150ab7dde88eaa40da0aeaf32f4cacf5fdb276d7",
+      "block": 22728802,
+      "timestamp": "2025-06-18T03:51:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0x30194a700b60cfdcd84616694fd4351a609459f3",
+      "value_eth": 4.5e-17,
+      "tx_hash": "0x05a3091dbab9a486e966977b5149bd1b0627830028a4d325da3c11ee892ae044",
+      "block": 22728806,
+      "timestamp": "2025-06-18T03:52:47.000Z",
+      "label": null
+    },
+    {
+      "from": "0x5d033270c1f7c56a39d34389426b0cfb90a3314b",
+      "value_eth": 1.6e-17,
+      "tx_hash": "0xa06b93beab342238ce24af5e668158250ad13f87c9d6780a44b95ec070e5a070",
+      "block": 22728837,
+      "timestamp": "2025-06-18T03:58:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0x97a82ecc7b08a5ae5774c87f1e98232ca1b42498",
+      "value_eth": 3e-17,
+      "tx_hash": "0xa39d6f6196cbb7bc33e09eb06e4eaea704d5241dc9e3f3e263d7d7acf7838f72",
+      "block": 22728848,
+      "timestamp": "2025-06-18T04:01:11.000Z",
+      "label": null
+    },
+    {
+      "from": "0x3ae0f27d634610a1950521cdaf5265e2f8188d20",
+      "value_eth": 2.6e-17,
+      "tx_hash": "0xf0570cad6c6a4619a93de1359afebe183ad1f2429a79bc67c35e1f32b7f986f8",
+      "block": 22729130,
+      "timestamp": "2025-06-18T04:57:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0x28e383c3f347aff5c7271cf5ca56f2528f21940c",
+      "value_eth": 3.4e-17,
+      "tx_hash": "0x7e3fd0073d9d9e389a61c550a623d83869fea8fa3d33bd8c9ddf01e7fe2f7aec",
+      "block": 22729546,
+      "timestamp": "2025-06-18T06:22:23.000Z",
+      "label": null
+    },
+    {
+      "from": "0x535a9c04bf56c6aba14ecc140e6e4c2193b6d118",
+      "value_eth": 1.8e-17,
+      "tx_hash": "0x2eb0e8e748392dd361828655bb7a884281d3961d713e27dfc84684786f1f2807",
+      "block": 22730306,
+      "timestamp": "2025-06-18T08:55:11.000Z",
+      "label": null
+    },
+    {
+      "from": "0xd539dcfdab2635c1dcf0318b2b232da6b9f5d123",
+      "value_eth": 2.6e-17,
+      "tx_hash": "0x5ccf140cd69166c5db4283ef8316c2884c14253c1f9cee5dc64a76a985195ffe",
+      "block": 22730429,
+      "timestamp": "2025-06-18T09:19:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0x26d63c25401f1693d57e197498e60f5aea43f194",
+      "value_eth": 9e-18,
+      "tx_hash": "0xb03fb7e44e7e349b0e2ca18d7a8ce63b96a1a5b7e8a18fbd2af0c36b714d2eb1",
+      "block": 22730839,
+      "timestamp": "2025-06-18T10:42:23.000Z",
+      "label": null
+    }
+  ],
+  "outbound": [],
+  "bridge_activity": [],
+  "cex_connections": [],
+  "funding_hops": [
+    {
+      "hop": 1,
+      "from": "0x8da37eadbbe52e7d17724732471cd734346710e2",
+      "to": "0x3304e22ddaa22bcdc5fca2269b418046ae7b566a",
+      "value_eth": 0.009129158964878698,
+      "tx_hash": "0xfb4ea3ce0c460b5b7c4ea4be707d05190d89e1106e7c3c6b0d4ec7e5fb40867b",
+      "timestamp": "2024-03-26T13:23:23.000Z",
+      "label": null
+    }
+  ],
+  "labels_found": []
+}

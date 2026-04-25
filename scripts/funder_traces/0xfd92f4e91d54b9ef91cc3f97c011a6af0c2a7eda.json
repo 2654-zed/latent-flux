@@ -1,0 +1,30 @@
+{
+  "address": "0xfd92f4e91d54b9ef91cc3f97c011a6af0c2a7eda",
+  "chain": "ethereum",
+  "traced_at": "2026-04-25T05:37:45.244512+00:00",
+  "inbound": [
+    {
+      "from": "0x56c75d50b71e0069064bf6a8a3028eb5cefd6abe",
+      "value_eth": 0.002679435800594249,
+      "tx_hash": "0xbeaf5009dd97065d14bf94b6d1eee350e84ea9202a25bd809afad7c87b96d351",
+      "block": 20229024,
+      "timestamp": "2024-07-03T22:39:23.000Z",
+      "label": null
+    }
+  ],
+  "outbound": [],
+  "bridge_activity": [],
+  "cex_connections": [],
+  "funding_hops": [
+    {
+      "hop": 1,
+      "from": "0x56c75d50b71e0069064bf6a8a3028eb5cefd6abe",
+      "to": "0xfd92f4e91d54b9ef91cc3f97c011a6af0c2a7eda",
+      "value_eth": 0.002679435800594249,
+      "tx_hash": "0xbeaf5009dd97065d14bf94b6d1eee350e84ea9202a25bd809afad7c87b96d351",
+      "timestamp": "2024-07-03T22:39:23.000Z",
+      "label": null
+    }
+  ],
+  "labels_found": []
+}

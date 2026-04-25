@@ -1,0 +1,343 @@
+{
+  "address": "0xca7ece5e43ef44de8e430629a5b535eca48e251b",
+  "chain": "ethereum",
+  "traced_at": "2026-04-25T05:38:09.933429+00:00",
+  "inbound": [
+    {
+      "from": "0x26048636ee8187ecf77e5335bd04231b6923b230",
+      "value_eth": 3.6079425657302093,
+      "tx_hash": "0xb68aa0c0a24befaad16535cb5df094a3042f3d7ebd9874162032a4703d97e69b",
+      "block": 24465279,
+      "timestamp": "2026-02-15T22:45:11.000Z",
+      "label": null
+    },
+    {
+      "from": "0x1d8098d261ffae0ee0a700b6b814d07a89281322",
+      "value_eth": 1e-08,
+      "tx_hash": "0x0c253c19c6fcd449d752840ebfb229469785dcf9a19024f82322db51bebb8797",
+      "block": 24465416,
+      "timestamp": "2026-02-15T23:12:35.000Z",
+      "label": null
+    },
+    {
+      "from": "0x1d81e83d88bdbb8d2706c019bb8cabee4ace5322",
+      "value_eth": 2.56647161482e-06,
+      "tx_hash": "0x5354e2843f47cd3e16f5d688362769d9cc1d2b8f6e3f156b45a8b482a44384a1",
+      "block": 24465416,
+      "timestamp": "2026-02-15T23:12:35.000Z",
+      "label": null
+    },
+    {
+      "from": "0x38f036262ff4e5a51d47286f599c43038c001463",
+      "value_eth": 1e-08,
+      "tx_hash": "0xb0ead1225f6460cf1c902b6b7bcbc128a89f2d35df9287ce9c986da2d2c7bbb1",
+      "block": 24465417,
+      "timestamp": "2026-02-15T23:12:47.000Z",
+      "label": null
+    },
+    {
+      "from": "0x6400a235debc33b6ee5fbf2435547b64ab220fff",
+      "value_eth": 1e-08,
+      "tx_hash": "0x0a4c264d02f11abb8dd6d431a4cf1ca700f86a802f817ec8edb0dfd1055ef468",
+      "block": 24465418,
+      "timestamp": "2026-02-15T23:12:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0x640774c2c54b1ccc3969177e6e550847d91befff",
+      "value_eth": 2.56647161482e-06,
+      "tx_hash": "0x1ed2ffbc2c92043fe06e417344d9475ba5572ec3d608905be8acf519f2f5cc6a",
+      "block": 24465418,
+      "timestamp": "2026-02-15T23:12:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0x38f435a8b7fcc70df9c9d4f2bc6ad602ecf60463",
+      "value_eth": 2.56647161482e-06,
+      "tx_hash": "0x22e9d2d8ea7c8ce4a4b4162d80a5f8da1625b9f65caf9eb330fd3c0d71483f5f",
+      "block": 24465418,
+      "timestamp": "2026-02-15T23:12:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0x566006f8d2110cb4dffa2d9d381f89946fedcf6b",
+      "value_eth": 1e-08,
+      "tx_hash": "0xc1c08df2710eaff0d4b9ed3b99542d31c463db5db6f752ca68622f270ad14925",
+      "block": 24465419,
+      "timestamp": "2026-02-15T23:13:11.000Z",
+      "label": null
+    },
+    {
+      "from": "0x566544858abf2d5d927a153f93beb697e9843f6b",
+      "value_eth": 2.56647161482e-06,
+      "tx_hash": "0xf0ba902cba7d202e17f8a5c929c306cd3030121b7f58cdbfed3f9bd4468173ba",
+      "block": 24465419,
+      "timestamp": "2026-02-15T23:13:11.000Z",
+      "label": null
+    },
+    {
+      "from": "0x781064033972c04fcd6440b0762217dda4b4a6c6",
+      "value_eth": 1e-08,
+      "tx_hash": "0xa31bbffc0744a2ed62f60e42630acc2d2cf35078ad4c59ae97693f85d6722bbb",
+      "block": 24465420,
+      "timestamp": "2026-02-15T23:13:23.000Z",
+      "label": null
+    },
+    {
+      "from": "0x7818dbd3422fa51f79d314c8c5b3d2fef25736c6",
+      "value_eth": 2.56647161482e-06,
+      "tx_hash": "0xd65ee86317bfc7e7693b9542be2dae610cad86e6c44e7992fc95b8a88af755cf",
+      "block": 24465420,
+      "timestamp": "2026-02-15T23:13:23.000Z",
+      "label": null
+    },
+    {
+      "from": "0x558a718c676c13b4cc7cf6bfa57d2342f62c73b3",
+      "value_eth": 2.56647161482e-06,
+      "tx_hash": "0x9e322b8b492d723c1d0e71f3935a0ba0f8f087c1209bf2d5360657ba6eb602c0",
+      "block": 24465421,
+      "timestamp": "2026-02-15T23:13:35.000Z",
+      "label": null
+    },
+    {
+      "from": "0x55801cdff4ff5257541d5ef800df7d0e59e923b3",
+      "value_eth": 1e-08,
+      "tx_hash": "0xce9a6cc935bbb63f4aa318b815dc2ae15b28996c583f646e93d43cfde4c37e2d",
+      "block": 24465421,
+      "timestamp": "2026-02-15T23:13:35.000Z",
+      "label": null
+    },
+    {
+      "from": "0xa5f00f81dd659562adbd323807666fd3152b2564",
+      "value_eth": 1e-08,
+      "tx_hash": "0xf8d9b7a6ad16784df39faa352edac684e70fb210bb2aebd28b896b245dc75bab",
+      "block": 24465422,
+      "timestamp": "2026-02-15T23:13:47.000Z",
+      "label": null
+    },
+    {
+      "from": "0x1d8d71a0b56159f46b02977478a309e6359d1322",
+      "value_eth": 1e-09,
+      "tx_hash": "0x28b3fdfc736bc745c5895a6cda9b33ba770c041857b8299cb64a1cd92680bd97",
+      "block": 24465423,
+      "timestamp": "2026-02-15T23:13:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0xcfdaf3ce8dd96b0cdf08a7d726b2dabcf1624113",
+      "value_eth": 2.56647161482e-06,
+      "tx_hash": "0x631b34ddde41b69798e4b875075b386776909d9c1f29a1630b655f9156ddd200",
+      "block": 24465423,
+      "timestamp": "2026-02-15T23:13:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0xcfd1b40da642512109e0c0084c4ec36223a35113",
+      "value_eth": 1e-08,
+      "tx_hash": "0x77801dc27224d690cd79a1bef8b822e24a02d4a08cdb21c5d1fa255171bbc662",
+      "block": 24465423,
+      "timestamp": "2026-02-15T23:13:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0x38f51958722a5e30644d2d2a37e1d98f26551463",
+      "value_eth": 1e-09,
+      "tx_hash": "0x8a3c83e0d355781272fd0411da336e6a8734889927ad2e204c170613a9dabd04",
+      "block": 24465423,
+      "timestamp": "2026-02-15T23:13:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0xa5f40b17fd7413689c69bc29cbc0b90fc62ff564",
+      "value_eth": 2.56647161482e-06,
+      "tx_hash": "0x8cec254c2c92255347e64d2fdb21fa4e1150686a2084354ed7c340b0656fe01e",
+      "block": 24465423,
+      "timestamp": "2026-02-15T23:13:59.000Z",
+      "label": null
+    },
+    {
+      "from": "0xdac185b016e1992d486d5671d814ff01fa09d786",
+      "value_eth": 2.56647161482e-06,
+      "tx_hash": "0x8bc11041a1ad2025d0725f5b4f60a07cf6ada0f82d6b7a9e676720b1c053628e",
+      "block": 24465424,
+      "timestamp": "2026-02-15T23:14:11.000Z",
+      "label": null
+    }
+  ],
+  "outbound": [
+    {
+      "to": "0xeb77a155ce6ffed822115d758d087095cbabd558",
+      "value_eth": 3.2197959079893597,
+      "tx_hash": "0xd1f3209d067f0e0b31938614137282d8892ddccf6e3adc9b9364585b0478212e",
+      "block": 24954327,
+      "timestamp": "2026-04-25T03:30:35.000Z",
+      "label": null
+    },
+    {
+      "to": "0x53cc0e0007287bb698f20292d5716dc30d249247",
+      "value_eth": 0.06686727052370836,
+      "tx_hash": "0x5e0ce8a729e62bc3a3b108d387d6bd8dcdf5975e14f9fe56611d891bdeafc2ee",
+      "block": 24954326,
+      "timestamp": "2026-04-25T03:30:23.000Z",
+      "label": null
+    },
+    {
+      "to": "0x1d8da3d8da3de46e6a55689caf47eded941b1322",
+      "value_eth": 0.06686721003060436,
+      "tx_hash": "0x210add501b405e965c61dc7d0351a211b8cb0d8dba0d5262dd5e34da20a2b2b7",
+      "block": 24954325,
+      "timestamp": "2026-04-25T03:30:11.000Z",
+      "label": null
+    },
+    {
+      "to": "0x4c2bc1f47907ed0a6a4ef151a1af63f7e81c172b",
+      "value_eth": 0.05108939266534788,
+      "tx_hash": "0x49c07f87fac9bb02e59a18eaa73aed98c4c38ec9c4e2cf7b3fca7953d4dcf162",
+      "block": 24954323,
+      "timestamp": "2026-04-25T03:29:47.000Z",
+      "label": null
+    },
+    {
+      "to": "0xa5fde73472dc2538da8a43c5c7004c0fe38e2564",
+      "value_eth": 0.06686733680602937,
+      "tx_hash": "0xd1dc202a97fb8fd3d2e81d9c363ab224550289d6bf1d376f5794e4a9651af740",
+      "block": 24954322,
+      "timestamp": "2026-04-25T03:29:35.000Z",
+      "label": null
+    },
+    {
+      "to": "0x1c6ec2a5f19eb34d35dc8632844fde0b150124b3",
+      "value_eth": 0.06686721603286637,
+      "tx_hash": "0x950a2e9621b81f10602cbd59af76e5f952d70643c253d428134421d40381a1ae",
+      "block": 24954321,
+      "timestamp": "2026-04-25T03:29:23.000Z",
+      "label": null
+    },
+    {
+      "to": "0xef1c654db4381468f002e5928eefa122f8f401d7",
+      "value_eth": 0.06686729299404437,
+      "tx_hash": "0x6ec052308d7719599befb159007c3d404b4449febfbb628ce2163d65a86ef0a1",
+      "block": 24954320,
+      "timestamp": "2026-04-25T03:29:11.000Z",
+      "label": null
+    },
+    {
+      "to": "0x1f9d8c3de828f820c654b4ea8f62ff423f436266",
+      "value_eth": 0.06686685349690936,
+      "tx_hash": "0xf53d736202ca844264a9dbaffd6847d3997db8610aea680153df719b9b6e3738",
+      "block": 24954319,
+      "timestamp": "2026-04-25T03:28:59.000Z",
+      "label": null
+    },
+    {
+      "to": "0x6c1e2f4eff2f5d2268116d647b210e24c166499a",
+      "value_eth": 0.06686730063699436,
+      "tx_hash": "0x89df8fc117ae99526c46ae4b378ff6d7cd0d8d4c5ef1d84b670eb4feadde8bf6",
+      "block": 24954318,
+      "timestamp": "2026-04-25T03:28:47.000Z",
+      "label": null
+    },
+    {
+      "to": "0x683e50a94456eb076bfa08da7aecfbc4121b4a41",
+      "value_eth": 0.06686697706313537,
+      "tx_hash": "0xba3421551ac44b06bf9c335947c5d3b4971b597ab6b6d4926e392bffdd0627c7",
+      "block": 24954317,
+      "timestamp": "2026-04-25T03:28:35.000Z",
+      "label": null
+    },
+    {
+      "to": "0x41bb2964f4ecc286043f02997696609a3957b00a",
+      "value_eth": 0.06686747950997536,
+      "tx_hash": "0xa6470b9b5e6f54ba9e59b122e0b24991ccc51d5d6527ae5e60ce05583774fbcd",
+      "block": 24954316,
+      "timestamp": "2026-04-25T03:28:23.000Z",
+      "label": null
+    },
+    {
+      "to": "0x43b6caf11040a264f31d1885ed43148d8b31c6f0",
+      "value_eth": 0.00532335040548446,
+      "tx_hash": "0x8994e66f0de95826751837972c76646fa1a786d9deff7533c92d4f16091e9e06",
+      "block": 24954315,
+      "timestamp": "2026-04-25T03:28:11.000Z",
+      "label": null
+    },
+    {
+      "to": "0x4956e538a3ae6062770aac9a99906ef7bb20cc14",
+      "value_eth": 0.06686724694093936,
+      "tx_hash": "0x9035d7dbf85735b3b90cc091990d05b294ce7a341a6fea76cc1a595cee2ee2f8",
+      "block": 24954314,
+      "timestamp": "2026-04-25T03:27:59.000Z",
+      "label": null
+    },
+    {
+      "to": "0x1125ae7e94e18bd35d7dbdde1f9d171f27c542ce",
+      "value_eth": 0.06686745333418936,
+      "tx_hash": "0xef84c5c57d484a4df5973360274ee50fa78400eebf07777bd4534738edc95c18",
+      "block": 24954313,
+      "timestamp": "2026-04-25T03:27:47.000Z",
+      "label": null
+    },
+    {
+      "to": "0x6a1611222b9a9d85467fc66f004ce821cc0f9f9f",
+      "value_eth": 0.06686715617490736,
+      "tx_hash": "0xe4972de32169f564f1bf2e3bb6aba2d11df93398d1da8956c21bd95bd15e2714",
+      "block": 24954312,
+      "timestamp": "2026-04-25T03:27:35.000Z",
+      "label": null
+    },
+    {
+      "to": "0x640bec3ab18b4dd12f7d9c224ced11eb39dd0fff",
+      "value_eth": 0.06686784527890337,
+      "tx_hash": "0x0804f5a2c68a2c4abcad0278c17d2963121eae9021a4eb6863336bc65393d60e",
+      "block": 24954311,
+      "timestamp": "2026-04-25T03:27:23.000Z",
+      "label": null
+    },
+    {
+      "to": "0xa88458521f5829f559cdbddf6d4b2089e51aa219",
+      "value_eth": 0.06686676739882036,
+      "tx_hash": "0xe461ebc066c97d7cf923dc8d0fe90b569a301f4fbd34dedae7098aed8e058d6d",
+      "block": 24954310,
+      "timestamp": "2026-04-25T03:27:11.000Z",
+      "label": null
+    },
+    {
+      "to": "0x38f5d100c82003d94ce045e142f6fac2c0701463",
+      "value_eth": 0.06686720834560636,
+      "tx_hash": "0x544fa9043827db896d5111407ecfd039abb56973d3e974cf35ebd35f31795a1c",
+      "block": 24954309,
+      "timestamp": "2026-04-25T03:26:59.000Z",
+      "label": null
+    },
+    {
+      "to": "0xe11ce5c7fc8232fb4e04a97f18a1f3a6cb86d963",
+      "value_eth": 0.06686708826105436,
+      "tx_hash": "0xf99ba5b29e03e8b75f182aa0f44f9b5fbb05126ce7175fc27d25f362ef14b185",
+      "block": 24954308,
+      "timestamp": "2026-04-25T03:26:47.000Z",
+      "label": null
+    },
+    {
+      "to": "0xb8a2052e685362c4731a9b791875dcf36796b7b1",
+      "value_eth": 0.06686705686529837,
+      "tx_hash": "0x6d79cb4d300e3cc706ddc639c6d42ca2ce539c33d38fc9fbcf3ba550bd37eb3f",
+      "block": 24954307,
+      "timestamp": "2026-04-25T03:26:35.000Z",
+      "label": null
+    }
+  ],
+  "bridge_activity": [],
+  "cex_connections": [],
+  "funding_hops": [
+    {
+      "hop": 1,
+      "from": "0x26048636ee8187ecf77e5335bd04231b6923b230",
+      "to": "0xca7ece5e43ef44de8e430629a5b535eca48e251b",
+      "value_eth": 3.6079425657302093,
+      "tx_hash": "0xb68aa0c0a24befaad16535cb5df094a3042f3d7ebd9874162032a4703d97e69b",
+      "timestamp": "2026-02-15T22:45:11.000Z",
+      "label": null
+    }
+  ],
+  "labels_found": []
+}

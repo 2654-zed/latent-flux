@@ -1,0 +1,11 @@
+{
+  "address": "0x8ca702323c341a8d46ee94a2abeddb08798ca10d",
+  "chain": "ethereum",
+  "traced_at": "2026-04-25T05:38:05.200287+00:00",
+  "inbound": [],
+  "outbound": [],
+  "bridge_activity": [],
+  "cex_connections": [],
+  "funding_hops": [],
+  "labels_found": []
+}
