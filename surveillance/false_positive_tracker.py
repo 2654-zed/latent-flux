@@ -98,6 +98,20 @@ def scan_false_positives(conn: sqlite3.Connection) -> dict:
         if hits < 10:
             continue  # Not enough data to assess
 
+        # Guard: do not write FP rows for contracts with any observed harm.
+        # The infrastructure-parasite class produces high-traffic + low-revert
+        # patterns by design; the sustained_traffic and balanced_interaction
+        # heuristics fire on exactly the surface that defines the parasite.
+        # If the contract has ever produced a trap_event, that is observed-harm
+        # ground truth and should override any heuristic-based FP signal.
+        # See Correction #17 (2026-04-25) for the 0xd4624228 cascade.
+        traps = conn.execute(
+            "SELECT 1 FROM trap_events WHERE LOWER(trap_contract_address) = LOWER(?) LIMIT 1",
+            (addr,),
+        ).fetchone()
+        if traps:
+            continue
+
         revert_rate = reverts / hits if hits > 0 else 0
         fp_reason = None
         fp_method = None
