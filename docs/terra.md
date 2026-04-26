@@ -1,6 +1,4 @@
-Here’s your report cleanly formatted as a **Markdown (.md) file**, ready to drop into GitHub / Notion / docs.
 
----
 
 ```markdown
 # Terra/UST Collapse — Adversarial System Stress Report
