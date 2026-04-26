@@ -1,6 +1,105 @@
 # Layer 3 — Claude Code Implementation Brief
-**Last updated:** April 17, 2026
+**Last updated:** April 25, 2026
 **Purpose:** This is the implementation context for Claude Code sessions working on Layer 3. Read this first before touching any code.
+
+---
+
+## Session-Start Protocol
+
+The corpus is now large enough that finding-rediscovery is the dominant failure mode for fresh sessions. Several recent sessions have independently "discovered" infrastructure that was already characterized in `surveillance/data/cases/` (org_001 wallets re-attributed; Coffee Fleet single-operator hypothesis restated as new; `0xd4624228` partially reframed without consulting `PARASITE_ARCHITECTURE_0xd4624228.md`). The cause is structural — sessions begin without a literature-review step. These four phases are the fix.
+
+Skipping a phase is the failure. Finding nothing in a phase is fine.
+
+### Phase 1 — Index Loading (mandatory, no exceptions)
+
+Read at session start, in order:
+1. `claude.md` (this file)
+2. `docs/lexicon.md`
+3. `docs/INDEX.md`
+4. `reports/correction_log.md`
+5. `CORRECTIONS.md` (project root — distinct from `reports/correction_log.md`)
+
+Both correction logs exist and serve different purposes. `CORRECTIONS.md` records customer-facing claim retractions; `reports/correction_log.md` records numbered methodology corrections. **Always check both.**
+
+State at session start:
+
+```
+Phase 1 complete:
+  claude.md (last updated [date]),
+  lexicon.md (version [date]),
+  INDEX.md (version [date]) — covers [N] organizations, [M] addresses, [K] patterns,
+  reports/correction_log.md (latest #[N]),
+  CORRECTIONS.md (latest entry [date]).
+```
+
+If `INDEX.md` is older than the newest file in `surveillance/data/cases/`, or `reports/correction_log.md` has not been updated in >30 days, flag staleness before proceeding.
+
+### Phase 2 — Task-Specific Literature Review
+
+Before producing any analysis, identify what the task touches and resolve each piece against documented prior work:
+
+- **Every address in the task** → search Section 2 of `INDEX.md`. For any address not in the index, grep `surveillance/data/cases/` and `reports/` before claiming it is undocumented.
+- **Every pattern, hypothesis, or framework concept** → search `docs/lexicon.md`, then Section 3 of `INDEX.md`, then both correction logs.
+- **Every entity name** (`org_xxx`, `Entity_xxx`, named cases like Dragon / Coffee Fleet / Routing Parasite) → look up in Section 1 of `INDEX.md`.
+
+Produce the list before analyzing:
+
+```
+Prior context for this task:
+- 0xABC: classified as [role] in [file], watchlist [tier or "none"].
+- Pattern Y: documented in lexicon entry [Z], status [DOCUMENTED / RETIRED / OPEN / ANECDOTE].
+- 0xDEF: not in INDEX.md, no grep matches in cases/ or reports/. Treating as undocumented; will not claim novel until Phase 3 verification.
+```
+
+Default posture: addresses are documented somewhere unless proven otherwise. The index Section 2 is grep-able. Use it.
+
+### Phase 3 — Prior-State Declaration
+
+Before producing analytical findings, declare the prior state explicitly:
+
+```
+Prior to this investigation, the following is documented:
+[1-paragraph summary citing specific files and key facts]
+```
+
+OR (only after Phase 2 grep failed to surface documentation):
+
+```
+No prior documentation found for [item] in (claude.md, lexicon.md, INDEX.md, both correction logs, cases/, reports/). Flagging as potentially novel.
+```
+
+The declaration is the load-bearing artifact. Without it, analysis defaults to silent rediscovery. **Skipping this phase is the protocol's primary failure mode.**
+
+### Phase 4 — Delta Framing
+
+Findings must frame their relationship to prior state in one of five shapes:
+
+- **Confirms** — "Prior file [X] documented [Y]; this investigation confirms with additional evidence [Z]."
+- **Refines** — "Prior file [X] documented [Y]; this investigation refines to [Z] based on [evidence]."
+- **Contradicts** — "Prior file [X] documented [Y]; this investigation contradicts based on [evidence]. Recommend correction-log entry."
+- **Extends** — "Prior file [X] documented [Y] up to [boundary]; this investigation extends with [Z]."
+- **Novel** — "No prior file documents [Y]; this finding is novel because [explicit reason it would have appeared in prior files if known]."
+
+Default posture: findings are confirmation, refinement, contradiction, or extension of prior work. Pure novel discovery is the rare case, not the default. A finding framed Novel without explicit justification of why prior work would have surfaced it (if known) is not Phase-4-compliant.
+
+### Phase 5 — Output Discipline (when warranted)
+
+When a session produces a finding that warrants a case file (genuinely novel entity; substantially refining a prior file; documenting a new wallet role), the session must:
+
+1. **Generate the case-file content** under `surveillance/data/cases/`. Match the existing naming convention:
+   - `CASE_ORG_{NNN}_{TITLE}.md` for organizational characterizations
+   - `CASE_ENTITY_{NNN}_{NAME}.md` for entity-level dives
+   - `CASE_{NAME}_{0xADDR}.md` for named cases
+   - `BOT_INVESTIGATION_{0xADDR}_{date}.md` / `PARASITE_ARCHITECTURE_{0xADDR}.md` / `CASE_ZERODAY_{0xADDR}.md` for specialized formats
+   - `CASE_0x{prefix8}_{chain}_{YYYYMMDD}_{HHMMSS}.md` is auto-generated by `surveillance/case_file.py`; don't write these by hand
+2. **Update `docs/INDEX.md`** — Section 1 entry if entity-level, Section 2 entries for every wallet with a role, Section 3 if a new pattern or hypothesis surfaces, Section 4 if it's an extraction event, Section 5 if it's a bytecode family.
+3. **If a prior claim is being retired** → append to `reports/correction_log.md` (numbered) and/or `CORRECTIONS.md` (date-titled), per the discipline of each log.
+
+The case-file commit and the INDEX.md update commit are the same commit. A new case file without an index update is the failure mode this protocol exists to prevent.
+
+### Index Maintenance Commitment
+
+Every commit that adds, removes, or substantially edits a file in `surveillance/data/cases/` or `reports/` MUST include a paired update to `docs/INDEX.md`. The stretch-goal `scripts/check_index.py` automates drift detection: lists addresses in case files but absent from INDEX.md, lists INDEX.md entries pointing to nonexistent files, returns nonzero on drift. Run it as a pre-commit check or as Phase 1 staleness verification.
 
 ---
 
