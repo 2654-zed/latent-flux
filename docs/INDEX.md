@@ -157,12 +157,34 @@
 - **Status:** TRACKED (watchlist HIGH, `entity_type: high_value_bridge_user`)
 - **Key wallet:** `0xe69f81b825d7dc31ee9becef4dbeab5cf30e3abb`
 
-### Infrastructure-Scale Operator candidates (2026-04-25 detector run, 12 candidates)
+### Infrastructure-Scale Operator candidates (2026-04-25 detector run, 12 candidates; counts updated 2026-04-26)
 - **ID:** No canonical IDs — surfaced by detector only
 - **Description:** Funder addresses with ≥200 fanout, ≥10% adversarial ratio, ≥50% disposable rate. Lexicon: [Infrastructure-Scale Operator](lexicon.md#infrastructure-scale-operator).
 - **Primary case file:** None — DB-only via `infrastructure_operator_candidates` table.
-- **Status:** UNDER_INVESTIGATION (12 candidates surfaced, 0 promoted to entity status)
-- **Note on attribution:** Two of the 12 candidates are already classified org_001 infrastructure: `0xf70da97812cb96acdf810712aa562db8dfa3dbef` (Whale Trader, mainnet) and `0x8c826f795466e39acbff1bb4eeeb759609377ba1` (L2 Gas Station). A third is `0xbaed383ede0e5d9d72430661f3285daa77e9439f` = org_004. The remaining 9 are not yet attributed to existing organizations.
+- **Status:** UNDER_INVESTIGATION (12 candidates surfaced 2026-04-25; counts shifting daily)
+
+**The twelve funder addresses (counts as of 2026-04-26 sync):**
+
+| Funder | Deployers | Contracts | Confirmed | Notes |
+|---|---|---|---|---|
+| `0xf70da97812cb96acdf810712aa562db8dfa3dbef` | 2,684 | 6,971 | 109 | **org_001 Whale Trader** (CEX-funded via Binance origin) |
+| `0xfd92f4e91d54b9ef91cc3f97c011a6af0c2a7eda` | 2,187 | 7,876 | 0 | Pure stockpile (zero confirmed) |
+| `0x3304e22ddaa22bcdc5fca2269b418046ae7b566a` | **2,027** (was 1,939; +88/24h) | 6,470+ | 33+ | Funds `0x666521` (HIGH watchlist), `0xbad051ece`, **`0x00169219` (5 confirmed in 24h)** |
+| `0xc43f317ed4d81cbbfe2c9c98b4cc6f303519f078` | 1,562 | 1,393 | 0 | Pre-stage warehouse |
+| `0xb0b0b6903489cc56bf037cb2f5ba986e2775bb07` | **5,775+** (was 1,404; +4,371/24h) | 5,775+ | 0 | **L2-only Optimism funder.** 99.86% of downstream uses bytecode `476b15536fa9...`. Drove the 8,797 COORDINATED_DEPLOYMENT alert surge 2026-04-26. |
+| `0xde8eb937cb5475eee5ac96dce6ba2d18e439c473` | 938 | 807 | 4 | Watchlist HIGH (`org_002_junior` per live entity_name) |
+| `0x0e6e91775d24d34b90e0f3d806a90705f0199999` | 878 | 724 | 0 | L2-only |
+| `0x238d7170f309a55b87a144a341bd6105897082ca` | 861 | 734 | 2 | Watchlist HIGH (`org_002_senior`). 98% suspected ratio. |
+| `0x8c826f795466e39acbff1bb4eeeb759609377ba1` | 743 | 3,366 | 2 | **org_001 L2 Gas Station** (Coinbase-funded) |
+| `0x8ca702323c341a8d46ee94a2abeddb08798ca10d` | 737 | 320 | 1 | L2-only |
+| `0x39591e7c099a379fd7b349ebfecaeef439c40454` | 633 | 2,029 | 5 | L2-only |
+| `0xca7ece5e43ef44de8e430629a5b535eca48e251b` | 484 | 576 | 0 | Pre-stage warehouse |
+
+**Attribution notes:**
+- Three are confirmed pre-existing organization infrastructure: `0xf70da97812` (org_001 Whale Trader), `0x8c826f79` (org_001 L2 Gas Station), `0xbaed383ede0e5d9d72430661f3285daa77e9439f` (org_004 — separately documented).
+- Two more are watchlist-classified org_002 infrastructure per live `watchlist.entity_name`: `0x238d7170` (`org_002_senior`) and `0xde8eb937` (`org_002_junior`).
+- Four are L2-native (no mainnet history) — deliberate `eth_depth` evasion: `0xb0b0b690` (Optimism), `0x0e6e9177`, `0x8ca70232`, `0x39591e7c` (Base).
+- `0xb0b0b690` (Optimism, L2-native) is currently scaling fastest — 4,371 new deployers in 24 hours, all with the same bytecode hash `476b15536fa9703e2c630e91ac976c514e1868a70e8c996f1bf8bb97a9b9e532` (see Section 5). Campaign-shape resembles **org_002 / Dragon scaled 2.8–16.5×** — pre-stage trap stockpile.
 
 ---
 
@@ -295,8 +317,10 @@ Flat alphabetical (lowercase). Use Ctrl-F. Format: `address  primary_classificat
 - `0x9da33ece6fdf36ecf99e10dbd6ecd0cb529e257e` — Multi-Mechanism Trap — `CASE_0x9da33ece_base_20260322_040303.md` (single-file artifact)
 - `0xb5ae0b6cb72dcf5180ac2a4c3b77bebef5b42a81` — deployer of `0x9da33ece` (8-contract Base fleet, top by victim-bot count in 2026-04-25 pairwise probe with 192 bots) — `CASE_0x9da33ece_base_20260322_040303.md`
 - `0x1d13a5aefd4d3a0f466c0058526d8bf11d88502a` — deployer of `0xb15e7a89` (Multi-Mechanism Trap, 8 contracts, Arbitrum) — `CASE_0xb15e7a89_arbitrum_20260322_040329.md`
-- `0x666521000c595a632fb3e99f392b12e937b77586` — high-productivity solo operator (watchlist HIGH 2026-04-23) — no case file, lexicon-only
+- `0x666521000c595a632fb3e99f392b12e937b77586` — high-productivity solo operator (watchlist HIGH 2026-04-23, funder `0x3304e22d` infrastructure-scale candidate) — no case file, lexicon-only
 - `0xefef185e2c89bbede21a1c41427bdf1332eca392` — high-confirmation-ratio operator (watchlist HIGH 2026-04-23) — no case file, lexicon-only
+- `0x00169219376146760298417404949075285cab72` — high-confirmation-rate operator (5 confirmed traps in 24h on 2026-04-26, fleet 22, mainnet 2024-09-03) — funded by `0x3304e22d` (infrastructure-scale candidate). No case file. Investigated via `scripts/investigate_0x00169219.py`. Bot victims: `0xf2b54380...`, `0x5555553ac295`, `0xffffff35da6e`, `0x999999a4d40f` (vanity-prefix MEV bots, NOT the c0ffee fleet).
+- `0x202c8b326ca75bf737fd709b524a1333681f0480` — dual role: self-funded trap operator (fleet 13, 2 confirmed, mainnet 2021-05-02) AND deployer-victim of `0x752c5a95` harvester. No case file; first surfaced in 2026-04-24 task-4 deployer-victim investigation, fired 1 trap event 2026-04-26.
 
 The remaining ~80 distinct addresses extracted from cases/ + reports/ are either victim/bot addresses without role attribution or appear in single auto-generated `CASE_0x*` files only. They are not enumerated here unless they have a documented role.
 
@@ -381,6 +405,7 @@ The off-chain events (004, 005, 006) are corpus-expansion case studies — `moni
 - **`T1-39b12abd4db3`** — 222 members. Pattern: `Tier1-CALLER at 0x2ab -> SLOAD at 0x2bf -> JUMPI`. 44.59% top-12-funded.
 - **`T1-fa8c132e5058`** — 204 members. Pattern: `Tier1-CALLER at 0x2ad -> SLOAD at 0x2c1 -> JUMPI`. 47.55% top-12-funded.
 - **"tx.origin conditional at 0x314"** — 350 members, 350 unique deployers. Documented in `CASE_*COMPETITION_ANALYSIS_20260322.md`. Identified there as **org_002 campaign** (1 contract per deployer).
+- **`476b15536fa9703e2c630e91ac976c514e1868a70e8c996f1bf8bb97a9b9e532`** — bytecode hash, NOT yet a registered family. **5,775 contracts** by **5,775 distinct deployers** (1 contract each, fully disposable), all on **Optimism**, all `tier=unknown`, all `has_*` flags zero (static classifier doesn't recognize the trap pattern). 99.86% (5,767 of 5,775) funded by `0xb0b0b6903489cc56bf037cb2f5ba986e2775bb07`. This is the campaign that drove the 8,797-alert COORDINATED_DEPLOYMENT surge on 2026-04-25/26. Pre-stage trap stockpile shape resembling org_002 scaled 16.5× and ported to Optimism. Status: **mass-deployment in progress**, no detection signal yet, no traffic yet. Worth bytecode_families clustering and ongoing surveillance.
 
 ### Dissolved family
 - **`T2-eaef6a5d7678`** — DISSOLVED 2026-04-16 per `reports/correction_log.md` Correction #3. Was a NULL-bucket methodology artifact (clustering on the all-zero bytecode-flag combination). 21,936 member rows + 20,936 contract reclassifications removed. See `reports/family_T2_eaef6a5d_verdict.md`.
