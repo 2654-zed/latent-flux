@@ -1,6 +1,6 @@
 # Layer 3 Lexicon
 
-**Version:** 2026-04-25 (living document; update when new framework-level observations emerge)
+**Version:** 2026-04-27 (living document; update when new framework-level observations emerge)
 **Purpose:** Canonical definitional reference for Layer 3 methodology. Every entry specifies the term's definition, extended meaning, empirical grounding in the corpus where applicable, and cross-references. Intended for internal use and eventual external publication.
 **Discipline:** Each entry is either (a) deductive from on-chain corpus evidence, (b) inferential with explicit methodology application, or (c) framework-level observation with clear analytical basis. No entry is asserted without basis.
 
@@ -25,6 +25,7 @@
 - [Pattern F — Advisor-Parasite Pattern](#pattern-f--advisor-parasite-pattern)
 - [Pristine Solo Operator](#pristine-solo-operator)
 - [Infrastructure-Scale Operator](#infrastructure-scale-operator)
+- [Adversarial Vanity Branding](#adversarial-vanity-branding)
 
 ### Structural and Psychological
 - [Participatory Asymmetry / Predatory Literacy](#participatory-asymmetry--predatory-literacy)
@@ -156,7 +157,7 @@
 - Pattern F scanned negative against the 30-day corpus but structurally scoped (`reports/advisor_parasite_candidates.md`).
 - Other patterns (A, B, C, E) scoped and partially scanned; see individual pattern entries below.
 
-**Cross-references.** All Pattern entries below. [Camouflage Ratio](#camouflage-ratio). [Strategy Lifecycle](#strategy-lifecycle) (how laundering patterns propagate). [Pristine Solo Operator](#pristine-solo-operator) and [Infrastructure-Scale Operator](#infrastructure-scale-operator) (deployer-layer and funder-layer instances of behavioral laundering, both shipped 2026-04-25).
+**Cross-references.** All Pattern entries below. [Camouflage Ratio](#camouflage-ratio). [Strategy Lifecycle](#strategy-lifecycle) (how laundering patterns propagate). [Pristine Solo Operator](#pristine-solo-operator) and [Infrastructure-Scale Operator](#infrastructure-scale-operator) (deployer-layer and funder-layer instances of behavioral laundering, both shipped 2026-04-25). [Adversarial Vanity Branding](#adversarial-vanity-branding) (vanity-prefix selection is an additional behavioral-layer signal; the three documented sub-categories — operational, anti-forensic, funder — each target a distinct surveillance surface).
 
 ---
 
@@ -286,7 +287,32 @@
 - 4 of top-12 funders are L2-native with no mainnet history — deliberate `eth_depth` evasion. Account for 4,419 funded deployers. Untraceable with current mainnet-scoped tooling.
 - Detector class to be built separately from `org_candidates` (do not retrofit). Schema and signal requirements TBD pending cross-funder overlap probe.
 
-**Cross-references.** [Behavioral Laundering](#behavioral-laundering) (infrastructure scale is laundering at the funding-layer), [Adversarial Topology](#adversarial-topology) (position primitive: a funder concentrated enough to be excluded by heuristics is occupying the position designed for benign infrastructure), [Publishing-Induced Recursive Evasion](#publishing-induced-recursive-evasion) (the exclusion logic is itself a published methodology adversaries calibrate against).
+**Cross-references.** [Behavioral Laundering](#behavioral-laundering) (infrastructure scale is laundering at the funding-layer), [Adversarial Topology](#adversarial-topology) (position primitive: a funder concentrated enough to be excluded by heuristics is occupying the position designed for benign infrastructure), [Publishing-Induced Recursive Evasion](#publishing-induced-recursive-evasion) (the exclusion logic is itself a published methodology adversaries calibrate against), [Adversarial Vanity Branding](#adversarial-vanity-branding) (`0xb0b0b69*` is both an instance of this entry and a vanity-branded operator).
+
+---
+
+### Adversarial Vanity Branding
+
+**Definition.** Deliberate use of vanity-mined address prefixes (typically ≥5 hex chars, requiring ≥1M generation attempts) by adversarial infrastructure. Three documented sub-categories: operational branding (the prefix marks bots or contracts that visibly transact), anti-forensic spoofing (the prefix targets truncated-display heuristics in monitoring tools), and funder branding (the prefix marks only the funding source while the downstream fleet uses random-prefix wallets).
+
+**Extended description.** Vanity-prefix selection is non-random and traceable to deliberate compute spend. When an adversary chooses to mine a vanity prefix despite the operational-security cost (mining time + reuse of a memorable identifier weakens unlinkability), the prefix carries information: identity, trust signal, or anti-forensic intent. Layer 3 surveillance can use the presence and scope of vanity prefixes as a behavioral signal independent of bytecode patterns or transaction-graph clustering.
+
+The three documented sub-categories are not interchangeable — they target different layers and threat models:
+
+- **Operational branding** marks the layer that visibly transacts with victims (bots, scanner contracts, the trap-deployer wallet itself). The Coffee Fleet (`0xc0ffee*` prefix on 84 victim bots + the deployer `0xc0ffeefeed8b9d271445cf5d1d24d74d2ca4235e`) is the canonical instance. Branding at this layer signals an integrated operation where the same actor controls both the trap-deployer and the bots that "fall into" it — observed-harm theater for downstream risk scorers.
+
+- **Anti-forensic spoofing** mints a vanity address with an N-byte prefix collision against an existing legitimate address (typically 7+ hex chars / 4 bytes matching), exploiting the convention of truncated-prefix display in dashboards and analyst workflows. org_001's Shadow Wallet 1 (`0x01989c93890aed05a63d179b03424997075b6acf`, colliding with the legitimate LP_POOL_2 at `0x01989c93890aed05cbcda4e62eec1b2eb4c55b1b` at 8 bytes / 16 hex chars) is the canonical instance. Branding at this layer targets the intelligence layer — chain analysis tooling, organizational dashboards, human review workflows.
+
+- **Funder branding** marks only the funding source while the downstream fleet uses anonymized random-prefix wallets. `0xb0b0b6903489cc56bf037cb2f5ba986e2775bb07` (`0xb0b0b69*` — Optimism mass-deployment funder) is the canonical instance. The funder vanity is most plausibly read either as operator self-signature visible across multiple campaigns, or — more interestingly — as a brand mark for a wallet/infrastructure-rental service whose buyers need a recognizable source. Funder branding is a reverse choice from the standard operational-security playbook (which would obscure the funder hardest); the existence of the choice is itself the diagnostic signal.
+
+**Empirical grounding.**
+- **`0xc0ffee*`** (Coffee Fleet): 84 vanity bots in `bot_candidates` + 1 vanity deployer (`0xc0ffeefeed8b9d271445cf5d1d24d74d2ca4235e`). 100% c0ffee-on-c0ffee victim overlap as of `surveillance/data/cases/CASE_COFFEE_FLEET_0xc0ffeefeed8b.md` (2026-04-08). Single-operator hypothesis still leading.
+- **`0x01989c93890aed05*`** (org_001 vanity spoof): 2 wallets — the legitimate LP_POOL_2 and the vanity-spoofed Shadow Wallet 1. Documented in `surveillance/data/cases/CASE_ORG_001_INFRASTRUCTURE.md` Anti-Forensic Capability section (discovered 2026-04-11).
+- **`0xb0b0b69*`** (Optimism funder): 1 funder, 6,605 random-prefix downstream deployers, ~5,775 contracts using bytecode hash `476b15536fa9703e2c630e91ac976c514e1868a70e8c996f1bf8bb97a9b9e532` in a 2026-04-25 mass-deployment campaign. Pre-stage interval: 10 days dormant between funder creation (2026-04-15, 7 test deployers) and mass-deployment burst (2026-04-25, 6,598 deployers in one day). Documented in `docs/INDEX.md` Section 1 + Section 5.
+- **Compute cost for a 7-hex-char vanity prefix:** ~268M generation attempts on average. Visible cost — this is not zero-cost obfuscation. The cost is itself the signal that the prefix is intentional.
+- **Singularity check:** `0xb0b0b6*` is the only such address in the corpus. No vanity siblings, no rotation. Compare to Coffee Fleet (84+1 across its prefix) and org_001 spoofs (2 across its prefix).
+
+**Cross-references.** [Behavioral Laundering](#behavioral-laundering) (vanity branding is a behavioral-layer signal complementing bytecode and graph signals), [Infrastructure-Scale Operator](#infrastructure-scale-operator) (`0xb0b0b69*` is both an instance of this entry and a vanity-branded operator), [Publishing-Induced Recursive Evasion](#publishing-induced-recursive-evasion) (anti-forensic vanity targets the analyst tooling that publishes truncated addresses), [The Self-Cannibalizing System](#the-self-cannibalizing-system) (Coffee Fleet's c0ffee-on-c0ffee operation is the closed-loop variant where the same operator runs both predator and prey roles).
 
 ---
 
@@ -463,7 +489,7 @@
 - [Camouflage Ratio](#camouflage-ratio) at 70–79% is the standing example. Operators have already calibrated to whatever revert-rate threshold the current detection tools use.
 - GoPlus-family benchmarks (`l3-narrative/Stored_Potential_Risk_Model.pptx` slide 6): 10/10 CRITICAL contracts in Layer 3 returned NO DATA from GoPlus. The GoPlus threshold is the attacker's calibration target.
 
-**Cross-references.** [The Detection Gap as Product](#the-detection-gap-as-product), [Intelligence-as-Compounding-Asset](#intelligence-as-compounding-asset), [Strategy Lifecycle](#strategy-lifecycle).
+**Cross-references.** [The Detection Gap as Product](#the-detection-gap-as-product), [Intelligence-as-Compounding-Asset](#intelligence-as-compounding-asset), [Strategy Lifecycle](#strategy-lifecycle), [Adversarial Vanity Branding](#adversarial-vanity-branding) (the anti-forensic-spoofing sub-category exploits the truncated-prefix display convention published by analyst tooling — a recursive-evasion pattern at the intelligence layer).
 
 ---
 

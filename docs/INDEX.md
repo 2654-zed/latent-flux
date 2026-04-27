@@ -171,7 +171,7 @@
 | `0xfd92f4e91d54b9ef91cc3f97c011a6af0c2a7eda` | 2,187 | 7,876 | 0 | Pure stockpile (zero confirmed) |
 | `0x3304e22ddaa22bcdc5fca2269b418046ae7b566a` | **2,027** (was 1,939; +88/24h) | 6,470+ | 33+ | Funds `0x666521` (HIGH watchlist), `0xbad051ece`, **`0x00169219` (5 confirmed in 24h)** |
 | `0xc43f317ed4d81cbbfe2c9c98b4cc6f303519f078` | 1,562 | 1,393 | 0 | Pre-stage warehouse |
-| `0xb0b0b6903489cc56bf037cb2f5ba986e2775bb07` | **5,775+** (was 1,404; +4,371/24h) | 5,775+ | 0 | **L2-only Optimism funder.** 99.86% of downstream uses bytecode `476b15536fa9...`. Drove the 8,797 COORDINATED_DEPLOYMENT alert surge 2026-04-26. |
+| `0xb0b0b6903489cc56bf037cb2f5ba986e2775bb07` | **6,605** (was 5,775; growing) | 6,000+ | 0 | **L2-only Optimism funder. 7-char vanity prefix `0xb0b0b69*` (~268M generation attempts).** Singular: only `0xb0b0b6*` address in corpus. Downstream fleet is random-prefix (vanity scope = funder only). Created 2026-04-15, dormant for 10 days, then mass-funded 6,598 deployers on 2026-04-25 alone. 99.86% of downstream uses bytecode `476b15536fa9...`. Drove the 8,797 COORDINATED_DEPLOYMENT alert surge 2026-04-26. See lexicon: [Adversarial Vanity Branding](lexicon.md#adversarial-vanity-branding). |
 | `0xde8eb937cb5475eee5ac96dce6ba2d18e439c473` | 938 | 807 | 4 | Watchlist HIGH (`org_002_junior` per live entity_name) |
 | `0x0e6e91775d24d34b90e0f3d806a90705f0199999` | 878 | 724 | 0 | L2-only |
 | `0x238d7170f309a55b87a144a341bd6105897082ca` | 861 | 734 | 2 | Watchlist HIGH (`org_002_senior`). 98% suspected ratio. |
@@ -185,6 +185,11 @@
 - Two more are watchlist-classified org_002 infrastructure per live `watchlist.entity_name`: `0x238d7170` (`org_002_senior`) and `0xde8eb937` (`org_002_junior`).
 - Four are L2-native (no mainnet history) — deliberate `eth_depth` evasion: `0xb0b0b690` (Optimism), `0x0e6e9177`, `0x8ca70232`, `0x39591e7c` (Base).
 - `0xb0b0b690` (Optimism, L2-native) is currently scaling fastest — 4,371 new deployers in 24 hours, all with the same bytecode hash `476b15536fa9703e2c630e91ac976c514e1868a70e8c996f1bf8bb97a9b9e532` (see Section 5). Campaign-shape resembles **org_002 / Dragon scaled 2.8–16.5×** — pre-stage trap stockpile.
+- **Three documented vanity-prefix patterns** in the corpus to date (cross-reference for any future vanity find):
+  1. **Operational branding** — `0xc0ffee*` (Coffee Fleet): 84 victim bots + 1 deployer. Vanity at the layer that visibly transacts.
+  2. **Anti-forensic spoofing** — `0x01989c93890aed05*` (org_001 Shadow Wallet 1): 7-byte prefix collision targeting truncated-address displays. Vanity at the intelligence layer.
+  3. **Funder branding** — `0xb0b0b69*` (this entry): 1 funder, anonymized random-prefix downstream. Vanity scope = funder only. Most plausibly read as wallet/infrastructure-rental service brand.
+  See lexicon: [Adversarial Vanity Branding](lexicon.md#adversarial-vanity-branding).
 
 ---
 
@@ -344,6 +349,7 @@ The remaining ~80 distinct addresses extracted from cases/ + reports/ are either
   - Pattern F — Advisor-Parasite Pattern — DOCUMENTED — 0 candidates (corpus too young)
 - **Pristine Solo Operator** — DOCUMENTED 2026-04-25 — `docs/lexicon.md#pristine-solo-operator`. Detector: `surveillance/pristine_solo_detector.py`.
 - **Infrastructure-Scale Operator** — DOCUMENTED 2026-04-25 — `docs/lexicon.md#infrastructure-scale-operator`. Detector: `surveillance/infrastructure_operator_detector.py`.
+- **Adversarial Vanity Branding** — DOCUMENTED 2026-04-27 — `docs/lexicon.md#adversarial-vanity-branding`. Three sub-categories (operational / anti-forensic / funder), three corpus instances (Coffee Fleet, org_001 Shadow Wallet 1, `0xb0b0b69*`).
 - **Tuition Extraction Markets** — DOCUMENTED 2026-04-25 — `docs/lexicon.md#tuition-extraction-markets`. Anchor: Bot_A.
 - **Pooled Custody Amplification** — DOCUMENTED — `docs/lexicon.md#pooled-custody-amplification`
 - **Verification-Path Trust Failure** — DOCUMENTED — `docs/lexicon.md#verification-path-trust-failure`
