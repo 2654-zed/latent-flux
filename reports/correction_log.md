@@ -787,6 +787,106 @@ This is the second instance of a Correction #3 cascade. Correction #5 surfaced t
 
 ---
 
+## Correction #18 — Epistemic Test #2 Cleanup Pass
+
+**Date applied:** 2026-04-29
+**Scope (docs):** `docs/lexicon.md` (Camouflage Ratio caveat lifted; Infrastructure-Scale Operator overlap finding integrated; figures re-pointed at canonical script). `surveillance/data/cases/PARASITE_ARCHITECTURE_0xd4624228.md` and `cases/TRUST_LAYER_EXPLOITATION_20260324.md` gain Correction #17 addenda. `reports/correction_log.md` Correction #16 receives a methodology note (this entry).
+**Scope (code):** New canonical query `scripts/funder_metrics.py`. Search script `scripts/search_tuition_anchor.py` for a corpus-derived Tuition Extraction Markets bot anchor.
+**Scope (data):** Watchlist row for `0x604be06b` updated on local + Railway production with org_001 attribution language.
+
+### What we claimed (implicitly, as of lexicon v2026-04-28)
+The post-2026-04-25 lexicon and correction-log entries described top-12 funder cluster scale with floating numbers (lexicon: 14,650 deployers / 36% of 41,538-deployer corpus; Correction #16: 11,006 deployers / 26.5% of corpus). Both numbers came from the same probe but diverged. The Camouflage Ratio entry's 2026-04-25 caveat noted the equilibrium claim could not be cited at corpus-wide resolution until a top-12-excluded re-run was performed. The Infrastructure-Scale Operator entry hedged between single-actor and multi-tenant interpretations of the funder cluster. The two `0xd4624228` case files framed the 14.2× trust amplification factor as live, despite Correction #17 having retired it in the lexicon. The Tuition Extraction Markets entry cited bot `0x84792c2a` ("$4,412 gas burn / 375K+ transactions") as if from corpus.
+
+### What was actually true
+Per `reports/epistemic_test_results_2026-04-29.md` (14 sections, 6 corrections flagged):
+
+1. **A1** — Lexicon and Correction #16 disagreed on the same probe. Live measurement via `scripts/funder_metrics.py` on 2026-04-29: 22,165 deployers / 42.7% of corpus. Both prior numbers were point-in-time and diverged because there was no canonical query.
+2. **A4** — Cross-funder downstream-deployer overlap probe (66 pairs, top-12 funders): zero pairs share any downstream deployer. The single-actor-with-many-faces and multi-tenant rental hypotheses are both ruled out. Twelve independent infrastructure-scale operations exist with similar operational tempo and no shared infrastructure.
+3. **A7** — Camouflage ratio top-12-excluded re-run: full corpus 67.1%, top-12 excluded 68.1%, delta +0.9pp. Well below the 5pp threshold; equilibrium robust.
+4. **A10** — `cases/PARASITE_ARCHITECTURE_0xd4624228.md` and `cases/TRUST_LAYER_EXPLOITATION_20260324.md` carried framing that the lexicon had retired in Correction #17 (TRUST_LAYER file already had a partial 2026-04-11 inline correction; PARASITE_ARCHITECTURE had no addendum at all).
+5. **A11** — `0x604be06b` watchlist row still read "high-velocity solo operator" without the post-2026-04-25 org_001 cluster attribution.
+6. **A12** — Bot `0x84792c2a` has zero `transaction_events` rows in the corpus (the bot's own case file `BOT_INVESTIGATION_0x84792c2a_20260322.md` confirms this explicitly). The 375K+ figure came from external block-walking with methodology not preserved. Cited file `reports/mev_vault_0xa45b51_discovery.md` does not exist.
+
+### How was the error caught
+The 2026-04-29 epistemic integrity test (`reports/epistemic_test_results_2026-04-29.md`) ran 14 claim-vs-corpus checks against the 2026-04-25 cohort of new framework material. 8 sections survived HIGH-confidence; 6 surfaced corrections.
+
+### What we changed
+
+| Component | Change |
+|---|---|
+| `scripts/funder_metrics.py` (new) | Canonical query for top-N funder cluster metrics. CLI: `--top-n` (default 12), `--db`. Output: `reports/funder_metrics_<DATE>.md`. Self-test on 2026-04-29 reproduced 22,165 / 42.7% from epistemic test A1. **Future references to funder cluster scale should cite this script and a date, not transcribed numbers.** |
+| `reports/funder_metrics_2026-04-29.md` (new) | First dated invocation. 22,165 top-12 deployers, 42.7% of 51,874-deployer corpus, 39.4% of active subset. |
+| `docs/lexicon.md` Camouflage Ratio entry | Replaced the 2026-04-25 methodological caveat with a 2026-04-29 empirical-robustness paragraph documenting the +0.9pp delta. The "stable across operators" claim is restored to corpus-wide resolution. |
+| `docs/lexicon.md` Infrastructure-Scale Operator entry | Replaced the single-actor-vs-multi-tenant hedge with the resolved finding (twelve independent operations, zero cross-funder overlap). New open question: convergent calibration across unrelated actors. Replaced static figures with a pointer to `scripts/funder_metrics.py` and named `reports/funder_metrics_2026-04-29.md` as the dated source. Per-funder profile heterogeneity figures refreshed against today's corpus. |
+| `docs/lexicon.md` version | Bumped from 2026-04-28 to 2026-04-29. |
+| `cases/PARASITE_ARCHITECTURE_0xd4624228.md` | Correction #17 addendum added at top, between metadata block and Executive Summary. Original analysis preserved. |
+| `cases/TRUST_LAYER_EXPLOITATION_20260324.md` | Correction #17 addendum added at top, layered on the existing 2026-04-11 inline correction. Original analysis preserved. |
+| `watchlist` table (local + Railway production) | `0x604be06b` row's `watch_reason` updated to reflect org_001 cluster re-attribution. Both DBs verified post-update. |
+| `scripts/search_tuition_anchor.py` (new) | Corpus search for replacement Tuition Extraction Markets bot anchor. Output: `reports/tuition_extraction_anchor_search_2026-04-29.md`. **Lexicon entry not auto-edited** per cleanup-pass discipline; the judgment call (Option A re-source, Option B mark as external evidence, Option C retract and rewrite) is human-gated. Top candidate: `0xc0dec76000f6c2d32f23d523748e50ebb5bb34a3` (57,023 tx, 85% revert across 174 contracts and 23 days, with parallel-infrastructure signal — funder `0x18b0f4547a89` funds 5 other deployers with fleets up to 44). |
+
+### Effect on published numbers
+- Camouflage Ratio: claim restored to corpus-wide resolution. The 2026-04-25 caveat is no longer cited as methodological provisional.
+- Infrastructure-Scale Operator scale: figures now reference dated canonical query rather than floating numbers. The 14,650 / 36% (lexicon) and 11,006 / 26.5% (Correction #16) figures should be read as superseded point-in-time measurements; the corpus has grown 25% since 2026-04-25.
+- Trust Amplification Factor: case-file framing now matches lexicon-level retirement of the 14.2× multiplier.
+
+### Pattern worth naming
+This is the second cleanup-pass surface that fixes a propagation problem rather than a substantive analytical error. Correction #6 was about documentation lagging code reality; this one is about documentation lagging the lexicon's own corrections. The fix in both cases is structural: replace the propagation surface with a canonical query (this case) or a single source of truth for behavior (Correction #6's `score_contract` per-request answer). When several documents copy a number from a probe, future drift is guaranteed unless one of them is a script.
+
+### Open work
+- **Tuition Extraction Markets entry update.** ~~Search results delivered in `reports/tuition_extraction_anchor_search_2026-04-29.md`. Pending Jason's decision between Option A, B, or C.~~ **CLOSED 2026-04-29:** Option A executed. Lexicon entry now anchored on `0xc0dec76000f6c2d32f23d523748e50ebb5bb34a3` (57,023 tx, 85% revert, 174 contracts, 23-day span, vanity-prefix branding cross-referencing Adversarial Vanity Branding). Old `0x84792c2a` anchor retired with cited reason.
+- **Cross-Domain Compositional Harm case files.** ~~Vercel/Context.ai breach (2026-04-19) and Bancor EIP-7702 (2026-04-29) are referenced in the lexicon entry without backing case files.~~ **CLOSED 2026-04-29 (partial):** Vercel case file written as structural reference (`cases/CASE_VERCEL_CONTEXT_BREACH_20260419.md`); Bancor case file written as skeleton (`cases/CASE_BANCOR_EIP7702_20260429.md`) acknowledging the documentation gap explicitly. The Bancor file flags that the lexicon's reference currently exceeds the corpus's documented detail and is held for primary-source review in a future session.
+- **Funder cluster diagnostic file.** ~~Cited in lexicon but never existed as a file.~~ **CLOSED 2026-04-29:** `reports/funder_cluster_diagnostic_2026-04-29.md` written, replacing the missing 04-25 file. Documents top-12 roster, three structural findings (twelve independent ops, profile heterogeneity, L2-native subset), and three open questions. INDEX.md Section 1 entry updated to point at this file.
+- **Single-Purpose Infrastructure Funder typology** (added to lexicon 2026-04-28). **CLOSED 2026-04-29:** Case file `cases/CASE_SINGLE_PURPOSE_INFRASTRUCTURE_FUNDER.md` written. Documents the 69 Pattern A operators, three deployment shapes, vanity-mirrored funder/deployer bonus finding, and structural independence from org_001-004 architecture. INDEX.md Section 1 entry added.
+- **Active-drain follow-ups** (six self-deploying trap operators surfaced 2026-04-29 by ad-hoc query, with `0x1aae146c1328` as the 133-drain leader still unwatched). Deferred to next session per active-drain to-do list.
+
+### Note on Correction #16
+Correction #16 (2026-04-25) cited "11,006 deployers (26.5% of corpus)" for the same probe the lexicon entry described as 14,650 / 36%. Both were point-in-time measurements at the same date; the disagreement reflects the absence of a canonical query at the time. The numbers are not retracted (both were honest measurements of related quantities) but they are superseded by `scripts/funder_metrics.py` going forward. Future correction-log entries citing funder cluster scale should reference a dated invocation of the canonical script.
+
+---
+
+## Correction #19 — Single-Purpose Infrastructure Funder Detection Rule Was Funder-Side-Only
+
+**Date applied:** 2026-05-08
+**Scope (docs):** `docs/lexicon.md` Single-Purpose Infrastructure Funder entry — definition refined to require *both* funder-layer and downstream-layer verification; new false-positive-class paragraph added under Empirical grounding.
+**Scope (code):** None. The detection rule lived in informal probe scripts; refining the lexicon entry is the load-bearing fix.
+**Scope (data):** None. The 69 prior Pattern A instances all pass the refined rule (chain distribution recorded as 100% L2-native already).
+
+### What we claimed (implicitly, as of lexicon v2026-04-29)
+The Single-Purpose Infrastructure Funder typology was defined by funder-layer criteria: lifetime spawns = 1, funder is EOA-only with no own deployer record, funder is silent after the funding event. The L2-only property was treated as a corpus-distribution *observation* ("Zero mainnet operators … parallels Infrastructure-Scale Operator subset 4 of top-12") rather than a detection criterion. In practice, ad-hoc probes promoted candidates to "fresh Pattern A funder" framing when only the funder-layer test was checked.
+
+### What was actually true
+On 2026-05-07 a daily probe surfaced three high-output funders — `0x268cbda30dd229e5f9b084609a2bb9b73b0f8aad`, `0x04e3eebcb2f9fa17640b1792546545b74289a4ef`, `0xa7eccdb9be08178f896c26b7bbd8c3d4e844d9ba` — all showing clean funder-layer Pattern A signal (1 lifetime spawn, EOA-only or self-funded, large downstream fleet). Initial framing in the May 7 probe writeup labeled them "three NEW high-output funders" and recommended Pattern A investigation.
+
+The 2026-05-08 deep-dive on the freshened local DB rejected all three:
+
+1. **`0x268cbda30dd2`** funds `0xf238b357f0d97048866b0569b9cd101df341c827` — mainnet history since 2025-03-17, fleet 278 spread across Base/OP/Arb. Multi-chain bot operator using single-funder OPSEC, not a Single-Purpose Funder.
+2. **`0x04e3eebcb2f9`** is *self-funded* (funder == deployer). 1,215-contract Base self-deployer. The Pattern A funder signal was an artifact of how `funding_trail` records first incoming tx — the deployer's own first-funding trace points to itself.
+3. **`0xa7eccdb9be08`** is a 2022-vintage operator (mainnet first-tx 2022-06-15) with 5 lifetime fleets. Established multi-chain operator, not single-purpose.
+
+All three pass funder-layer Pattern A criteria but fail at the downstream layer. None warranted Pattern A classification.
+
+### How was the error caught
+The May 7 probe writeup recommended deep-diving the three funders. Running the deep-dive (post-corpus-resync 2026-05-08) and observing each downstream deployer's `mainnet_first_tx` revealed that none of the three downstreams were L2-only — every one had either mainnet history or self-funding. The funder-layer-only rule had no test for this; the lexicon entry treated L2-only as a corpus observation, not a detection criterion. The gap was a methodology gap, not a corpus error: the 69 prior Pattern A instances all happen to be L2-only (the `mainnet_first_tx IS NULL` filter was implicit in how those candidates were originally surfaced), so the rule's incompleteness never produced a published false positive — only a writeup-stage one, caught before promotion.
+
+### What we changed
+
+| Component | Change |
+|---|---|
+| `docs/lexicon.md` Single-Purpose Infrastructure Funder definition | Added a Detection rule (refined 2026-05-08) section requiring both funder-layer and downstream-layer checks. Downstream layer requires `mainnet_first_tx IS NULL`. Existing definition preamble updated to include condition (b) "the funded deployer is L2-only with no mainnet history". |
+| `docs/lexicon.md` Empirical grounding section | Note added that the L2-only property is now part of the detection rule, not just a corpus-distribution observation. New "False-positive class identified 2026-05-08" paragraph documents the three rejected candidates with addresses and reasons. |
+| `reports/correction_log.md` (this entry) | Numbered correction documenting the methodology gap, false-positive class, and rule refinement. |
+
+### Effect on published numbers
+- **No retraction of the 69 confirmed Pattern A instance count.** All 69 were originally surfaced via a probe that included an implicit L2-only filter; spot-checks of the published distribution (71% Base / 24% Arb / 5% OP, "zero mainnet operators") confirm the population is unchanged under the refined rule.
+- **No retraction of any external-facing claim.** The three May 7 false-positives never reached watchlist HIGH, INDEX.md Section 1, or any case file. The error was caught at writeup-internal-recommendation stage.
+- **Future-applied effect**: probes that surface high-output funders for Pattern A consideration must now run the downstream `mainnet_first_tx IS NULL` check before any framing as Single-Purpose Funder.
+
+### Open work
+- **None for this correction.** Refined rule is documented in lexicon and grounded in the false-positive class. Future ad-hoc probes inherit the rule by reading the lexicon entry.
+- **Adjacent open thread (not part of this correction):** the May 7 hub iter_9 pause is a separate observation worth tracking; logged as INDEX.md Section 1 entry on 2026-05-08, not material to this correction.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.

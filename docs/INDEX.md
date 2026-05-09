@@ -14,7 +14,7 @@
 - **Description:** Professional multi-chain trap operation on Arbitrum + Base, traceable to two CEX origins (Coinbase 2023 seed + Binance 2021 33,333 ETH withdrawal). 7-tier wallet graph, vanity-spoofed shadow wallets (intelligence-layer counter-forensics), simultaneously target of external address-poisoning campaigns.
 - **Primary case file:** `surveillance/data/cases/CASE_ORG_001_INFRASTRUCTURE.md` (last updated 2026-04-11)
 - **Supporting:** `surveillance/data/cases/CASE_ORG_001_ETHEREUM_DEPTH.md`, `surveillance/data/cases/CROSS_ORG_ANALYSIS_20260322.md`
-- **Status:** CONFIRMED — actively expanding
+- **Status:** CONFIRMED — actively expanding. **Drainer-spawn escalation 2026-05-06:** First confirmed direct-org-drainer linkage observed — `0xfbf44e969d4fc5cbad62870207341c976f9e38f9` (Arbitrum, watchlist HIGH `self_deploying_drainer_fbf44e96_org001`) drained 113 victims on 2026-05-06 via contract `0xd6cd943bfc0711125bc01cff7b7dfb87be1d10c8`, funded by org_001 gas station `0x8c826f795466`. **Caveat on framing:** the gas station funds 1,164 lifetime corpus deployers; this is 1 of 1,164 (0.09%) — represents playbook expansion (adding wave-class drain pattern) rather than wholesale class shift from camouflage/infrastructure to drain. Worth tracking whether iter_2 of this drainer pattern emerges from the same gas station downstream.
 - **Headcount caveat:** `CASE_ORG_001_INFRASTRUCTURE.md` cites "559+ deployers / 7,400+ contracts." `CORRECTIONS.md` 2026-04-02 documents "actual numbers depend entirely on attribution method (16/26/308/324)." Both are consistent if the 559 figure is the union over all attribution methods at a later snapshot — use `CASE_ORG_001_INFRASTRUCTURE.md` as canonical, but quote with the snapshot date.
 - **Key wallet roles:**
   - **CEX origins:** Coinbase Hot 1 `0x503828976d22510aad0201ac7ec88293211d23da`, Binance Hot 1 `0x28c6c06298d514db089934071355e5743bf21d60`
@@ -150,6 +150,28 @@
 - **Primary case file:** None — gap. Only investigated via session scripts (`scripts/investigate_0x752c5a95.py`).
 - **Status:** UNDER_INVESTIGATION — pre-drain accumulation, no sweep yet
 
+### Industrial-scale PSO+Single-Purpose hybrid — pulse-burst operator (2026-05-01, case file pending)
+- **Deployer:** `0xbb50ce87be3443ed137df1dfdbf2fb0ca8c0a9e0` — Optimism, **38,016 lifetime contracts** (as of 2026-05-02), 7.7y mainnet history (first tx 2018-08-29). Watchlist HIGH (`pristine_solo_industrial_bb50ce87`).
+- **Operating pattern (refined 2026-05-03): pulse-burst, not continuous.** Across a 19-day lifespan (2026-04-13 first appearance → 2026-05-01 most recent burst end), bb50 has only **6 active deployment days**. The pattern is: 1 initial deploy 04-13 → **13-day silence** → 4-day burst 04-28→05-01 (33,016 contracts in 4 days, peaking at 13,000 on 05-01) → silence resumed 05-02. Today's quiet is consistent with the operator's historical rhythm; not pivot, not disappearance. Reload-between-bursts posture (capital, opsec rotation, key infrastructure).
+- **Funder:** `0x6a9c2449c32779f89d0ccafd746152e237c1bdf2` — pure funding wallet, funds 2 corpus deployers but 99.99% of fleet via the bb50 operator. Watchlist HIGH (`single_purpose_funder_industrial_bb50`).
+- **Burst:** 9,333 contracts deployed in 7-hour window 2026-04-30T21:37 → 2026-05-01T04:42 UTC, ~22 contracts/min sustained. Single bytecode template `5439c9995738b4a07047059bd8d43e89` covers 99.97% of the burst. 99.98% suspected-tier.
+- **Status:** Case file PENDING. This is structurally novel — confluence of [Pristine Solo Operator](lexicon.md#pristine-solo-operator) (7.7y mainnet age) + [Single-Purpose Infrastructure Funder](lexicon.md#single-purpose-infrastructure-funder) (one funder, one main deployer) + Infrastructure-Scale Operator territory (29K fleet exceeds any documented single-deployer fanout). Case file should propose whether to refine an existing typology or name a new "industrial-scale hybrid" class.
+- **Detection note:** Surfaced by post-monitor-restart probe 2026-05-01 — first deployments visible only because Layer 3 ingest came back online at 21:37 UTC. The bb50 deployer's previous ~20K contracts on Optimism happened in our blind window and are visible only as the existing `total_contracts_deployed=29016` baseline.
+- **Upstream depth-2 probe (2026-05-01 via Blockscout, Optimism chain):** bb50 funder `0x6a9c2449c327…` first Optimism tx 2025-09-08, current balance ~1,562 ETH (~$3.58M). Top 6 upstream senders (covering ~750 ETH inflow across page 1): `0xe0eace0a4659…` (542 ETH, 71%), `0xe129188380d4…` (126 ETH, 17%), `0xaf8c81b247c9…` (24 ETH), `0x1ebdab5ed9bc…` (23 ETH), `0x8a2ee96c329d…` (18 ETH), `0xbacec9ceb004…` (17 ETH). **All 6 are absent from our corpus** — not in `deployers`, `watchlist`, or `org_wallets`; none fund any corpus deployer. The bb50 operation is structurally independent from org_001-004, the top-12 Infrastructure-Scale Operators, and the 69 Single-Purpose Funder pairs. Reinforces the [Convergent Calibration](lexicon.md#convergent-calibration) pattern at industrial scale: yet another independent operator running the same operational template with no observable coordination linkage.
+
+### Single-Purpose Infrastructure Funder typology (2026-04-28 lexicon entry, 69 Pattern A operators)
+- **ID:** No canonical IDs — typology, not a single entity
+- **Description:** Funder wallets that fund exactly one corpus deployer with fleet ≥50, where the funder has no deployer record. Opposite calibration of Infrastructure-Scale Operator. Three deployment shapes (burst-mass, slow-drip, active-weaponized). Lexicon: [Single-Purpose Infrastructure Funder](lexicon.md#single-purpose-infrastructure-funder).
+- **Primary case file:** `cases/CASE_SINGLE_PURPOSE_INFRASTRUCTURE_FUNDER.md`
+- **Status:** ACTIVE — 69 Pattern A operators in corpus; Coffee Fleet retroactively classified as the active-weaponized exemplar; `0xb3c07d462cbc` (3,161 fleet, deployed 2026-04-24 to 28) the largest burst-mass instance to date
+- **Key wallets (top-3 burst-mass):** `0xb3c07d462cbcd384636d713aaaa8a841f180e509`, `0x0b701885fbee30213ce8847da8aef1202d13a4e4`, `0xd660fa35cd16f768e41c8e09729e39385b51f55c`
+
+### Cross-Domain Compositional Harm references (anchor cases)
+- **Description:** Empirical anchors for lexicon entry [Cross-Domain Compositional Harm](lexicon.md#cross-domain-compositional-harm). Both off-chain (Vercel) and on-chain (Wasabi) instances are now documented; the framework's claim that the same compositional pattern operates across substrates is empirically anchored on both sides.
+- **Vercel / Context.ai breach (2026-04-19, off-chain):** `cases/CASE_VERCEL_CONTEXT_BREACH_20260419.md`. Eight-domain composition chain (Lumma Stealer → Context.ai AWS → Google Workspace OAuth → Vercel SSO → env-var visibility → bulk customer credential extraction). Status: STRUCTURAL_REFERENCE — primary-source detail to be appended on future disclosure review.
+- **Wasabi Protocol admin-key compromise (2026-04-30, on-chain) — EXTRACTION_009:** `cases/CASE_WASABI_EXPLOIT_20260430.md`. ~$5M loss across Ethereum / Base / Berachain / Blast via UUPS proxy upgrade by compromised wasabideployer.eth (`0x5c629f8c0b53`). Same attacker helper deployed at `0x02228b0afcdbEdf8180D96Fc181Da3AF5DD1d1ab` on both mainnet and Base via CREATE2. Status: CONFIRMED. **Layer 3 had zero corpus coverage** — Wasabi predates monitoring window and production ingest was stuck during attack.
+- **Bancor EIP-7702 exploit (2026-04-29):** `cases/CASE_BANCOR_EIP7702_20260429.md`. Status: SKELETON — kept as research target. Wasabi now provides the live structural analog the Bancor file was hypothesizing.
+
 ### `0xe69f81b8` — High-Volume Bridge User
 - **ID:** No canonical org assigned
 - **Description:** EOA bridging 49,000 ETH (~$147M) to L1 via the canonical Base bridge over 7 days (April 7–14). One of the most active L2-to-L1 bridge users in the Base ecosystem. Coordinated during western sleep hours.
@@ -157,11 +179,12 @@
 - **Status:** TRACKED (watchlist HIGH, `entity_type: high_value_bridge_user`)
 - **Key wallet:** `0xe69f81b825d7dc31ee9becef4dbeab5cf30e3abb`
 
-### Infrastructure-Scale Operator candidates (2026-04-25 detector run, 12 candidates; counts updated 2026-04-26)
+### Infrastructure-Scale Operator candidates (2026-04-25 detector run, 12 candidates; canonical metrics in `reports/funder_cluster_diagnostic_2026-04-29.md`)
 - **ID:** No canonical IDs — surfaced by detector only
 - **Description:** Funder addresses with ≥200 fanout, ≥10% adversarial ratio, ≥50% disposable rate. Lexicon: [Infrastructure-Scale Operator](lexicon.md#infrastructure-scale-operator).
-- **Primary case file:** None — DB-only via `infrastructure_operator_candidates` table.
-- **Status:** UNDER_INVESTIGATION (12 candidates surfaced 2026-04-25; counts shifting daily)
+- **Primary case file:** `reports/funder_cluster_diagnostic_2026-04-29.md` (replaces the missing 2026-04-25 file). Live metrics via `scripts/funder_metrics.py`. DB table: `infrastructure_operator_candidates`.
+- **Status:** UNDER_INVESTIGATION. Cross-funder overlap probe 2026-04-29 resolved single-actor-vs-multi-tenant question (twelve independent operations; 0 of 66 pairs share downstream).
+- **Note on figures:** Per Correction #18, future references to top-12 cluster scale should cite a dated invocation of `scripts/funder_metrics.py` rather than transcribed numbers. The table below was generated 2026-04-26 and is preserved for historical comparison.
 
 **The twelve funder addresses (counts as of 2026-04-26 sync):**
 
@@ -327,6 +350,62 @@ Flat alphabetical (lowercase). Use Ctrl-F. Format: `address  primary_classificat
 - `0x00169219376146760298417404949075285cab72` — high-confirmation-rate operator (5 confirmed traps in 24h on 2026-04-26, fleet 22, mainnet 2024-09-03) — funded by `0x3304e22d` (infrastructure-scale candidate). No case file. Investigated via `scripts/investigate_0x00169219.py`. Bot victims: `0xf2b54380...`, `0x5555553ac295`, `0xffffff35da6e`, `0x999999a4d40f` (vanity-prefix MEV bots, NOT the c0ffee fleet).
 - `0x202c8b326ca75bf737fd709b524a1333681f0480` — dual role: self-funded trap operator (fleet 13, 2 confirmed, mainnet 2021-05-02) AND deployer-victim of `0x752c5a95` harvester. No case file; first surfaced in 2026-04-24 task-4 deployer-victim investigation, fired 1 trap event 2026-04-26.
 
+### org_001 drainer escalation (`0xfbf44e96` on Arbitrum, 2026-05-06)
+- **Drainer:** `0xfbf44e969d4fc5cbad62870207341c976f9e38f9` — Arbitrum, fleet=1, deploy-once-and-dispose. Watchlist HIGH (`self_deploying_drainer_fbf44e96_org001`).
+- **Funder:** `0x8c826f795466e39acbff1bb4eeeb759609377ba1` (org_001 gas station, already HIGH).
+- **Event:** 113 victims drained via contract `0xd6cd943bfc0711125bc01cff7b7dfb87be1d10c8` (Arbitrum, confirmed tier). Deploy 07:07 UTC → first drain 10:42 UTC (3.5h bait window) → peak 11-12 UTC (100 of 113 drains in 2h) → tail through 19 UTC.
+- **Significance:** First confirmed direct-org-drainer linkage in the corpus. org_001 has been documented as funder/whale + gas-station infrastructure across hundreds of deployers, but the harm has historically been mediated (bot traps, slow extraction, camouflage). This is the first wave-class (deploy → bait → mass-sweep → dispose) drain operation directly funded by the gas station wallet.
+- **Framing precision:** 1 of 1,164 lifetime gas-station-funded deployers = 0.09%. Playbook expansion, not wholesale class shift. Watch for iter_2 from same funder.
+
+### Drainer-spawn hub `0x3304e22ddaa2` — cross-typology (top-12 Infrastructure-Scale Operator + drainer-spawn) (2026-05-02)
+- **Hub:** `0x3304e22ddaa22bcdc5fca2269b418046ae7b566a` — watchlist HIGH (`infrastructure_scale_drainer_spawn_hub_3304e22d`). Documented top-12 Infrastructure-Scale Operator (rank #4 with 2,134 deployers per `reports/funder_cluster_diagnostic_2026-04-29.md`) AND drainer-spawn hub.
+- **4 drainer iterations across March 25 → May 1, 404 total victims:** `0xbaff5fe29cee…` (3-25, 2v), **`0x7b72595d62b1…`** (4-01 → 4-04, **399v — largest single-iteration drain count in corpus**), `0x16cd9c10664b…` (4-27 → 4-28, 2v), `0x0f5162779f6b…` (5-01, 1v). All on watchlist HIGH.
+- **Significance:** First documented case of an Infrastructure-Scale Operator running as a drainer-spawn hub. Confirms the lexicon's pre-stage / stockpile / live-extraction sub-types can co-exist with active drainer-spawn within one hub. Surfaced 2026-05-02 via Apr 1 ↔ May 1 cross-link probe (single shared funder across both days' drainer wallets).
+- **Lexicon:** [Infrastructure-Scale Operator § Drainer-spawn-hub overlap](lexicon.md#infrastructure-scale-operator) — refinement added 2026-05-02.
+
+### Persistent Arbitrum cluster funder `0xbbfca1dfa3c2` (2026-05-02)
+- `0xbbfca1dfa3c2515df653c395a52ac603466bbbab` — watchlist HIGH (`arbitrum_cluster_funder_bbfca1df`). Funds 8 persistent deployers (active across full April 1 → May 1 30-day window) including `0x47b3fb3b0e65…` (188 fleet), `0x1a1c55fe35b5…` (173), `0xcfdef8a8ddbb…` (164), `0x1ce5e3a70d93…` (159). Largest non-watchlisted persistent-funder signal surfaced via the 89-deployer cross-day cohort. Likely Infrastructure-Scale candidate or Architect-cluster adjacent.
+
+### Drainer-spawn operator hub `0xf7883e3fef23` (2026-05-02, automation confirmed 2026-05-03, sub-minute precision verified 2026-05-05, **iter_9 forecast missed 2026-05-07**)
+- **Operator hub:** `0xf7883e3fef23c8e645deba4b540549d78028a616` — watchlist HIGH (`drainer_spawn_hub_f7883e3f`).
+- **Campaign scale (as of 2026-05-05):** 8 drainer iterations across 28 days, **~1,150 total victims drained on Base.** Largest single-operator-by-victim-count in the corpus.
+- **Iterations:** `0x7d34e0a0…` (4-07, 139v) → `0x2ce5ff20…` (4-13, 139v) → idle `0xb07b8e9f…` (4-15) → `0xa370e0f4…` (4-25, 154v) → `0xdf86f7c9…` (4-27, 153v) → `0x1aae146c…` (4-29, 133v) → `0x1ac0dd67…` (5-01, 144v) → `0x72747b31…` (5-03, 143v) → **`0xa8c7ac1c…` (5-05, iter_8)** → **iter_9: NO SPAWN (2026-05-07 — forecast missed)**. All hub-spawned deployers deploy-once-and-dispose, fleet=1.
+- **Automation signature — sub-minute precision (verified 2026-05-05 with iter_8):** iter_6 spawned at 09:33:41 → iter_7 at 10:01:41 (+47.7h, 28-min drift) → iter_8 at **10:02:11** (+48.0h, **30-second drift** from iter_7 time-of-day). Three-iteration time-of-day window: 09:33-10:02 UTC. Interval mean 47.85h ± 15min. Time-of-day **converging on 10:02 UTC ± 30 seconds**. This is automation precision tighter than human-tuned cron jobs typically achieve.
+- **Forecast iter_9:** 2026-05-07, **~10:02 UTC window** (±30 minutes for safety; precision suggests narrower). Same template, ~140 victims expected.
+- **iter_9 outcome (2026-05-07): MISSED.** First observable break in the 28-day automation streak. The 2-day cadence at 09:30-10:02 UTC held for 5 consecutive iterations (Apr 25 → May 5) and produced no May 7 spawn within the forecast window. Cadence prediction track record: iter_4–iter_8 correct (5/5); iter_9 wrong (0/1). Hypotheses (none confirmed): scheduler crash, deliberate pause, operator pivot to a different launch surface, or simple +1-day drift not yet observed at probe time.
+- **Cadence prediction track record:** iter_8 prediction made 2026-05-03 with ±90min window confirmed within 1 hour of midpoint (+1 minute drift from iter_7). Three consecutive correct cadence predictions = scheduler-level confidence in operator's automation. Streak broken by iter_9.
+- **Spawn-cadence vs drain-cadence are decoupled processes.** iter_8 (`0xa8c7ac1cdc33…`) is **still actively draining** despite the hub's spawn pause: 3 victims at 09:10:03 UTC on 2026-05-07 hitting `0xee80d04303e2…`, cumulative 151 victims as of 2026-05-07. Pattern: scheduler stops; in-flight operator continues. Structural implication — this is not a single automation but two coupled-but-independent processes (a spawner that produces drainer wallets on a 2-day cadence, and the most recent drainer that operates on its own internal rhythm against pre-staged contracts). The pause-while-draining configuration is the diagnostic surface — a single-process automation could not exhibit this divergence.
+- **One non-drainer downstream:** `0xb07b8e9f3907…` (4-15, fleet 1, idle). Failed setup or deferred trap.
+- **Lexicon:** documented as the scheduler-layer instance of [Convergent Calibration](lexicon.md#convergent-calibration) — automation precision is itself a behavioral signature distinct from human-driven schedules. The 2026-05-07 pause is a candidate empirical anchor for a future "automation pause as signal" lexicon refinement (deferred until 2+ more instances).
+- **Framework note:** This refines the drain-wave reading. Yesterday's analysis assumed 6 distinct drainers represented Convergent Calibration without coordination; the linkage probe shows 2+ of N drainers in the wave are spawned by one hub. The wave is **part-coordinated, part-convergent** rather than fully one or the other. The 2026-05-03 automation signature pushes the coordinated portion further — this hub is not just a single operator with rotating wallets but a *scheduled* operator running a drainer-spawn pipeline. The 2026-05-07 pause does not retract that finding (the prior 5 sub-minute spawns are themselves dispositive); it adds a second observation about the *temporal structure* of the operation.
+
+### Self-deploying drainer Pattern A clone cadence (2026-05-06 → 2026-05-07)
+Two structurally identical events 48h apart, **different operators and different funders**, same architecture:
+- **2026-05-06**: `0xfbf44e969d4f…` drainer drained 113 victims on Arbitrum through one tier=confirmed contract; funder `0x8c826f795466…` (org_001 gas station, watchlist HIGH). Logged as the first confirmed direct-org-drainer linkage (org_001 escalation).
+- **2026-05-07**: `0x44a2ee1369c3eecf86f8de7c73c3e3602523a198` drainer drained 37 victims on Arbitrum through one tier=confirmed contract `0x955b2c75efffa1ee9ee54e21e9c5c7cf772fdcb0` over a 6.5h window (10:55 → 17:25 UTC); funder `0x68b8b6d48dc6…` (1 lifetime spawn, watchlist HIGH `single_purpose_funder_44a2ee13`).
+- Architecture in both cases: **single-purpose funder → self-deploying drainer → one tier=confirmed contract → tens of victims in single-day burst**. Layer 3 had pre-classified the trap contract in both events.
+- Two data points is thin for a lexicon refinement. Pattern-A-clone-cadence is logged as a forward signal (~48h inter-event interval observed) but not yet promoted to lexicon; revisit after a third instance.
+
+### X402 facilitator-drain coordinated endpoint (2026-05-02)
+- `0xa7b9874d15742358fb455dd56f97c6d19ad74f5c` — Base recipient of 4 of 7 X402_AGENT_DRAIN alerts in 2026-05-01 → 2026-05-02 window. Total ~$285K USD-equivalent received from two payers (escalating $20K/$101K/$102K USDC pattern + 26.9 ETH-worth). Watchlist HIGH (`x402_drain_endpoint_a7b9874d`). See `cases/CASE_X402_DRAINER_OPERATION.md` activity update 2026-05-01/02.
+
+### Industrial-scale PSO operator (case file pending, 2026-05-01)
+- `0xbb50ce87be3443ed137df1dfdbf2fb0ca8c0a9e0` — Optimism deployer, 38,016 lifetime contracts (2026-05-02), 7.7y mainnet age, watchlist HIGH (`pristine_solo_industrial_bb50ce87`). **Pulse-burst pattern**: 6 active days across 19-day lifespan, 13-day historical pause precedent, single 4-day burst window 2026-04-28 → 2026-05-01 deployed 33,016 contracts (peak 13,000 on 05-01). — `[CASE FILE PENDING]`
+- `0x6a9c2449c32779f89d0ccafd746152e237c1bdf2` — funder of the above, watchlist HIGH (`single_purpose_funder_industrial_bb50`). Near-Pattern-A (funds 2, but 99.99% of fleet via bb50ce87). — `[CASE FILE PENDING]`
+
+### Mass dormant-wallet drain (EXTRACTION_010, 2026-04-30)
+- `0xA707034429c8E4E01df056C0CbCf478F0FBeFAd7` — mainnet drain hub, watchlist HIGH (`mass_dormant_drain_hub_a707`). 22h-old EOA receiving from 49+ distinct senders (5 of 8 sampled = 7+ years old), then bridging 324.741 ETH out via Thorchain. — `CASE_DORMANT_WALLET_DRAIN_20260430.md`
+- `0xD37BbE5744D730a1d98d8DC97c42F0Ca46aD7146` — Thorchain mainnet deposit router, watchlist HIGH (`thorchain_router_known_offramp`). Off-ramp for the 324.741 ETH at 15:28:59 UTC. Not malicious itself; flagged for cross-chain laundering signal in our L2 corpus. — `CASE_DORMANT_WALLET_DRAIN_20260430.md`
+- Confirmed dormant victims (sample): `0xf44087b7e1CCb36019d231C7AD09ba9BF9783F3b` (6.8y), `0x006ac999c96020ba3e54653b2e98e59e92b8b829` (7.0y), `0x166bf677b8d8bb4efce2eab16dc6ba941ed9d3b3` (7.5y), `0x95ca15e460e3c39a1b81e86c90665c4b35052c55` (8.1y), `0x2a2bad8781ded48e4aa5aadad543e43196492575` (7.0y), `0x3a687fade4857dd7840fb04d8dc3dc66cf7f58ee` (7.0y). — `CASE_DORMANT_WALLET_DRAIN_20260430.md`
+
+### Wasabi Protocol exploit (EXTRACTION_009, 2026-04-30)
+- `0x5c629f8c0b5368f523c85bfe79d2a8efb64fb0c8` — wasabideployer.eth, compromised admin EOA (mainnet + Base). Sole `ADMIN_ROLE` holder pre-compromise. — `CASE_WASABI_EXPLOIT_20260430.md`
+- `0x02228b0afcdbEdf8180D96Fc181Da3AF5DD1d1ab` — attacker helper contract, deployed at the **same address on both Ethereum mainnet and Base** via CREATE2. Funded with 5.09 ETH (mainnet) and 1.172 ETH (Base) by the admin EOA shortly before drains. — `CASE_WASABI_EXPLOIT_20260430.md`
+- `0xc0b01a4f4A4459D5A7E13C2E8566CDe93A010e7D` — Wasabi role manager (mainnet). `grantRole`/`revokeRole` target during the attack. — `CASE_WASABI_EXPLOIT_20260430.md`
+- `0xeC3e4E0FDB50411F4C5ee9f75436d8b20CF7D70E` — Wasabi role manager (Base). — `CASE_WASABI_EXPLOIT_20260430.md`
+- `0xEe5c45DCB0064f9B097edBC5d8adfcE23baaC03b` — Wasabi vault (mainnet, observed in trace; `setWithdrawFeeBips` + `setFeeReceiver`). — `CASE_WASABI_EXPLOIT_20260430.md`
+- `0xfAe69F2C82747F878F74C1E57a1AeD945eD8558F` — Wasabi vault (Base, observed in trace). — `CASE_WASABI_EXPLOIT_20260430.md`
+
 The remaining ~80 distinct addresses extracted from cases/ + reports/ are either victim/bot addresses without role attribution or appear in single auto-generated `CASE_0x*` files only. They are not enumerated here unless they have a documented role.
 
 ---
@@ -335,9 +414,14 @@ The remaining ~80 distinct addresses extracted from cases/ + reports/ are either
 
 ### Documented (active framework concepts)
 - **Stored Potential** — DOCUMENTED — `docs/lexicon.md#stored-potential`
+- **Thermodynamic Fundamentalism** — DOCUMENTED 2026-05-02 — `docs/lexicon.md#thermodynamic-fundamentalism`. Framework-level. Replaces social-consensus value measurements with physical-substrate measurements (CER as ROI replacement). Empirical grounding now includes Layer 3 corpus instances (bb50 stockpile CER ≈ 0; 0xf7883e3fef23 / 0x3304e22ddaa2 hubs CER positive). Cross-refs Stored Potential + Compositional Harm + Neutrality Trap + Forced Deterministic Neutrality (bidirectional refs added).
+- **Neutrality Trap** — DOCUMENTED 2026-05-02, refined and authored 2026-05-02 — `docs/lexicon.md#neutrality-trap`. Four-phase structure (Promise → Selection → Predation → Override). Empirical anchor: April 2026 cluster (EXTRACTION_006-010).
+- **Forced Deterministic Neutrality** — DOCUMENTED 2026-05-02, refined and authored 2026-05-02 — `docs/lexicon.md#forced-deterministic-neutrality`. Three key characteristics (no context window, no pause/override, no intent parsing). Six empirical examples spanning EVM / ECDSA / UUPS / Permit2 / OAuth / USD wires.
+- **Normative Shell Game** — DOCUMENTED 2026-05-02 — `docs/lexicon.md#normative-shell-game`. Two-layer governance posture (public Shell + Emergency Core) that emerges as the structural response to the Neutrality Trap. Empirical anchor: Arbitrum Security Council freezing KelpDAO funds (2026-04-20), The DAO Fork (2016), USDC/USDT freeze authority.
+- **Confused Deputy Problem** — DOCUMENTED 2026-05-02 — `docs/lexicon.md#confused-deputy-problem`. Three-role structure (Principal → Deputy → Attacker). The per-program vulnerability that Forced Deterministic Neutrality produces and the Neutrality Trap makes ecosystem-wide. Includes Agentic AI Supercharger sub-section. Empirical anchors: AI coding agents, Permit2 (EXTRACTION_010), Wasabi UUPS (EXTRACTION_009), Vercel/Context.ai OAuth.
 - **Adversarial Topology Framework** (5 primitives: position, permissions, trust bindings, mutability, observation capability) — DOCUMENTED — `docs/lexicon.md#adversarial-topology` + `claude.md` §Adversarial Topology Framework
 - **Compositional Harm** — DOCUMENTED — `docs/lexicon.md#compositional-harm`
-- **Cross-Domain Compositional Harm** — DOCUMENTED 2026-04-25 — `docs/lexicon.md#cross-domain-compositional-harm`. Anchor: Vercel/Context.ai breach (no on-chain evidence yet, off-chain case study).
+- **Cross-Domain Compositional Harm** — DOCUMENTED 2026-04-25 — `docs/lexicon.md#cross-domain-compositional-harm`. Anchors: Vercel/Context.ai breach (off-chain, 2026-04-19) + Wasabi Protocol admin-key compromise (on-chain, 2026-04-30, EXTRACTION_009 — `cases/CASE_WASABI_EXPLOIT_20260430.md`).
 - **Trust Amplification Factor** — DOCUMENTED with methodological caveat — `docs/lexicon.md#trust-amplification-factor`. **Two contradictory retractions of the 14.2× anchor figure exist** (`CORRECTIONS.md` 2026-04-02 vs `reports/correction_log.md` Correction #17 2026-04-25). Resolution open.
 - **Camouflage Ratio** — DOCUMENTED with methodological caveat (cluster-dominance impact) — `docs/lexicon.md#camouflage-ratio`. Original 14.2× claim retired (`CORRECTIONS.md`); equilibrium framing requires top-12-excluded re-run.
 - **Behavioral Laundering** (Patterns A–F) — DOCUMENTED — `docs/lexicon.md#behavioral-laundering`
@@ -347,13 +431,16 @@ The remaining ~80 distinct addresses extracted from cases/ + reports/ are either
   - Pattern D — Cross-Chain Reputation Import — DOCUMENTED — strongest validated (54 of 100)
   - Pattern E — Fake Legitimate Projects — METHODOLOGY-ONLY — not yet scanned
   - Pattern F — Advisor-Parasite Pattern — DOCUMENTED — 0 candidates (corpus too young)
-- **Pristine Solo Operator** — DOCUMENTED 2026-04-25 — `docs/lexicon.md#pristine-solo-operator`. Detector: `surveillance/pristine_solo_detector.py`.
+- **Pristine Solo Operator** — DOCUMENTED 2026-04-25, bidirectional refinement 2026-04-30 — `docs/lexicon.md#pristine-solo-operator`. Detector: `surveillance/pristine_solo_detector.py`. Refinement: same 7+ year aged wallet class is bidirectionally exploited — as **operators** (PSO original framing) and as **victims** (EXTRACTION_010 mass dormant-drain). Detection signal common to both: first activity from a long-dormant wallet.
 - **Infrastructure-Scale Operator** — DOCUMENTED 2026-04-25 — `docs/lexicon.md#infrastructure-scale-operator`. Detector: `surveillance/infrastructure_operator_detector.py`.
 - **Adversarial Vanity Branding** — DOCUMENTED 2026-04-27 — `docs/lexicon.md#adversarial-vanity-branding`. Three sub-categories (operational / anti-forensic / funder), three corpus instances (Coffee Fleet, org_001 Shadow Wallet 1, `0xb0b0b69*`).
-- **Tuition Extraction Markets** — DOCUMENTED 2026-04-25 — `docs/lexicon.md#tuition-extraction-markets`. Anchor: Bot_A.
+- **Tuition Extraction Markets** — DOCUMENTED 2026-04-25, anchor re-sourced 2026-04-29 — `docs/lexicon.md#tuition-extraction-markets`. Anchor: `0xc0dec76000f6c2d32f23d523748e50ebb5bb34a3` (corpus-derived; replaces the retired `0x84792c2a` external-block-walking anchor per Correction #18). Search log: `reports/tuition_extraction_anchor_search_2026-04-29.md`.
+- **Single-Purpose Infrastructure Funder** — DOCUMENTED 2026-04-28 — `docs/lexicon.md#single-purpose-infrastructure-funder`. Case file: `cases/CASE_SINGLE_PURPOSE_INFRASTRUCTURE_FUNDER.md`. 69 Pattern A operators across Base/Arbitrum/Optimism, three deployment shapes, structurally independent of org_001-004.
+- **Protocol-Family Specialist Operator** — DOCUMENTED 2026-05-07 — `docs/lexicon.md#protocol-family-specialist-operator`. Within-ecosystem analog of Pattern D (Cross-Chain Reputation Import). Same operator EOA exploits **different vulnerability classes** within a single protocol family / trust-graph over time. Anchor: EXTRACTION_011 — `0xC3EBDdEa4f69df717a8f5c89e7cF20C1c0389100` exploited 1inch Fusion V1 (March 2025) and TrustedVolumes RFQ proxy (2026-05-06), 14-month gap, different bug classes. Off-chain only (mainnet); typology transfers to L2 corpus.
+- **Convergent Calibration** — DOCUMENTED 2026-04-29 — `docs/lexicon.md#convergent-calibration`. Meta-observation across three operator scales (funder, operator, execution layers): N independent actors converge on the same template at the same time, no observable coordination signal. Empirical anchors: epistemic test #2 A4 (66/66 zero pair overlap among top-12 funders), `cases/CASE_SINGLE_PURPOSE_INFRASTRUCTURE_FUNDER.md` (69 unrelated Pattern A operators), 2026-04-29 24h drain-burst (6 self-deploying trap operators in 9-hour window, no shared infrastructure).
 - **Pooled Custody Amplification** — DOCUMENTED — `docs/lexicon.md#pooled-custody-amplification`
 - **Verification-Path Trust Failure** — DOCUMENTED — `docs/lexicon.md#verification-path-trust-failure`
-- **Configuration-Level Vulnerability** — DOCUMENTED — `docs/lexicon.md#configuration-level-vulnerability`
+- **Configuration-Level Vulnerability** — DOCUMENTED — `docs/lexicon.md#configuration-level-vulnerability`. April 2026 cluster synthesis: `reports/april_2026_key_management_cluster.md` (5 of 5 EXTRACTION_006-010 incidents in this class). **Extended 2026-05-07** to 6 of 6 with EXTRACTION_011 (TrustedVolumes RFQ proxy, 1inch family) — same configuration-class shape (signed-quote acceptance scope, not bytecode defect).
 - **Operational Layer Attack** — DOCUMENTED — `docs/lexicon.md#operational-layer-attack`
 - **Strategy Lifecycle** (EARLY → ARMS_RACE → WEAPONIZED → SATURATED) — DOCUMENTED — `docs/lexicon.md#strategy-lifecycle`
 - **Publishing-Induced Recursive Evasion** — DOCUMENTED — `docs/lexicon.md#publishing-induced-recursive-evasion`
@@ -395,8 +482,21 @@ The remaining ~80 distinct addresses extracted from cases/ + reports/ are either
 | EXTRACTION_006 | 2026-04-09 | BNB Chain (off-chain — `monitored_chain=0`) | (admin compromise drain) | `reports/extraction_event_006_aethir.md` | CONFIRMED |
 | EXTRACTION_007 | 2026-04-13 | Ethereum (`monitored_chain=1`) | ~245 ETH + ~1B DOT phase 2 | `reports/extraction_event_007_hyperbridge.md` | CONFIRMED |
 | EXTRACTION_008 | 2026-04-18 | Ethereum / Unichain (`monitored_chain=1`) | ~$292M | `reports/extraction_event_008_kelp.md`, `reports/kelp_retrospective_replay.md` | CONFIRMED |
+| EXTRACTION_009 | 2026-04-30 | Ethereum + Base + Berachain + Blast (`monitored_chain=1`) | ~$4.5–5.5M | `surveillance/data/cases/CASE_WASABI_EXPLOIT_20260430.md` | CONFIRMED. Wasabi Protocol admin-key compromise. UUPS proxy upgrade attack via compromised wasabideployer.eth. Configuration-Level Vulnerability — same shape as 006/007/008. **Layer 3 had zero corpus coverage** — Wasabi predates 2026-03-17 monitoring window AND production ingest was stuck during attack. |
+| EXTRACTION_010 | 2026-04-30 | Ethereum mainnet (`monitored_chain=0`) | ~$733K visible (324.741 ETH off-ramp; full scale across token paths TBD) | `surveillance/data/cases/CASE_DORMANT_WALLET_DRAIN_20260430.md` | CONFIRMED. Mass dormant-wallet drain — single hub `0xA707034429c8…` received from 49+ distinct senders in 3.5-min burst (06:39-06:42 UTC), 5 of 8 sampled senders are 7+ years old, off-ramp via Thorchain at 15:28:59. Probable mass-key-compromise event (vector unconfirmed). Inverts Pristine Solo Operator framing (same aged-wallet class, opposite role: victims not operators). **Layer 3 had zero corpus coverage** — mainnet-only, outside L2 scope. |
+| EXTRACTION_011 | 2026-05-06 | Ethereum mainnet (`monitored_chain=0`) | ~$5.87M (1,291.16 WETH + 206,282 USDT + 16.939 WBTC + 1,268,771 USDC) | (off-chain reference — Blockaid disclosure; no Layer 3 case file, see scope-gap note below) | CONFIRMED. TrustedVolumes / 1inch RFQ proxy exploit. Victim contract: TrustedVolumes resolver `0x9bA0CF1588E1DFA905eC948F7FE5104dD40EDa31`. Vulnerable component: TrustedVolumes-controlled custom RFQ swap proxy `0xeEeEEe53033F7227d488ae83a27Bc9A9D5051756`. Exploiter: `0xC3EBDdEa4f69df717a8f5c89e7cF20C1c0389100`. Exploit tx: `0xc5c61b3ac39d854773b9dc34bd0cdbc8b5bbf75f18551802a0b5881fcb990513`. **Same operator as the March-2025 1inch Fusion V1 incident; different vulnerability class** — anchors the new [Protocol-Family Specialist Operator](`docs/lexicon.md#protocol-family-specialist-operator`) lexicon entry (2026-05-07). Configuration-Level Vulnerability cluster grows to **6 of 6** (006-011). **Layer 3 had zero corpus coverage** — mainnet-only, outside L2 scope. |
 
 The off-chain events (004, 005, 006) are corpus-expansion case studies — `monitored_chain=0`. EXTRACTION_001 / EXTRACTION_002 are referenced in `claude.md` Database Schema as table rows but have no case-file or report-file documentation in current corpus state. **Gap flagged.**
+
+### Scope-gap note (added 2026-05-07)
+
+**Mainnet RFQ / resolver / admin-key compromises are structurally outside Layer 3's monitoring scope.** Three of the last four extraction events (009 Wasabi, 010 mass-dormant-drain, 011 TrustedVolumes) carry the marker **"Layer 3 had zero corpus coverage"**. This is not a detection failure — it is a scope statement: Layer 3 monitors Base / Arbitrum / Optimism deployments, and the entire **Configuration-Level Vulnerability** cluster (006-011) overwhelmingly originates on Ethereum mainnet against protocol-tier infrastructure (resolvers, vaults, OFT adapters, multisig admin EOAs) that does not deploy contracts on the L2s we watch.
+
+Implication for forward documentation:
+- The Configuration-Level Vulnerability cluster will continue to grow in this off-chain reference column without producing Layer 3 corpus detections.
+- Each new event in this class should be logged as an extraction-events-table entry plus (optionally) a case file under `surveillance/data/cases/`, but should NOT be expected to surface in `contracts`, `transaction_events`, or `alerts`.
+- Cross-referencing these events into the lexicon (e.g., as anchors for Configuration-Level Vulnerability, Confused Deputy Problem, Forced Deterministic Neutrality, Protocol-Family Specialist Operator) remains valuable — the typology work transfers to the L2 corpus even when the events themselves do not.
+- Any future "what is Layer 3 missing on mainnet?" question is answered structurally, not as a gap to close: closing it would require mainnet ingest, which is an architectural decision (Alchemy budget, RPC scope, schema multi-chain implications) deferred indefinitely per `claude.md` infrastructure constraints.
 
 ---
 
