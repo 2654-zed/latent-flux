@@ -1,9 +1,18 @@
 # CASE FILE: ORG_001 — Complete Infrastructure Map
 **Case ID:** ORG_001
 **Classification:** DELEGATECALL Trap Network (Arbitrum + Base)
-**Last Updated:** 2026-04-11
-**Status:** ACTIVE — infrastructure expanding, shadow wallets discovered
+**Last Updated:** 2026-04-11; **2026-05-09 (Correction #20 — Whale Trader path retracted)**
+**Status:** ACTIVE — infrastructure expanding, shadow wallets discovered (core finding stands)
 **Compiled from:** fund_tracer.py, org_cycles.py, trace_exit_ramp.py, trace_laundry_new.py, entity_classification DB, watchlist DB, deployer_profiles DB, eth_traces DB, CASE_ORG_001_ETHEREUM_DEPTH.md, FUND_FLOW_TRACE reports
+
+> **[CORRECTION #20 — 2026-05-09]** **The "Whale Trader" path (`0xf70da97812cb96acdf810712aa562db8dfa3dbef`) is RETRACTED from org_001 attribution.** The address is OLI-tagged as **Relay: Solver / Relay Bridge** — a cross-chain bridge solver that routes trades from many origins (including Binance) to many destinations. The "68% of org_001 deployments through this path" claim conflated bridge throughput with org_001 fund flow; bridges send to whatever address users specify. Specific consequences for the file below:
+> - The "Whale Trader" row in the Wallet Inventory table no longer represents an org_001 wallet.
+> - The "Funding channel shift detected (40% → 68% whale)" 2026-03-28 event is **not** an org_001 operational evolution; it reflects increasing Relay bridge usage by org_001 customers (or by anyone bridging through Relay), which is structurally upstream of org_001's actual operational decisions.
+> - The "1,819 deployers / 5,018 contracts (whale trader path)" metric is **bridge throughput**, not org_001 attribution. The headcount-attribution-method dispersion documented in CORRECTIONS.md 2026-04-02 (16/26/308/324) most plausibly reflects: lower bound = OLI-cleared org_001 wallets, upper bound = inclusive of Relay-bridge-routed traffic. The lower bound is the defensible org_001 footprint.
+> - **Coinbase-origin branch (gas station `0x8c826f795466e39acbff1bb4eeeb759609377ba1`) is unchanged.** OLI-cleared. The L2 gas station, L2 core wallets, and shadow wallets remain valid org_001 infrastructure.
+> - **The 2021 Binance withdrawal of 33,333 ETH** (CASE_ORG_001_ETHEREUM_DEPTH.md context) was real but its connection to org_001 was inferred via the Whale Trader path. With that path retracted, the Binance-origin branch evidence chain weakens. The mainnet-buffer wallets and Central Treasury linkage do still appear independent of Relay; the 33,333 ETH attribution requires re-tracing without the whale-trader hop.
+>
+> **Net effect:** org_001 as a Coinbase-origin operation with documented L2 gas station, L2 core wallets, shadow wallets, and a confirmed direct-org-drainer linkage (2026-05-06 escalation, see INDEX.md) **is unchanged**. The Binance-origin half of the case file requires re-tracing. The headcount drops to the lower-bound estimate. See `reports/correction_log.md#correction-20` for the full numbered correction.
 
 ---
 
@@ -38,7 +47,7 @@ On 2026-04-11, two **vanity-spoofed shadow wallets** were discovered during a da
 | Address | Role | Chain | First Seen | Notes |
 |---|---|---|---|---|
 | `0x4c968f6beecf1906710b08e8b472b8ba6e75f957` | **Central Treasury** | Ethereum | 2023-05 | Hub for all downstream ops. Coinbase-funded. |
-| `0xf70da97812cb96acdf810712aa562db8dfa3dbef` | **Whale Trader** | Ethereum | 2024-01 | Primary funding channel (68% of deployments as of Mar 28). Binance-funded. Moving 5-92 ETH/tx. |
+| ~~`0xf70da97812cb96acdf810712aa562db8dfa3dbef`~~ | ~~**Whale Trader**~~ **[CORRECTION #20 → Relay: Solver / Relay Bridge — REMOVED from org_001 attribution]** | ~~Ethereum~~ | ~~2024-01~~ | ~~Primary funding channel (68% of deployments as of Mar 28). Binance-funded. Moving 5-92 ETH/tx.~~ Bridge solver throughput, not org_001 fund flow. |
 | `0x5babe600b9fcd5fb7b66c0611bf4896d967b23a1` | MEV Bot | Ethereum | 2024-08 | Funded 20x from treasury Aug-Sep 2024 |
 | `0x391e7c679d29bd940d63be94ad22a25d25b5a604` | Revenue Collector | Ethereum | 2024-06 | Sweeper -> MEV bot |
 | `0x5e0f8e7337c8955d2124b8e85ca74af884b3e124` | WETH Wrapping Station | Ethereum | 2026-01 | DeFi operations |

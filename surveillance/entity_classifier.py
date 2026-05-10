@@ -104,15 +104,73 @@ def ensure_table(conn):
     conn.commit()
 
 
+# Trap-class subtypes that the OLI guardrail blocks for institutionally-tagged
+# addresses. Per Correction #20, these are the typology classifications that
+# behavioral/topology signals can spuriously assign to CEX hot wallets, bridge
+# solvers, payment processors, and institutional deployers. If an OLI HIGH-severity
+# tag is present, the classification is downgraded to a COMMERCIAL/institutional row
+# instead of the requested adversarial-class assignment.
+_OLI_GUARDED_TRAP_SUBTYPES = frozenset({
+    "trap_contract", "trap_deployer", "trap_inventory", "infrastructure_parasite",
+    "mev_factory", "bot_operator", "rd_bot", "known_attacker",
+    "org_laundry", "org_cashout", "org_001_shadow_cex_exit", "org_001_shadow_lp_staging",
+    # PSO + ISO subtypes (typology-promotion paths most affected by Correction #20)
+    "pristine_solo_operator", "infrastructure_scale_operator",
+    "single_purpose_funder", "drainer_spawn_hub",
+})
+
+
 def classify_address(conn, address, category, subtype, confidence, source,
                      org_id=None, notes=None):
     """
     Insert or update an entity classification.
 
     CONFIDENCE PROTECTION: never overwrite HIGH/CONFIRMED with MEDIUM/LOW.
+
+    OLI GUARDRAIL (added 2026-05-09 per Correction #20): if `subtype` is in
+    `_OLI_GUARDED_TRAP_SUBTYPES` AND the address has a HIGH-severity OLI tag
+    (institutional / CEX / bridge / payment processor), the classification is
+    redirected to ('COMMERCIAL', 'institutional_oli_tagged', confidence='HIGH')
+    with the OLI primary entity preserved in `notes`. This prevents the systematic
+    mislabel pattern that Correction #20 documented (e.g., Binance hot wallet
+    promoted to "infrastructure_scale_drainer_spawn_hub", Circle deployer promoted
+    to "pristine_solo_industrial_operator"). The guardrail short-circuits at the
+    classify_address boundary so all callers (import_from_deployers,
+    classify_by_deployment_pattern, watchlist promoters, etc.) inherit the check
+    without needing per-caller modification.
+
+    Lookup uses `surveillance.oli_enrichment.is_known_legitimate` against the
+    `oli_labels` cache. If the cache is empty for this address, the guardrail
+    is silent (no fetch is triggered from inside classify_address — calling code
+    should run `oli_enrichment.enrich_address(conn, addr)` ahead of time for
+    new-promotion paths).
     """
     address = address.lower().strip()
     now = datetime.now(timezone.utc).isoformat()
+
+    # OLI guardrail — redirect adversarial-class classifications when the address
+    # has an institutional public tag.
+    if subtype in _OLI_GUARDED_TRAP_SUBTYPES:
+        try:
+            from surveillance.oli_enrichment import is_known_legitimate
+            oli_row = is_known_legitimate(conn, address, chain_id=1)
+        except Exception:
+            oli_row = None
+        if oli_row is not None:
+            entity = oli_row.get("primary_entity") or oli_row.get("primary_tag_name") or "OLI-tagged"
+            redirect_notes = (
+                f"[OLI guardrail (Correction #20)] Original classification request: "
+                f"category={category} subtype={subtype} source={source} confidence={confidence}. "
+                f"Redirected to COMMERCIAL/institutional_oli_tagged because address carries "
+                f"OLI HIGH-severity tag '{oli_row.get('primary_tag_name')}' (entity={entity})."
+            )
+            if notes:
+                redirect_notes = redirect_notes + " || Original notes: " + notes
+            category = "COMMERCIAL"
+            subtype = "institutional_oli_tagged"
+            confidence = "HIGH"
+            source = source + "+oli_redirect"
+            notes = redirect_notes
 
     existing = conn.execute(
         "SELECT confidence FROM entity_classification WHERE address = ?",

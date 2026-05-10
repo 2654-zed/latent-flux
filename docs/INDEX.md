@@ -228,7 +228,7 @@
 >
 > **The Top-12 cluster is no longer a defensible empirical anchor.** Lexicon entries [Infrastructure-Scale Operator](lexicon.md#infrastructure-scale-operator), [Convergent Calibration](lexicon.md#convergent-calibration), and [Thermodynamic Fundamentalism](lexicon.md#thermodynamic-fundamentalism) (which used `0x3304e22d` as a positive-CER hub example) require revision; the lexicon retraction notes are landed alongside this correction.
 >
-> The remaining 5 of 12 are not yet OLI-cleared and may still be either adversarial OR un-tagged legitimate operators (smaller exchanges, custody services, project deployers). Pending re-audit.
+> **Update 2026-05-09 (post-correction deeper audit):** The remaining 8 of 12 (after subtracting the 4 confirmed CEX/bridge entries above) ARE all OLI-cleared (no public tag returned by metadata service). Of those 8, 4 are pre-attributed within Layer 3 (`0xb0b0b690` Adversarial Vanity Branding, `0xde8eb937` org_002_junior, `0x238d7170` org_002_senior, `0x8c826f79` org_001 L2 Gas Station). The other 4 (`0xc43f317e`, `0x0e6e9177`, `0x8ca70232`, `0xca7ece5e`) carry the topology fingerprint expected of the typology — high disposable-deployer fanout, all-fleet-1 downstream, predominantly L2-only origin (no eth_depth). These represent the **genuine residual Infrastructure-Scale Operator population** that the typology was originally designed to identify. Retain HIGH watchlist; deeper individual case-file investigation deferred but not blocking.
 
 #### Original entry (preserved for historical record):
 
