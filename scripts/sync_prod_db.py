@@ -146,8 +146,49 @@ def run(args: argparse.Namespace) -> int:
         f"exec(base64.b64decode('{script_b64}'))\""
     )
 
-    cmd = ["railway", "ssh", "-p", PROJECT, "-s", SERVICE, bootstrap]
+    # On Windows, subprocess.Popen with a list of args does not resolve PATH
+    # the same way the shell does — it uses CreateProcess directly. Resolve
+    # the railway binary via shutil.which to get a full path. If the resolved
+    # binary is a .cmd/.bat (npm-installed railway is railway.CMD), Windows
+    # CreateProcess cannot execute it directly; wrap with cmd.exe /c.
+    railway_exe = (
+        shutil.which("railway.exe")
+        or shutil.which("railway.cmd")
+        or shutil.which("railway")
+    )
+    if not railway_exe:
+        sys.stderr.write(
+            "[sync] FATAL: 'railway' CLI not found in PATH. "
+            "Install via https://docs.railway.app/develop/cli or run "
+            "`npm i -g @railway/cli`.\n"
+        )
+        return 1
+
+    # Precondition: the linked-project context must already be set, because
+    # `railway ssh -p/-s` flags expect project/service IDs (UUIDs), not the
+    # human-readable names. We rely on `railway link --project <name>` having
+    # been run interactively.
+    status_cmd = (
+        ["cmd.exe", "/c", railway_exe, "status"]
+        if os.name == "nt" and railway_exe.lower().endswith((".cmd", ".bat"))
+        else [railway_exe, "status"]
+    )
+    status = subprocess.run(status_cmd, capture_output=True, text=True)
+    if status.returncode != 0 or PROJECT not in status.stdout or SERVICE not in status.stdout:
+        sys.stderr.write(
+            f"[sync] FATAL: railway CLI is not linked to {PROJECT}@{SERVICE}.\n"
+            f"[sync] Run interactively: railway link --project {PROJECT} && "
+            f"railway service {SERVICE}\n"
+            f"[sync] Current `railway status`:\n{status.stdout or status.stderr}\n"
+        )
+        return 1
+
+    if os.name == "nt" and railway_exe.lower().endswith((".cmd", ".bat")):
+        cmd = ["cmd.exe", "/c", railway_exe, "ssh", bootstrap]
+    else:
+        cmd = [railway_exe, "ssh", bootstrap]
     sys.stderr.write(f"[sync] running railway ssh against {SERVICE}@{PROJECT}\n")
+    sys.stderr.write(f"[sync] railway binary: {railway_exe}\n")
     sys.stderr.write(f"[sync] remote script size: {len(remote_script)} bytes "
                      f"({len(script_b64)} chars base64)\n")
 
