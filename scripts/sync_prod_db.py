@@ -52,51 +52,90 @@ def fmt_bytes(n: int) -> str:
     return f"{n:.1f} TB"
 
 
-def stream_extract_payload(stream, dest_path: Path) -> tuple[int, int]:
-    """Read line-by-line from `stream` (subprocess stdout), find the
-    base64 payload between MARKER_START/MARKER_END, base64-decode it
-    line-by-line, and write the decoded bytes to a temp file. Returns
-    (base64_bytes_in, decoded_bytes_out).
+def capture_stdout(stream, raw_path: Path) -> int:
+    """Stream stdout from subprocess to a raw file, no parsing. Returns bytes written.
 
-    Streaming-decode keeps memory bounded regardless of payload size.
+    We defer all parsing until after the transfer completes. This avoids
+    intermittent base64-decode errors from SSH-transport buffering quirks
+    (line boundaries occasionally not preserved through railway ssh's
+    cmd.exe wrapper, observed 2026-05-10).
     """
-    state = "before"
-    b64_in = 0
-    decoded_out = 0
-    with open(dest_path, "wb") as f_out:
-        for raw_line in stream:
-            # Strip CR (Railway SSH does CRLF translation) and trailing newlines
-            line = raw_line.rstrip(b"\r\n")
-            if state == "before":
-                if MARKER_START in line:
-                    state = "in_payload"
-                continue
-            if state == "in_payload":
-                if MARKER_END in line:
-                    state = "after"
+    n = 0
+    with open(raw_path, "wb") as f_out:
+        while True:
+            chunk = stream.read(1024 * 1024)
+            if not chunk:
+                break
+            f_out.write(chunk)
+            n += len(chunk)
+    return n
+
+
+def extract_payload_from_file(raw_path: Path, gz_path: Path) -> tuple[int, int]:
+    """Parse the captured raw file: find MARKER_START/MARKER_END via mmap
+    (no full-file read), then stream-read the payload region in chunks,
+    filter non-base64 bytes, and decode in 4-char-multiples to keep
+    memory bounded. Returns (b64_chars_in, decoded_bytes_out).
+
+    Robust against transport-induced line-boundary jitter: chunk filtering
+    + 4-byte-aligned decode means line boundaries are irrelevant. The
+    base64 alphabet is closed under concatenation (any sequence of valid
+    base64 chars can be decoded as a stream).
+    """
+    import mmap
+
+    with open(raw_path, "rb") as f:
+        size = os.fstat(f.fileno()).st_size
+        with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+            start_idx = mm.find(MARKER_START)
+            if start_idx < 0:
+                head = bytes(mm[:500]).decode("utf-8", errors="replace")
+                tail = bytes(mm[-500:]).decode("utf-8", errors="replace")
+                raise RuntimeError(
+                    f"MARKER_START not found in raw stream "
+                    f"({size:,} bytes captured).\nHead: {head!r}\nTail: {tail!r}"
+                )
+            payload_start = start_idx + len(MARKER_START)
+            end_idx = mm.find(MARKER_END, payload_start)
+            if end_idx < 0:
+                tail = bytes(mm[-500:]).decode("utf-8", errors="replace")
+                raise RuntimeError(
+                    f"MARKER_END not found after MARKER_START "
+                    f"(start={start_idx}, size={size:,}).\nTail: {tail!r}"
+                )
+
+        # Stream-read the payload region, filter, decode in 4-byte-aligned chunks
+        f.seek(payload_start)
+        bytes_remaining = end_idx - payload_start
+        b64_buf = bytearray()
+        b64_chars_in = 0
+        decoded_out = 0
+        non_b64_re = re.compile(rb"[^A-Za-z0-9+/=]")
+        chunk_size = 8 * 1024 * 1024  # 8 MB read chunks
+        with open(gz_path, "wb") as f_out:
+            while bytes_remaining > 0:
+                read_len = min(chunk_size, bytes_remaining)
+                chunk = f.read(read_len)
+                if not chunk:
                     break
-                if not line:
-                    continue
-                # Skip any non-base64 contamination; if line has stray content, abort
-                if not re.fullmatch(rb"[A-Za-z0-9+/=]+", line):
-                    sys.stderr.write(
-                        f"WARN: non-base64 line inside payload (skipped): {line[:80]!r}\n"
-                    )
-                    continue
-                b64_in += len(line)
-                # Each line is 48KB binary worth of base64 = 65,536 chars (the
-                # remote-side line size is exactly multiples of 4, so per-line
-                # decode is safe).
-                decoded = base64.b64decode(line)
+                bytes_remaining -= len(chunk)
+                clean = non_b64_re.sub(b"", chunk)
+                b64_buf.extend(clean)
+                b64_chars_in += len(clean)
+                # Decode the part that's a multiple of 4 chars; carry the
+                # remainder (0-3 trailing chars) into the next iteration.
+                decode_len = (len(b64_buf) // 4) * 4
+                if decode_len > 0:
+                    decoded = base64.b64decode(bytes(b64_buf[:decode_len]))
+                    f_out.write(decoded)
+                    decoded_out += len(decoded)
+                    del b64_buf[:decode_len]
+            # Final flush: any trailing chars (with padding =) decode here
+            if b64_buf:
+                decoded = base64.b64decode(bytes(b64_buf))
                 f_out.write(decoded)
                 decoded_out += len(decoded)
-    if state != "after":
-        raise RuntimeError(
-            f"Payload markers not properly framed (state={state}, "
-            f"b64_in={b64_in}, decoded_out={decoded_out}). "
-            f"Expected START + payload + END, but stream ended in state={state}."
-        )
-    return b64_in, decoded_out
+        return b64_chars_in, decoded_out
 
 
 def decompress_gz(gz_path: Path, db_path: Path) -> int:
@@ -195,18 +234,19 @@ def run(args: argparse.Namespace) -> int:
     # Use temp paths so we never partially overwrite the live DB
     with tempfile.TemporaryDirectory(dir=out_path.parent) as tmp_dir:
         tmp_dir = Path(tmp_dir)
+        raw_path = tmp_dir / "stdout.raw"
         gz_path = tmp_dir / "snapshot.db.gz"
         new_db_path = tmp_dir / "snapshot.db"
 
-        # Stream-extract base64 payload from railway ssh stdout into gz_path
+        # Phase 1: stream stdout from railway ssh to a raw file. No parsing.
+        sys.stderr.write("[sync] phase 1: capturing stdout to raw file...\n")
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            bufsize=0,
         )
         try:
-            b64_in, decoded_out = stream_extract_payload(proc.stdout, gz_path)
+            raw_bytes = capture_stdout(proc.stdout, raw_path)
         finally:
             proc.wait()
             stderr_blob = proc.stderr.read().decode("utf-8", errors="replace")
@@ -216,9 +256,14 @@ def run(args: argparse.Namespace) -> int:
             sys.stderr.write(f"[sync] stderr (last 2KB):\n{stderr_blob[-2000:]}\n")
             return 1
 
-        sys.stderr.write(f"[sync] base64 received: {fmt_bytes(b64_in)}\n")
-        sys.stderr.write(f"[sync] gz on disk: {fmt_bytes(gz_path.stat().st_size)}\n")
+        sys.stderr.write(f"[sync] phase 1 done: raw stdout {fmt_bytes(raw_bytes)}\n")
         sys.stderr.write(f"[sync] (remote stderr tail: {stderr_blob.strip()[-200:]!r})\n")
+
+        # Phase 2: parse markers, decode base64 → gz_path
+        sys.stderr.write("[sync] phase 2: extracting and decoding base64...\n")
+        b64_in, decoded_out = extract_payload_from_file(raw_path, gz_path)
+        sys.stderr.write(f"[sync] base64 chars: {b64_in:,}\n")
+        sys.stderr.write(f"[sync] gz on disk: {fmt_bytes(gz_path.stat().st_size)}\n")
 
         # Decompress gz → SQLite db
         sys.stderr.write("[sync] decompressing...\n")
