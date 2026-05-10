@@ -982,7 +982,7 @@ The shared root cause across all 18 mismatches: **high-fanout funding-wallet top
 
 **Still open:**
 
-5. **Production sync.** Local `oli_labels` table is populated against the 28h-stale DB snapshot. Once the new `/dump` token is provided and production sync resumes, re-run `--backfill-flagged` to capture any post-snapshot deployers, then run `scripts/apply_correction_20_to_prod.py` against production.
+5. **Production sync.** Local `oli_labels` table is populated against a stale DB snapshot (last manual refresh was 2026-05-08 04:49 UTC). The earlier characterization of this open item — that a `/dump` endpoint token was needed — was a false premise; `/dump` was never a Railway production endpoint. Production sync mechanism is whatever the user runs manually (`railway ssh + sqlite3 .dump` per `Trading/layer3_trading_exp/config.py`, or another method). Once the local DB is refreshed against the latest production state, re-run `python -m surveillance.oli_enrichment --backfill-flagged` to capture any post-snapshot deployers, then `scripts/apply_correction_20_to_prod.py --db <prod-path>` to mirror the watchlist + infra_op_candidates dispositions to production.
 
 6. **Bytecode-and-narrative review for the 4 unattributed Top-12 entries** (`0xc43f317e`, `0x0e6e9177`, `0x8ca70232`, `0xca7ece5e`). Topology supports adversarial classification but case files for individual investigation are not yet authored.
 
