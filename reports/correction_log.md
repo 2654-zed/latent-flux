@@ -887,6 +887,101 @@ The May 7 probe writeup recommended deep-diving the three funders. Running the d
 
 ---
 
+## Correction #20 — Mass Mislabel Sweep: OLI-Tagged Institutional Addresses Misclassified as Adversarial Operators
+
+**Date applied:** 2026-05-09
+**Scope (docs):** `docs/INDEX.md` — Section 1 entries for Top-12 Infrastructure-Scale Operators, Architect, org_001 whale path, 0xe69f81b8 high_value_bridge_user, Cluster A/B funder analysis, bb50 industrial-scale operator. Section 2 watchlist entries for the 18 affected addresses. `docs/lexicon.md` — Infrastructure-Scale Operator, Convergent Calibration, Thermodynamic Fundamentalism, Pristine Solo Operator.
+**Scope (code):** New module `surveillance/oli_enrichment.py`. New table `oli_labels` (migration in `db.py`). New script `scripts/blockscout_tag_audit.py` (the audit that surfaced this).
+**Scope (data):** Local `watchlist` and `entity_classification` rows for 18 addresses receive corrective notes; production must apply the same updates separately. New `oli_labels` table populated for 140 flagged addresses on 2026-05-09.
+
+### What we claimed
+Across multiple INDEX.md entries, lexicon entries, and watchlist rows, Layer 3 had asserted that 14 institutional-class addresses were adversarial operators of various kinds. Specifically:
+
+- **Top-12 Infrastructure-Scale Operator cluster** (lexicon: [Infrastructure-Scale Operator](../docs/lexicon.md#infrastructure-scale-operator); INDEX.md Section 1): documented as 12 funder addresses with ≥200 fanout / ≥10% adversarial ratio / ≥50% disposable rate. Used as empirical anchor for [Convergent Calibration](../docs/lexicon.md#convergent-calibration). At least one (`0x3304e22d`) used as positive-CER exemplar in [Thermodynamic Fundamentalism](../docs/lexicon.md#thermodynamic-fundamentalism).
+- **Pristine Solo Operator typology** (lexicon: [Pristine Solo Operator](../docs/lexicon.md#pristine-solo-operator); INDEX.md): old mainnet wallets first appearing on L2 with high-velocity deployment. Documented as a trap-class signature.
+- **Cluster A and Cluster B funder analysis** (INDEX.md Section 1; CRITICAL watchlist): two "cluster funders" connecting tens of deployers each, framed as coordinated trap-fleet operations.
+- **Architect investigation** (INDEX.md Section 1; CRITICAL watchlist): a lone funder identified as the Architect's "sole funder," used to anchor an exclusivity finding.
+- **org_001 whale path** (INDEX.md): one path representing 68% of org_001 deployments.
+- **`0xe69f81b8` high_value_bridge_user** (INDEX.md Section 1): 49,000 ETH bridged to L1 in one week (Apr 7-14), framed as "coordinated during western sleep hours."
+- **bb50 / `0xbb50ce87`** (INDEX.md Section 1; lexicon Thermodynamic Fundamentalism empirical grounding): the industrial-scale stockpile entry with 38,016+ contracts, 7.7y mainnet age, framed as PSO+Single-Purpose hybrid pre-funding state.
+
+### What was actually true
+The 2026-05-09 mass audit (`reports/blockscout_tag_audit_2026-05-09.csv`) cross-referenced 140 flagged addresses against the Open Labels Initiative tag set surfaced by the Blockscout metadata service. **18 of 140 (12.9%) carry public institutional tags incompatible with the adversarial classification.**
+
+**HIGH-severity mismatches (institutional / CEX / payment-processor identities):**
+
+| L3 address | L3 framing (PRIOR) | OLI public tag | Reality |
+|---|---|---|---|
+| `0xbb50ce87be3443ed137df1dfdbf2fb0ca8c0a9e0` | `pristine_solo_industrial_bb50ce87` (HIGH) — Pristine Solo Operator at industrial scale, PSO+Single-Purpose hybrid, CER ≈ 0 pre-funding state | **Circle: contract deployer** | Circle's institutional contract deployer. 7.7y mainnet history is real but is institutional infrastructure history, not Pristine Solo Operator dormancy. |
+| `0x3304e22ddaa22bcdc5fca2269b418046ae7b566a` | `infrastructure_scale_drainer_spawn_hub_3304e22d` (HIGH); top-12 ISO funder (1,939 deployers, 6,470 contracts, 33 confirmed); empirical anchor for Thermodynamic Fundamentalism positive-CER hub class | **Binance 73 / Exchange / Binance** | Binance hot wallet. The 1,939 "deployers" are CEX customer-withdrawal recipients who happened to deploy contracts. The "33 confirmed" traps are downstream of Binance withdrawals, not seeded by a coordinated operator. |
+| `0x39591e7c099a379fd7b349ebfecaeef439c40454` | `iso_top12_39591e7c` (HIGH); top-12 ISO rank #10 (633 deployers, 2,029 contracts) | **OKX 177 / Exchange** | OKX hot wallet. Same misclassification as `0x3304e22d`. |
+| `0x4e3ae00e8323558fa5cac04b152238924aa31b60` | top-12 ISO candidate (243 deployers, 1,557 contracts) | **MEXC 15 / Exchange / MEXC** | MEXC hot wallet. |
+| `0xfd92f4e91d54b9ef91cc3f97c011a6af0c2a7eda` | `iso_top12_fd92f4e9_stockpile` (HIGH); top-12 ISO rank #3 | **OKX 137 / Exchange** | OKX hot wallet (second OKX address in the same top-12 list). |
+| `0xbaed383ede0e5d9d72430661f3285daa77e9439f` | `potential_org_004` (HIGH); CLAUDE.md priority #12 explicitly calls this out as next org-mapping target; top-12 ISO candidate (210 deployers, 1,492 contracts) | **Bybit: Hot Wallet 6 / DEPOSIT ADDRESS / Exchange / Bybit** | Bybit hot wallet. The "potential org_004" investigation surface dissolves on identification. |
+| `0xf70da97812cb96acdf810712aa562db8dfa3dbef` | `org_001_whale` (HIGH) — "68% of deployments now through this path. Binance origin"; top-12 funder (2,684 deployers, 6,971 contracts) | **Relay: Solver / Relay Bridge** | Relay (cross-chain bridge) solver. Bridges route trades from many origins to many destinations. The "68% of deployments through this path" claim is bridge-routing volume, not org_001 fund flow. The "Binance origin" notation is correct only in that the bridge user originated from Binance — it does not imply org_001 attribution. |
+| `0xe69f81b825d7dc31ee9becef4dbeab5cf30e3abb` | `high_value_bridge_user` (HIGH) — 49,000 ETH bridged Apr 7-14, framed "coordinated during western sleep hours" | **Binance: Internal 2 / Exchange** | Binance internal wallet moving exchange funds. The 49K ETH is treasury rebalancing. The "coordinated" framing dissolves — Binance internal transfers run on whatever schedule treasury operations require. |
+| `0x151b381058f91cf871e7ea1ee83c45326f61e96d` | `architect` (CRITICAL) — Architect's sole funder, 0.0508 ETH, "single deployer" | **MoonPay 4 / Exchange** | MoonPay (fiat onramp) deposit address. Many users receive funds from MoonPay; the Architect address is one of millions of recipients. The "sole funder" framing collapses — MoonPay is not exclusive to anyone. |
+| `0x45a318273749d6eb00f5f6ca3bc7cd3de26d642a` | `cluster_b_funder` (CRITICAL) — 25 deployer wallets, 223 contracts on Base+Arb, blacklist tracking | **Owlto Finance: Bridge** | Owlto Finance cross-chain bridge. The 25 "deployer wallets" are bridge destinations. "Cluster B" topology is a normal bridge fanout. |
+| `0xe4edb277e41dc89ab076a1f049f4a3efa700bce8` | `cluster_a_funder` (CRITICAL) — 51 deployer wallets, 260 contracts on Base, "honeypot bytecode" | **Orbiter Finance: Bridge 2** | Orbiter Finance cross-chain bridge. The "honeypot bytecode" downstream is real — but that's because bridges send to whatever address users specify, including honeypots that the bridge does not control. |
+| `0x80c67432656d59144ceff962e8faf8926599bcf8` | top-12 ISO candidate (272 deployers, 1,135 contracts) | **Orbiter Finance: Bridge** | Orbiter Finance — same bridge family as `0xe4edb277e`. |
+| `0xd37bbe5744d730a1d98d8dc97c42f0ca46ad7146` | `thorchain_router_known_offramp` (HIGH) | **THORChain: THORChain Router v4.1.1** | OLI tag CONFIRMS our existing classification. Keep as-is — already correct as "known offramp surface, not adversarial-by-default." |
+| `0xfa7093cdd9ee6932b4eb2c9e1cde7ce00b1fa4b9` | `INFRASTRUCTURE / mixer` (entity_classification) | **Relay; Railgun** | OLI tag CONFIRMS classification (Railgun is privacy-protocol mixer). Keep as-is. |
+
+**LOW-severity mismatches (Web3 brand institutional deployers misclassified as Pristine Solo Operators):**
+
+| L3 address | L3 framing | OLI public tag |
+|---|---|---|
+| `0x147b8869655bc09f226955cc676ff78efe240ca8` | `pristine-reputation solo operator (base)` (HIGH); fleet 4 conf 1 | **Luchadores: Deployer** (NFT project) |
+| `0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8` | `pristine-reputation solo operator (0x752c5a95 deployer)` (HIGH); 2026-04-24 investigator | **Animoca: Deployer** |
+| `0xa2a01b4a68575280a2de45178e289da717bedb6f` | `pristine-reputation solo operator (arbitrum)` (HIGH); fleet 4 conf 1 | **Stabilize Finance: Deployer 2** |
+| `0xc5d133296e17ba25df0409a6c31607bf3b78e3e3` | `architect_associated` (HIGH) — behavioral match to Architect at 0.742 | **CryptoCauses: Deployer** |
+
+### How was the error caught
+Two-stage discovery on 2026-05-09:
+
+1. **Stage 1 — bb50 manual probe.** User asked for production `/priority` analysis. Production analyst note flagged bb50 as "FALSE POSITIVE for trap detection / wallet farm for airdrop farming," contradicting our PSO+Single-Purpose framing. Manual cross-check of bb50's mainnet identity via Blockscout metadata service surfaced "Circle: contract deployer" tag.
+2. **Stage 2 — corpus-wide audit.** User authorized broader sweep. New script `scripts/blockscout_tag_audit.py` queried Blockscout metadata service for all 140 unique malicious-flagged addresses (`watchlist` ∪ `entity_classification` malicious subtypes ∪ `infrastructure_operator_candidates`). 18 addresses returned tags incompatible with our classifications.
+
+The Blockscout metadata service surfaces tags from the [Open Labels Initiative](https://www.openlabelsinitiative.org/), a public crowd-curated labeling consortium. Tag reliability was independently verified against canonical anchor addresses (USDC `0xa0b8...` correctly tagged; Circle Hot Wallet `0x55fe...` correctly tagged with `meta.main_entity: "Circle"` and OLI attribution) before any retraction.
+
+The methodological gap producing the false positives: **Layer 3's classification pipeline never queried public address labels.** Detectors operated on behavioral and topological signal only (high-fanout funding, high-velocity deployment, mainnet age, bytecode patterns). The `infrastructure_registry` table existed (12 rows) but contained only Circle CCTP product contracts — not the *deployer wallets* of CEXes, bridges, or institutional issuers, and was not consulted at the watchlist-promotion or typology-application step. CLAUDE.md priority #2 ("Build known-legitimate bytecode template baseline — discount OpenZeppelin, Uniswap, standard patterns") covered this conceptually but the address-label dimension was never wired in.
+
+The shared root cause across all 18 mismatches: **high-fanout funding-wallet topology is the structural signature of CEX hot wallets, bridge solvers, payment processors, AND single-purpose trap-fleet funders.** The detector cannot distinguish them by topology alone. The disambiguating signal is institutional identity, surfaced via public labels.
+
+### What we changed
+
+| Component | Change |
+|---|---|
+| `surveillance/oli_enrichment.py` (new) | Module that fetches Open Labels Initiative tags from Blockscout metadata service, classifies severity (HIGH for institutional / CEX / bridge / issuer, LOW for project-deployer brands, self-confirming for scam/phishing tags), caches in `oli_labels` table. Provides `is_known_legitimate(conn, address)` for fast lookup at watchlist-promotion or classification time. CLI: `--address`, `--backfill-watchlist`, `--backfill-flagged`, `--hits`. |
+| `surveillance/db.py` | New migration: `oli_labels` table with PK `(address, chain_id)`, indexed on `severity` and `primary_entity`. |
+| `scripts/blockscout_tag_audit.py` (new) | One-shot audit script — pulls all malicious-flagged addresses, runs OLI enrichment, writes CSV report. Output: `reports/blockscout_tag_audit_YYYY-MM-DD.csv`. |
+| `docs/INDEX.md` Section 1 | Top-12 ISO entry — 6 of 12 confirmed CEX hot wallets; remaining 6 not yet OLI-cleared, should not be cited as "infrastructure-scale operator cluster" pending re-audit with non-CEX-contaminated baseline. bb50 entry — superseded by Circle attribution (per this correction). Cluster A/B funder entries — superseded by Orbiter Finance bridge attribution. Architect funder side — superseded by MoonPay attribution. `0xe69f81b8` 49K ETH bridge user entry — superseded by Binance Internal attribution. org_001 entry — `0xf70da978` whale path retracted (Relay solver). |
+| `docs/INDEX.md` Section 2 | Per-address rows for the 18 affected entries receive `[CORRECTION #20]` notation pointing to this entry. |
+| `docs/lexicon.md` | [Infrastructure-Scale Operator](../docs/lexicon.md#infrastructure-scale-operator) — adds "CEX-hot-wallet false-positive class" subsection, requires OLI cross-check. [Pristine Solo Operator](../docs/lexicon.md#pristine-solo-operator) — adds "institutional-deployer false-positive class," requires OLI check. [Convergent Calibration](../docs/lexicon.md#convergent-calibration) — empirical grounding revised to remove Top-12 ISO instances pending re-audit. [Thermodynamic Fundamentalism](../docs/lexicon.md#thermodynamic-fundamentalism) — bb50 stockpile and `0x3304e22d` positive-CER hub examples retracted; replacement examples needed (deferred). |
+| `watchlist` table (local) | 14 HIGH-severity rows tagged `[CORRECTION #20]` in `watch_reason` and active flag set per disposition. Production DB requires same updates. |
+
+### Effect on published numbers / case files / pitch claims
+
+- **"12 Infrastructure-Scale Operators"** — corpus claim retracted at the 12-count. Re-audit needed before any operator-cluster count is cited externally.
+- **"49,000 ETH bridged Apr 7-14, coordinated"** — retract; this was Binance Internal moving exchange funds.
+- **"68% of org_001 deployments through Relay path"** — retract; Relay's solver is a bridge, the 68% reflects bridge throughput attribution to org_001 that conflated origin-chain bridging with org-attribution.
+- **"Architect's sole funder"** — retract. The Architect investigation continues but the funder-side framing collapses.
+- **bb50 lexicon anchor for Thermodynamic Fundamentalism** — retract. Replacement empirical anchor needed.
+
+### Open work (post-correction)
+
+1. **Re-audit Top-12 ISO list to identify the 6 non-CEX entries.** OLI tags only flagged 6 of 12; the remaining 6 may still be adversarial — or may be other un-OLI-tagged institutional flows (smaller exchanges, custody services). Action: bytecode-pattern + funding-pattern review per remaining address.
+2. **OLI enrichment integration into entity_classifier and watchlist-promotion paths.** This correction adds the *capability* (`oli_enrichment.py` + cache table). It does not yet *invoke* the check during normal operation. Wiring it into `entity_classifier.classify_address` and the watchlist promotion code is the priority-#2 follow-up.
+3. **Re-anchor [Thermodynamic Fundamentalism](../docs/lexicon.md#thermodynamic-fundamentalism)** with a non-misclassified positive-CER instance. Hub `0xf7883e3fef23c8e645deba4b540549d78028a616` (drainer-spawn hub, 859 victims drained per INDEX.md) is OLI-clean and remains a valid example, but a fresh audit pass is warranted before lexicon use.
+4. **Validate the LOW-severity mislabels by a second source** before production watchlist removal. Animoca, Stabilize Finance, Luchadores, CryptoCauses are tagged via OLI but are smaller projects — verify with a second labeling source or direct project disclosure before action.
+5. **Production sync.** Local `oli_labels` table is populated against the 28h-stale DB snapshot. Once the new `/dump` token is provided and production sync resumes, re-run `--backfill-flagged` to capture any post-snapshot deployers.
+
+### Why this is one numbered correction, not seven
+
+All 14+4 mismatches share the same root cause (no OLI/public-label cross-check in classification pipeline) and were all surfaced by a single audit pass. Splitting into Corrections #20-#26 would create the appearance of multiple independent methodology issues; collapsing into one entry preserves the actual structural finding: **a single missing enrichment step produced systematic false positives across multiple typologies.** Future independent corrections that surface OLI-tag-related issues should reference back to #20.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.

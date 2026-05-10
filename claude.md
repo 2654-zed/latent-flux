@@ -113,19 +113,28 @@ Layer 3 is a production behavioral intelligence platform monitoring smart contra
 
 ---
 
-## Current Corpus (as of April 2026)
+## Current Corpus (as of 2026-05-09, from production `/stats`)
 
-| Metric | Value |
-|---|---|
-| Contracts monitored | 90,276+ |
-| Transaction events | 2.44M+ |
-| Unique deployers | 25,834 |
-| Confirmed traps | 391 |
-| Suspected traps | 49,190 |
-| Organizations mapped | 4 |
-| API endpoints | 19 |
-| Analysis modules | 54 |
-| Database tables | 50+ |
+| Metric | Value | vs. April 2026 baseline |
+|---|---|---|
+| Contracts monitored | 282,401 (1,404 confirmed + 115,514 suspected + 39,842 unanalyzed + 125,641 unknown) | 3.13x (was 90,276+) |
+| Transaction events | 16,678,335 | 6.84x (was 2.44M+) |
+| Unique deployers | 66,805 | 2.59x (was 25,834) |
+| Confirmed traps | 1,404 | 3.59x (was 391) |
+| Suspected traps | 115,514 | 2.35x (was 49,190) |
+| Bot candidates | 4,244 | 6.69x (was 634) |
+| Funder coverage | 91.9% (61,375 of 66,805 deployers traced) | new line item |
+| Gas stations identified | 253 | new line item |
+| Org links found | 4,382 | new line item |
+| Cross-chain shared deployers | 1,046 | new line item |
+| Organizations mapped | 4 | unchanged |
+| API endpoints | new surface (post-refactor) — `/stats /suspected /priority /bots /tx-events /known-selectors /clusters /cluster-events /health`. The 19-endpoint Tier 1/2/3/A surface documented below is from the prior architecture; reconcile against current routes before relying on the list. | needs spec reconciliation |
+| Analysis modules | 54 | unchanged (modules in repo; runtime composition not re-audited) |
+| Database tables | 50+ | unchanged |
+
+**Pulled from:** `https://stellar-embrace-production-2020.up.railway.app/stats` on 2026-05-09 (heartbeat 13 min before pull: `deployment_monitor_optimism 2026-05-09T22:09:10.140408+00:00`).
+
+**Note on the API surface:** The 19 endpoints documented in the section below (`/risk/{chain}/{address}`, `/check/...`, `/screen/...`, `/feed`, `/dump`, `/org/...`, `/deployer/...`, etc.) all return 404 on the new service. The `/dump` route returns 403 (alive but token-rotated) — re-enable for delta sync once new token is set. The other Tier 1/2/3/A routes appear to have been replaced with a stripped surface; section needs a reconciliation pass.
 
 ---
 
@@ -387,6 +396,8 @@ This framework transfers to non-blockchain domains (browser extensions, AI agent
 11. **Draft appeals/recourse policy** for `/methodology` endpoint
 12. **Investigate org_004 (0xbaed383e)** — next organizational mapping target
 13. **Evaluate hybrid cache architecture for `risk_scores` persistence** — deferred until scheduler audit complete. Decision criteria: bulk-query demand, longitudinal tracking need, acceptable staleness window. See Correction #6 and `reports/risk_scoring_persistence_audit.md`.
+14. **Drain-wave USD attribution gap (flagged 2026-05-04)** — `approval_watchlist` schema captures `victim_address`, `contract_address`, `drain_caller`, `drain_tx_hash`, and `drain_timestamp`, but has no field for per-drain USD value. As of 2026-05-04, 3,437 lifetime drain events recorded across 94 distinct drainer wallets and 2,963 victims, but **zero USD attribution** on any drain. The 2026-05-04 capital-total query (`scripts/capital_total.py`) flagged this as the single largest unmeasured-harm gap in the corpus. Estimated impact: median drain ~$500-2000 → drain-wave alone is ~$1.7M–$6.9M unaccounted for. Fix: add `drain_value_usd` column + backfill via on-chain `transferFrom` log parsing (token amount × oracle price at block timestamp). Without this, every "how much have you seen drained" answer requires a hand-waved estimate.
+15. **`trap_events.loss_estimate_usd` column unused (flagged 2026-05-04)** — schema has the field, **0 of 2,159 lifetime rows populated**. Either the field was deprecated and the column should be dropped, OR the populator was never built. The 2026-05-04 capital-total query surfaced this as the second-largest USD-attribution gap. Fix path A (drop): formal deprecation with migration; fix path B (populate): build a `trap_loss_estimator.py` module that joins `trap_events` against `transaction_events` for the trapped tx and computes USD value at trap-time. Path B is preferred if the data is reachable from existing tx records.
 
 ---
 

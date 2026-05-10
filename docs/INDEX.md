@@ -19,7 +19,7 @@
 - **Key wallet roles:**
   - **CEX origins:** Coinbase Hot 1 `0x503828976d22510aad0201ac7ec88293211d23da`, Binance Hot 1 `0x28c6c06298d514db089934071355e5743bf21d60`
   - **Mainnet buffer:** `0x66666ff8ee46eee265ba888dbbbaad69ccf50b1d`, `0x4976a4a02f38326660d17bf34b431dc6e2eb2327`, `0xf3d63166f0ca56c3c1a3508fce03ff0cf3fb691e`, `0x81f91aca8c05b3eefebc00171139afefac17c9a6`
-  - **Mainnet operations:** Central Treasury `0x4c968f6beecf1906710b08e8b472b8ba6e75f957`, Whale Trader `0xf70da97812cb96acdf810712aa562db8dfa3dbef`, MEV Bot `0x5babe600b9fcd5fb7b66c0611bf4896d967b23a1`, Revenue Collector `0x391e7c679d29bd940d63be94ad22a25d25b5a604`, WETH Wrapping `0x5e0f8e7337c8955d2124b8e85ca74af884b3e124`, Revenue Source `0x9e22ebec84c7e4c4bd6d4ae7ff6f4d436d6d8390`
+  - **Mainnet operations:** Central Treasury `0x4c968f6beecf1906710b08e8b472b8ba6e75f957`, ~~Whale Trader `0xf70da97812cb96acdf810712aa562db8dfa3dbef`~~ **[CORRECTION #20 → Relay: Solver — REMOVED from org_001 attribution; this is a cross-chain bridge solver, not an org_001 wallet]**, MEV Bot `0x5babe600b9fcd5fb7b66c0611bf4896d967b23a1`, Revenue Collector `0x391e7c679d29bd940d63be94ad22a25d25b5a604`, WETH Wrapping `0x5e0f8e7337c8955d2124b8e85ca74af884b3e124`, Revenue Source `0x9e22ebec84c7e4c4bd6d4ae7ff6f4d436d6d8390`. **Note (2026-05-09):** the "68% of org_001 deployments through whale path" claim previously made for `0xf70da978` is retracted — that was Relay's bridge throughput, not org_001 fund flow. The core org_001 case is unchanged; only the whale-trader attribution dissolves. CASE_ORG_001_INFRASTRUCTURE.md needs update.
   - **L2 core:** Treasury `0xf186cb00e49e18491db5783ff04fae3818102ff7`, Operator `0xe93d64f3fbc352131e79fc5578cbe44b66697f86`, Operator 2 `0xfd51e33d44b376ef346d24a130a51035db09c1dc`, Cashout `0xc6962004f452be9203591991d15f6b388e09e8d0`, Gas Station `0x8c826f795466e39acbff1bb4eeeb759609377ba1`, Vault Branch `0x360e68faccca8ca495c1b759fd9eee466db9fb32`
   - **L2 exit:** CEX Exit / Shadow 1 `0x01989c93890aed05a63d179b03424997075b6acf` (vanity-spoofed), Laundry `0xfdaf1f1714810f8d88a57c9d551d442c68ace2bb`, LP Staging / Shadow 2 `0x96daa0b8a5499ea9323421ed0cda06b345caab73` (vanity-spoofed), LP Companion `0x27920e8039d2b6e93e36f5d5f53b998e2e631a70`, DeFi Exit Channel `0x51c72848c68a965f66fa7a88855f9f7784502a7f`
 
@@ -39,12 +39,17 @@
   - 6 deployers: `0x392c564a28d6d87d326e8a385c764355e130418d`, `0x9f5db1b0436815de051b86a732c3d8ad8877bbef`, `0xadb085d8279bf7afad7599d3b8685547b19b2798`, `0x8f007f3e4f83a57c34dc4bf19237423665d28dd8`, `0x571ba99571f588d8238cb56a244de1c44e1d1da7`, `0x888a491ed0a09c9325507aaccead28a099a2104f`
   - 6 contracts: `0x0697a11c537829...`, `0x201b32f4a87c21...`, `0x7709a1e3fe44a0...`, `0xf2b2b76e43961872c3c55823b843c52dd5cb149c`, `0xa80899d4ce98a4...`, `0xc3bc6e376159b2...`
 
-### org_004 — Infrastructure-Scale Operator (referenced, no case file)
+### org_004 — **DISSOLVED 2026-05-09, Correction #20**
+
+> **[CORRECTION #20 — 2026-05-09]** `0xbaed383ede0e5d9d72430661f3285daa77e9439f` is OLI-tagged as **"Bybit: Hot Wallet 6 / DEPOSIT ADDRESS / Exchange / Bybit"**. The "210 deployers / 1,492 contracts / 63.1% adversarial ratio" finding is normal Bybit hot-wallet customer-withdrawal volume; some recipients happened to deploy contracts that classifier flagged as suspected. **org_004 as an organizational entity does not exist.** CLAUDE.md priority #12 ("Investigate org_004") should be removed. Original entry preserved for historical record.
+
+#### Original entry (preserved for historical record):
+
 - **ID:** `org_004`
 - **Description:** Named in `claude.md` Current Priority Items #12 ("Investigate org_004 (0xbaed383e) — next organizational mapping target"). Surfaced in 2026-04-25 by `surveillance/infrastructure_operator_detector.py` as a 210-deployer / 1,492-contract / 63.1% adversarial-ratio infrastructure operator.
 - **Primary case file:** None — gap. Only in `claude.md` priority list and `infrastructure_operator_candidates` table.
-- **Status:** UNDER_INVESTIGATION — case file pending
-- **Key wallet:** `0xbaed383ede0e5d9d72430661f3285daa77e9439f`
+- **Status:** DISSOLVED — see correction note above.
+- **Key wallet:** `0xbaed383ede0e5d9d72430661f3285daa77e9439f` **[CORRECTION #20 → Bybit: Hot Wallet 6]**
 
 ### org_005, org_006, org_007 — Tier-1 Cluster Promotions (DB-only)
 - **ID:** `org_005`, `org_006`, `org_007`
@@ -53,14 +58,20 @@
 - **Status:** PROMOTED (DB-only) — case files pending
 
 ### Entity_005 — "The Architect" (Arbitrum R&D operator)
+
+> **[CORRECTION #20 — 2026-05-09 — partial retraction]** The Architect-primary-deployer finding (`0x9209c9f7...`) is NOT retracted by this correction; it stands. Two attribution surfaces around it ARE retracted:
+> - **Funder `0x151b381058f9...`** is OLI-tagged as **"MoonPay 4 / Exchange"** — a fiat-onramp address with millions of recipients. The "Architect's sole funder" framing collapses; MoonPay is not exclusive to anyone. The case-file's funding-side narrative needs revision.
+> - **Behavioral match `0xc5d133296e17ba25df0409a6c31607bf3b78e3e3` (0.742)** is OLI-tagged as **"CryptoCauses: Deployer"** — a separate Web3 project, not an Architect alternate. Behavioral-similarity 0.742 was computed on the deployer-profile dimensions; identity-matching via OLI was never run. Remove from Architect-cluster attribution.
+> - The other behavioral-match candidates (0.711, 0.710, 0.719, 0.799) are not yet OLI-cleared.
+
 - **ID:** `Entity_005`
 - **Description:** Most sophisticated trap developer in corpus. Arbitrum-exclusive R&D in 7-contract sessions, building toward 4-mechanism weapon (SELFDESTRUCT + DELEGATECALL + TIMESTAMP + CALLER). Pre-production as of last case-file update — no Base deployment yet.
 - **Primary case file:** `surveillance/data/cases/CASE_ENTITY_005_THE_ARCHITECT.md`
 - **Status:** UNDER_INVESTIGATION — R&D phase
 - **Key wallet roles:**
   - Primary: `0x9209c9f7dcb61937f1ec8160c22c0b2365079474`
-  - Funder: `0x151b381058f91cf871e7ea1ee83c45326f61e96d`
-  - Behavioral matches (watchlist HIGH): `0x4cfe37d2` (0.799), `0xc5d133296e17ba25df0409a6c31607bf3b78e3e3` (0.742), `0x30e88ee4c417f126aacf6a4c3cd641424203fe6d` (0.711), `0x7930e1380157596ff82595d502083bf604eda922` (0.710), `0xd28e6a7ad806e85bd0544ed443d25e48f52c06c3` (0.719)
+  - Funder: `0x151b381058f91cf871e7ea1ee83c45326f61e96d` **[CORRECTION #20 → MoonPay 4]**
+  - Behavioral matches (watchlist HIGH): `0x4cfe37d2` (0.799), `0xc5d133296e17ba25df0409a6c31607bf3b78e3e3` (0.742) **[CORRECTION #20 → CryptoCauses: Deployer]**, `0x30e88ee4c417f126aacf6a4c3cd641424203fe6d` (0.711), `0x7930e1380157596ff82595d502083bf604eda922` (0.710), `0xd28e6a7ad806e85bd0544ed443d25e48f52c06c3` (0.719)
 
 ### X402 Drainer Operation — 7 rogue Permit2 facilitators
 - **ID:** X402_DRAINER (no canonical org_xxx ID assigned)
@@ -133,15 +144,28 @@
   - Deployer: `0x760640f4aa7309efd3f08c32ead01f0097667c78`
   - Funder: `0x40f4eef12643644cda2a5b9ca5cbba51345045ce` (0.026 ETH)
 
-### Pristine-Solo Operators (4 watchlist HIGH promotions, 2026-04-25)
+### Pristine-Solo Operators (4 watchlist HIGH promotions, 2026-04-25) — **MAJOR REVISION 2026-05-09, Correction #20**
+
+> **[CORRECTION #20 — 2026-05-09]** **3 of 4 promoted entries are OLI-tagged Web3 project deployers**, not adversarial Pristine Solo Operators:
+> - `0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8` → **Animoca: Deployer**
+> - `0xa2a01b4a68575280a2de45178e289da717bedb6f` → **Stabilize Finance: Deployer 2**
+> - `0x147b8869655bc09f226955cc676ff78efe240ca8` → **Luchadores: Deployer** (NFT project)
+> - `0xf6c99cec5bd639316a19d2f56afc14bd046d3a90` → not OLI-tagged; remains under current classification pending further check
+>
+> The Pristine Solo Operator detector flagged on behavioral signal (long mainnet age + first L2 appearance + small fleet) — the same signature an established institutional or project deployer presents when expanding to a new chain. The detector did not consult OLI tags. Lexicon entry [Pristine Solo Operator](lexicon.md#pristine-solo-operator) updated with FP class section. The `0x752c5a95` Pre-Drain Harvester finding (next entry) is **not retracted** by this correction — the harvester contract's behavior is documented independently of its deployer's identity, and a project-deployer wallet deploying a confirmed-tier approval-harvesting contract is itself a finding worth investigating (compromise? rogue developer? something else?).
+>
+> **LOW-severity tags require second-source verification** before final action — see Correction #20 open work item #4.
+
+#### Original entry (preserved for historical record):
+
 - **ID:** PRISTINE_SOLO (no canonical org_xxx ID)
 - **Description:** Long-mainnet-history wallets surfacing as small-fleet (1–5 contract) trap operators on L2. Lexicon: [Pristine Solo Operator](lexicon.md#pristine-solo-operator). Detector: `surveillance/pristine_solo_detector.py`.
 - **Primary case file:** None — DB-only via `pristine_solo_candidates` table. Lexicon entry references the four addresses.
-- **Status:** CONFIRMED (4 promoted, 13 candidates)
+- **Status:** SUPERSEDED for 3 of 4 promoted entries (see correction note above).
 - **Key wallets (HIGH watchlist):**
-  - `0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8` (gap 2,498d, deployer of `0x752c5a95` harvester)
-  - `0xa2a01b4a68575280a2de45178e289da717bedb6f` (gap 2,314d, Arbitrum, fleet 4)
-  - `0x147b8869655bc09f226955cc676ff78efe240ca8` (gap 1,777d, Base, fleet 4)
+  - `0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8` (gap 2,498d, deployer of `0x752c5a95` harvester) **[CORRECTION #20 → Animoca: Deployer]**
+  - `0xa2a01b4a68575280a2de45178e289da717bedb6f` (gap 2,314d, Arbitrum, fleet 4) **[CORRECTION #20 → Stabilize Finance: Deployer 2]**
+  - `0x147b8869655bc09f226955cc676ff78efe240ca8` (gap 1,777d, Base, fleet 4) **[CORRECTION #20 → Luchadores: Deployer]**
   - `0xf6c99cec5bd639316a19d2f56afc14bd046d3a90` (gap ≈1,748d, Base, fleet 2)
 
 ### `0x752c5a95` Pre-Drain Harvester (Base)
@@ -150,7 +174,12 @@
 - **Primary case file:** None — gap. Only investigated via session scripts (`scripts/investigate_0x752c5a95.py`).
 - **Status:** UNDER_INVESTIGATION — pre-drain accumulation, no sweep yet
 
-### Industrial-scale PSO+Single-Purpose hybrid — pulse-burst operator (2026-05-01, case file pending)
+### Industrial-scale PSO+Single-Purpose hybrid — pulse-burst operator (2026-05-01, **RETRACTED 2026-05-09 — Correction #20**)
+
+> **[CORRECTION #20 — 2026-05-09]** This entry is RETRACTED. Address `0xbb50ce87...` is publicly attributed via Open Labels Initiative as **"Circle: contract deployer"** (`meta.main_entity: "Circle"`) — Circle's institutional contract deployer (the Circle that issues USDC). The 7.7y mainnet history is real but is the history of a publicly-attributed institutional infrastructure address, not Pristine Solo Operator dormancy. The PSO+Single-Purpose+Convergent-Calibration framing below is preserved as historical record per the immutable-corpus-record discipline, but is **not a current Layer 3 finding**. The funder `0x6a9c2449...` is not currently OLI-tagged and may be a Circle-internal hot wallet, an integrator gas-paying for Circle's deployer, or a separate actor; classification deferred. Architecture fix landed: `surveillance/oli_enrichment.py` + `oli_labels` table (`db.py` migration). See `reports/correction_log.md#correction-20` and `reports/blockscout_tag_audit_2026-05-09.csv`.
+
+#### Original entry (preserved for historical record):
+
 - **Deployer:** `0xbb50ce87be3443ed137df1dfdbf2fb0ca8c0a9e0` — Optimism, **38,016 lifetime contracts** (as of 2026-05-02), 7.7y mainnet history (first tx 2018-08-29). Watchlist HIGH (`pristine_solo_industrial_bb50ce87`).
 - **Operating pattern (refined 2026-05-03): pulse-burst, not continuous.** Across a 19-day lifespan (2026-04-13 first appearance → 2026-05-01 most recent burst end), bb50 has only **6 active deployment days**. The pattern is: 1 initial deploy 04-13 → **13-day silence** → 4-day burst 04-28→05-01 (33,016 contracts in 4 days, peaking at 13,000 on 05-01) → silence resumed 05-02. Today's quiet is consistent with the operator's historical rhythm; not pivot, not disappearance. Reload-between-bursts posture (capital, opsec rotation, key infrastructure).
 - **Funder:** `0x6a9c2449c32779f89d0ccafd746152e237c1bdf2` — pure funding wallet, funds 2 corpus deployers but 99.99% of fleet via the bb50 operator. Watchlist HIGH (`single_purpose_funder_industrial_bb50`).
@@ -172,39 +201,62 @@
 - **Wasabi Protocol admin-key compromise (2026-04-30, on-chain) — EXTRACTION_009:** `cases/CASE_WASABI_EXPLOIT_20260430.md`. ~$5M loss across Ethereum / Base / Berachain / Blast via UUPS proxy upgrade by compromised wasabideployer.eth (`0x5c629f8c0b53`). Same attacker helper deployed at `0x02228b0afcdbEdf8180D96Fc181Da3AF5DD1d1ab` on both mainnet and Base via CREATE2. Status: CONFIRMED. **Layer 3 had zero corpus coverage** — Wasabi predates monitoring window and production ingest was stuck during attack.
 - **Bancor EIP-7702 exploit (2026-04-29):** `cases/CASE_BANCOR_EIP7702_20260429.md`. Status: SKELETON — kept as research target. Wasabi now provides the live structural analog the Bancor file was hypothesizing.
 
-### `0xe69f81b8` — High-Volume Bridge User
+### `0xe69f81b8` — High-Volume Bridge User — **RETRACTED 2026-05-09, Correction #20**
+
+> **[CORRECTION #20 — 2026-05-09]** OLI-tagged as **"Binance: Internal 2 / Exchange"**. The 49,000 ETH bridged was Binance treasury rebalancing exchange funds. The "coordinated during western sleep hours" framing was Binance internal-transfer scheduling, not adversarial coordination. Original entry preserved below for historical record.
+
+#### Original entry (preserved for historical record):
+
 - **ID:** No canonical org assigned
 - **Description:** EOA bridging 49,000 ETH (~$147M) to L1 via the canonical Base bridge over 7 days (April 7–14). One of the most active L2-to-L1 bridge users in the Base ecosystem. Coordinated during western sleep hours.
 - **Primary case file:** None — only `CORRECTIONS.md` entries 2026-04-07 (19,000 ETH) and 2026-04-14 (additional 30,000 ETH).
-- **Status:** TRACKED (watchlist HIGH, `entity_type: high_value_bridge_user`)
+- **Status:** TRACKED (formerly watchlist HIGH, `entity_type: high_value_bridge_user`) — SUPERSEDED by Binance Internal identification.
 - **Key wallet:** `0xe69f81b825d7dc31ee9becef4dbeab5cf30e3abb`
 
-### Infrastructure-Scale Operator candidates (2026-04-25 detector run, 12 candidates; canonical metrics in `reports/funder_cluster_diagnostic_2026-04-29.md`)
+### Infrastructure-Scale Operator candidates (2026-04-25 detector run, 12 candidates; canonical metrics in `reports/funder_cluster_diagnostic_2026-04-29.md`) — **MAJOR REVISION 2026-05-09, Correction #20**
+
+> **[CORRECTION #20 — 2026-05-09]** **6 of 12 (50%) of the documented Top-12 are confirmed CEX or bridge institutional addresses**, not adversarial operators:
+> - `0x3304e22ddaa22bcdc5fca2269b418046ae7b566a` → **Binance 73 / Exchange / Binance** (also retracts the cross-typology drainer-spawn-hub framing in the entry below)
+> - `0x39591e7c099a379fd7b349ebfecaeef439c40454` → **OKX 177 / Exchange**
+> - `0x4e3ae00e8323558fa5cac04b152238924aa31b60` → **MEXC 15 / Exchange / MEXC**
+> - `0xfd92f4e91d54b9ef91cc3f97c011a6af0c2a7eda` → **OKX 137 / Exchange**
+> - `0xbaed383ede0e5d9d72430661f3285daa77e9439f` → **Bybit: Hot Wallet 6** (also dissolves the org_004 investigation surface — see Section 1 org_004 entry)
+> - `0xf70da97812cb96acdf810712aa562db8dfa3dbef` → **Relay: Solver / Relay Bridge** (also retracts org_001 whale path attribution — see org_001 entry below)
+> - `0x80c67432656d59144ceff962e8faf8926599bcf8` → **Orbiter Finance: Bridge**
+>
+> The detector signal (high deployer-count fanout from a single funding wallet) is the **structural signature of CEX hot wallets and bridge solvers operating at scale** — exactly what these entities do as normal business. The detector did not query public address labels at promotion time.
+>
+> **The Top-12 cluster is no longer a defensible empirical anchor.** Lexicon entries [Infrastructure-Scale Operator](lexicon.md#infrastructure-scale-operator), [Convergent Calibration](lexicon.md#convergent-calibration), and [Thermodynamic Fundamentalism](lexicon.md#thermodynamic-fundamentalism) (which used `0x3304e22d` as a positive-CER hub example) require revision; the lexicon retraction notes are landed alongside this correction.
+>
+> The remaining 5 of 12 are not yet OLI-cleared and may still be either adversarial OR un-tagged legitimate operators (smaller exchanges, custody services, project deployers). Pending re-audit.
+
+#### Original entry (preserved for historical record):
+
 - **ID:** No canonical IDs — surfaced by detector only
 - **Description:** Funder addresses with ≥200 fanout, ≥10% adversarial ratio, ≥50% disposable rate. Lexicon: [Infrastructure-Scale Operator](lexicon.md#infrastructure-scale-operator).
 - **Primary case file:** `reports/funder_cluster_diagnostic_2026-04-29.md` (replaces the missing 2026-04-25 file). Live metrics via `scripts/funder_metrics.py`. DB table: `infrastructure_operator_candidates`.
-- **Status:** UNDER_INVESTIGATION. Cross-funder overlap probe 2026-04-29 resolved single-actor-vs-multi-tenant question (twelve independent operations; 0 of 66 pairs share downstream).
+- **Status:** SUPERSEDED. Cross-funder overlap probe 2026-04-29 resolved single-actor-vs-multi-tenant question (twelve independent operations; 0 of 66 pairs share downstream) — that finding remains correct (independence holds, since CEXes and bridges don't share downstream customers either) but the *adversarial* interpretation is retracted.
 - **Note on figures:** Per Correction #18, future references to top-12 cluster scale should cite a dated invocation of `scripts/funder_metrics.py` rather than transcribed numbers. The table below was generated 2026-04-26 and is preserved for historical comparison.
 
 **The twelve funder addresses (counts as of 2026-04-26 sync):**
 
 | Funder | Deployers | Contracts | Confirmed | Notes |
 |---|---|---|---|---|
-| `0xf70da97812cb96acdf810712aa562db8dfa3dbef` | 2,684 | 6,971 | 109 | **org_001 Whale Trader** (CEX-funded via Binance origin) |
-| `0xfd92f4e91d54b9ef91cc3f97c011a6af0c2a7eda` | 2,187 | 7,876 | 0 | Pure stockpile (zero confirmed) |
-| `0x3304e22ddaa22bcdc5fca2269b418046ae7b566a` | **2,027** (was 1,939; +88/24h) | 6,470+ | 33+ | Funds `0x666521` (HIGH watchlist), `0xbad051ece`, **`0x00169219` (5 confirmed in 24h)** |
-| `0xc43f317ed4d81cbbfe2c9c98b4cc6f303519f078` | 1,562 | 1,393 | 0 | Pre-stage warehouse |
-| `0xb0b0b6903489cc56bf037cb2f5ba986e2775bb07` | **6,605** (was 5,775; growing) | 6,000+ | 0 | **L2-only Optimism funder. 7-char vanity prefix `0xb0b0b69*` (~268M generation attempts).** Singular: only `0xb0b0b6*` address in corpus. Downstream fleet is random-prefix (vanity scope = funder only). Created 2026-04-15, dormant for 10 days, then mass-funded 6,598 deployers on 2026-04-25 alone. 99.86% of downstream uses bytecode `476b15536fa9...`. Drove the 8,797 COORDINATED_DEPLOYMENT alert surge 2026-04-26. See lexicon: [Adversarial Vanity Branding](lexicon.md#adversarial-vanity-branding). |
-| `0xde8eb937cb5475eee5ac96dce6ba2d18e439c473` | 938 | 807 | 4 | Watchlist HIGH (`org_002_junior` per live entity_name) |
-| `0x0e6e91775d24d34b90e0f3d806a90705f0199999` | 878 | 724 | 0 | L2-only |
-| `0x238d7170f309a55b87a144a341bd6105897082ca` | 861 | 734 | 2 | Watchlist HIGH (`org_002_senior`). 98% suspected ratio. |
-| `0x8c826f795466e39acbff1bb4eeeb759609377ba1` | 743 | 3,366 | 2 | **org_001 L2 Gas Station** (Coinbase-funded) |
-| `0x8ca702323c341a8d46ee94a2abeddb08798ca10d` | 737 | 320 | 1 | L2-only |
-| `0x39591e7c099a379fd7b349ebfecaeef439c40454` | 633 | 2,029 | 5 | L2-only |
-| `0xca7ece5e43ef44de8e430629a5b535eca48e251b` | 484 | 576 | 0 | Pre-stage warehouse |
+| `0xf70da97812cb96acdf810712aa562db8dfa3dbef` | 2,684 | 6,971 | 109 | ~~org_001 Whale Trader~~ **[CORRECTION #20 → Relay: Solver — bridge solver, not org_001]** |
+| `0xfd92f4e91d54b9ef91cc3f97c011a6af0c2a7eda` | 2,187 | 7,876 | 0 | ~~Pure stockpile (zero confirmed)~~ **[CORRECTION #20 → OKX 137 / Exchange]** |
+| `0x3304e22ddaa22bcdc5fca2269b418046ae7b566a` | **2,027** (was 1,939; +88/24h) | 6,470+ | 33+ | ~~Funds `0x666521` (HIGH watchlist), `0xbad051ece`, **`0x00169219` (5 confirmed in 24h)**~~ **[CORRECTION #20 → Binance 73 / Exchange / Binance — funding linkage is normal CEX customer-withdrawal volume; downstream confirmed-tier deployers retained on watchlist via their own behavior, but upstream-Binance linkage carries no adversarial signal]** |
+| `0xc43f317ed4d81cbbfe2c9c98b4cc6f303519f078` | 1,562 | 1,393 | 0 | Pre-stage warehouse — not OLI-cleared, retained for re-audit |
+| `0xb0b0b6903489cc56bf037cb2f5ba986e2775bb07` | **6,605** (was 5,775; growing) | 6,000+ | 0 | **L2-only Optimism funder. 7-char vanity prefix `0xb0b0b69*` (~268M generation attempts).** Singular: only `0xb0b0b6*` address in corpus. Downstream fleet is random-prefix (vanity scope = funder only). Created 2026-04-15, dormant for 10 days, then mass-funded 6,598 deployers on 2026-04-25 alone. 99.86% of downstream uses bytecode `476b15536fa9...`. Drove the 8,797 COORDINATED_DEPLOYMENT alert surge 2026-04-26. See lexicon: [Adversarial Vanity Branding](lexicon.md#adversarial-vanity-branding). **OLI-cleared (no public tag) — adversarial framing retained.** |
+| `0xde8eb937cb5475eee5ac96dce6ba2d18e439c473` | 938 | 807 | 4 | Watchlist HIGH (`org_002_junior` per live entity_name) — OLI-cleared |
+| `0x0e6e91775d24d34b90e0f3d806a90705f0199999` | 878 | 724 | 0 | L2-only — OLI-cleared |
+| `0x238d7170f309a55b87a144a341bd6105897082ca` | 861 | 734 | 2 | Watchlist HIGH (`org_002_senior`). 98% suspected ratio. — OLI-cleared |
+| `0x8c826f795466e39acbff1bb4eeeb759609377ba1` | 743 | 3,366 | 2 | **org_001 L2 Gas Station** (Coinbase-funded) — OLI-cleared |
+| `0x8ca702323c341a8d46ee94a2abeddb08798ca10d` | 737 | 320 | 1 | L2-only — OLI-cleared |
+| `0x39591e7c099a379fd7b349ebfecaeef439c40454` | 633 | 2,029 | 5 | ~~L2-only~~ **[CORRECTION #20 → OKX 177 / Exchange]** |
+| `0xca7ece5e43ef44de8e430629a5b535eca48e251b` | 484 | 576 | 0 | Pre-stage warehouse — not OLI-cleared, retained for re-audit |
 
-**Attribution notes:**
-- Three are confirmed pre-existing organization infrastructure: `0xf70da97812` (org_001 Whale Trader), `0x8c826f79` (org_001 L2 Gas Station), `0xbaed383ede0e5d9d72430661f3285daa77e9439f` (org_004 — separately documented).
+**Attribution notes (revised 2026-05-09 per Correction #20):**
+- ~~Three are confirmed pre-existing organization infrastructure~~ **One is** confirmed pre-existing organization infrastructure: `0x8c826f79` (org_001 L2 Gas Station). The other two prior attributions retracted: `0xf70da97812` is **Relay: Solver** (not org_001), and `0xbaed383ede` is **Bybit: Hot Wallet 6** (not org_004; org_004 dissolved per this correction).
 - Two more are watchlist-classified org_002 infrastructure per live `watchlist.entity_name`: `0x238d7170` (`org_002_senior`) and `0xde8eb937` (`org_002_junior`).
 - Four are L2-native (no mainnet history) — deliberate `eth_depth` evasion: `0xb0b0b690` (Optimism), `0x0e6e9177`, `0x8ca70232`, `0x39591e7c` (Base).
 - `0xb0b0b690` (Optimism, L2-native) is currently scaling fastest — 4,371 new deployers in 24 hours, all with the same bytecode hash `476b15536fa9703e2c630e91ac976c514e1868a70e8c996f1bf8bb97a9b9e532` (see Section 5). Campaign-shape resembles **org_002 / Dragon scaled 2.8–16.5×** — pre-stage trap stockpile.
@@ -234,7 +286,7 @@ Flat alphabetical (lowercase). Use Ctrl-F. Format: `address  primary_classificat
 - `0x391e7c679d29bd940d63be94ad22a25d25b5a604` — Revenue Collector (org_001) — `CASE_ORG_001_INFRASTRUCTURE.md`
 - `0x9e22ebec84c7e4c4bd6d4ae7ff6f4d436d6d8390` — Revenue Source (org_001) — `CASE_ORG_001_INFRASTRUCTURE.md`
 - `0xf3d63166f0ca56c3c1a3508fce03ff0cf3fb691e` — Intermediate (org_001) — `CASE_ORG_001_INFRASTRUCTURE.md`
-- `0xf70da97812cb96acdf810712aa562db8dfa3dbef` — **Whale Trader (org_001 — primary funding channel, 68% of deployments at 2026-03-28)** — `CASE_ORG_001_INFRASTRUCTURE.md`. Also surfaced by `infrastructure_operator_detector` 2026-04-25 (2,684-deployer fanout).
+- `0xf70da97812cb96acdf810712aa562db8dfa3dbef` — ~~Whale Trader (org_001 — primary funding channel, 68% of deployments at 2026-03-28)~~ **[CORRECTION #20 → Relay: Solver / Relay Bridge]**. Cross-chain bridge solver, not org_001. The 2,684-deployer fanout surfaced by `infrastructure_operator_detector` 2026-04-25 is bridge throughput.
 - `0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae` — LI.FI Diamond (3rd party, used by org_001) — `CASE_ORG_001_INFRASTRUCTURE.md`
 
 ### org_001 L2 infrastructure (Arbitrum + Base)
@@ -268,13 +320,13 @@ Flat alphabetical (lowercase). Use Ctrl-F. Format: `address  primary_classificat
 - `0xf2b2b76e43961872c3c55823b843c52dd5cb149c` — Contract 4 (org_003 — fee-skimmer) — `CASE_ORG_003_GHOST_NETWORK.md` (FP retraction subject in Correction #17)
 
 ### org_004
-- `0xbaed383ede0e5d9d72430661f3285daa77e9439f` — org_004 (referenced in `claude.md` priority #12) — no case file yet
+- `0xbaed383ede0e5d9d72430661f3285daa77e9439f` — ~~org_004 (referenced in `claude.md` priority #12)~~ **[CORRECTION #20 → Bybit: Hot Wallet 6]**. org_004 dissolved per Correction #20.
 
 ### Entity_005 — The Architect
 - `0x9209c9f7dcb61937f1ec8160c22c0b2365079474` — Architect primary deployer (CRITICAL watchlist) — `CASE_ENTITY_005_THE_ARCHITECT.md`
-- `0x151b381058f91cf871e7ea1ee83c45326f61e96d` — Architect funder (CRITICAL watchlist) — `CASE_ENTITY_005_THE_ARCHITECT.md`
+- `0x151b381058f91cf871e7ea1ee83c45326f61e96d` — ~~Architect funder (CRITICAL watchlist)~~ **[CORRECTION #20 → MoonPay 4 / Exchange]** — fiat onramp, not Architect-exclusive. Case file funder-side narrative needs revision.
 - `0x4cfe37d2` (full: `0x4cfe37d21a5a8a1d74e4840426d644a1b50dc328`) — Architect alternate (HIGH, 0.799) — `CASE_ENTITY_005_THE_ARCHITECT.md`
-- `0xc5d133296e17ba25df0409a6c31607bf3b78e3e3` — Architect alternate (HIGH, 0.742) — `CASE_ENTITY_005_THE_ARCHITECT.md`
+- `0xc5d133296e17ba25df0409a6c31607bf3b78e3e3` — ~~Architect alternate (HIGH, 0.742)~~ **[CORRECTION #20 → CryptoCauses: Deployer]** — separate Web3 project, not Architect-cluster. Behavioral similarity 0.742 was profile-shape match, not identity match.
 - `0x30e88ee4c417f126aacf6a4c3cd641424203fe6d` — Architect candidate (HIGH, 0.711) — `CASE_ENTITY_005_THE_ARCHITECT.md`
 - `0x7930e1380157596ff82595d502083bf604eda922` — Architect candidate (HIGH, 0.710) — `CASE_ENTITY_005_THE_ARCHITECT.md`
 - `0xd28e6a7ad806e85bd0544ed443d25e48f52c06c3` — Architect candidate (HIGH, 0.719) — `CASE_ENTITY_005_THE_ARCHITECT.md`
@@ -317,9 +369,9 @@ Flat alphabetical (lowercase). Use Ctrl-F. Format: `address  primary_classificat
 - `0x40f4eef12643644cda2a5b9ca5cbba51345045ce` — Zero-Day funder — `CASE_ZERODAY_0xa7fea69e.md`
 
 ### Pristine-Solo (watchlist HIGH, 2026-04-25)
-- `0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8` — pristine-solo, 2,498d gap, deployer of `0x752c5a95` — lexicon entry, no case file
-- `0xa2a01b4a68575280a2de45178e289da717bedb6f` — pristine-solo, 2,314d gap, Arbitrum — lexicon entry, no case file
-- `0x147b8869655bc09f226955cc676ff78efe240ca8` — pristine-solo, 1,777d gap, Base — lexicon entry, no case file
+- `0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8` — ~~pristine-solo, 2,498d gap, deployer of `0x752c5a95`~~ **[CORRECTION #20 → Animoca: Deployer]**. The `0x752c5a95` Pre-Drain Harvester finding (1,898+ approval pool) is NOT retracted — investigate why an Animoca-tagged wallet deployed a confirmed-tier approval-harvesting contract. Possibilities: compromise, rogue developer, label staleness, or harvester-contract behavior more nuanced than initial classification.
+- `0xa2a01b4a68575280a2de45178e289da717bedb6f` — ~~pristine-solo, 2,314d gap, Arbitrum~~ **[CORRECTION #20 → Stabilize Finance: Deployer 2]**
+- `0x147b8869655bc09f226955cc676ff78efe240ca8` — ~~pristine-solo, 1,777d gap, Base~~ **[CORRECTION #20 → Luchadores: Deployer]** (NFT project)
 - `0xf6c99cec5bd639316a19d2f56afc14bd046d3a90` — pristine-solo, ≈1,748d gap, Base — lexicon entry, no case file
 - `0x752c5a95d202972e124390f30a50154409d3c858` — pre-drain harvester (1,898+ approvals, 0 sweeps) — no case file, only `scripts/investigate_0x752c5a95.py`
 
@@ -337,7 +389,7 @@ Flat alphabetical (lowercase). Use Ctrl-F. Format: `address  primary_classificat
 - `0x7fd9a5104f1cb261a7215f950c9fa7eac06d60d0` — Pattern D candidate (longest mainnet gap: 8.8 years) — `reports/cross_chain_import_candidates.md`
 
 ### Other
-- `0xe69f81b825d7dc31ee9becef4dbeab5cf30e3abb` — High-volume bridge user (49,000 ETH bridged April 7–14, watchlist HIGH) — `CORRECTIONS.md` 2026-04-07 + 2026-04-14
+- `0xe69f81b825d7dc31ee9becef4dbeab5cf30e3abb` — ~~High-volume bridge user (49,000 ETH bridged April 7–14, watchlist HIGH)~~ **[CORRECTION #20 → Binance: Internal 2 / Exchange]** — Binance treasury rebalancing, not adversarial. `CORRECTIONS.md` 2026-04-07 + 2026-04-14 entries should be reviewed.
 - `0xb15e7a89e71b8468c23eb330f837caf0f2ff7628` — Multi-Mechanism Trap (independent operator) — `CASE_0xb15e7a89_arbitrum_20260322_040329.md`
 - `0x01989c93890aed05cbcda4e62eec1b2eb4c55b1b` — LP_POOL_2 (the **legitimate** address being vanity-spoofed by org_001's Shadow Wallet 1, which has the same first 8 bytes `0x01989c93890aed05`) — `CASE_ORG_001_INFRASTRUCTURE.md`
 - `0x12577cf0d8a07363224d6909c54c056a183e13b3` — Fee-Skimming Token — `CASE_0x12577cf0_base_20260322_040329.md` (single-file artifact)
@@ -357,7 +409,16 @@ Flat alphabetical (lowercase). Use Ctrl-F. Format: `address  primary_classificat
 - **Significance:** First confirmed direct-org-drainer linkage in the corpus. org_001 has been documented as funder/whale + gas-station infrastructure across hundreds of deployers, but the harm has historically been mediated (bot traps, slow extraction, camouflage). This is the first wave-class (deploy → bait → mass-sweep → dispose) drain operation directly funded by the gas station wallet.
 - **Framing precision:** 1 of 1,164 lifetime gas-station-funded deployers = 0.09%. Playbook expansion, not wholesale class shift. Watch for iter_2 from same funder.
 
-### Drainer-spawn hub `0x3304e22ddaa2` — cross-typology (top-12 Infrastructure-Scale Operator + drainer-spawn) (2026-05-02)
+### Drainer-spawn hub `0x3304e22ddaa2` — cross-typology — **MAJOR REVISION 2026-05-09, Correction #20**
+
+> **[CORRECTION #20 — 2026-05-09]** `0x3304e22ddaa22bcdc5fca2269b418046ae7b566a` is OLI-tagged as **"Binance 73 / Exchange / Binance"** with `meta.main_entity: "Binance"`. The "infrastructure-scale operator" rank is retracted (see Top-12 entry above). What remains real: 4 drainer wallets did receive funds from this Binance hot wallet over the March-May window. **Reframing:** these were CEX-customer withdrawals to drainer wallets (drainers cashing out attacker proceeds, OR victims being drained after withdrawal — the funder-side cannot distinguish). The "single shared funder across both days' drainer wallets" finding is technically correct but uninformative — a CEX hot wallet shares as funder across thousands of unrelated downstream addresses. The cross-typology drainer-spawn-hub finding does NOT survive: the hub is Binance, not a coordinator.
+>
+> **Preserved as separate finding (still real):** the four drainer wallets `0xbaff5fe29cee…`, `0x7b72595d62b1…` (399 victims!), `0x16cd9c10664b…`, `0x0f5162779f6b…` are still on watchlist HIGH for their own behavior. Drainer-side classification is unchanged. Only the upstream-funder linkage is dissolved.
+>
+> Original entry preserved below for historical record.
+
+#### Original entry (preserved for historical record):
+
 - **Hub:** `0x3304e22ddaa22bcdc5fca2269b418046ae7b566a` — watchlist HIGH (`infrastructure_scale_drainer_spawn_hub_3304e22d`). Documented top-12 Infrastructure-Scale Operator (rank #4 with 2,134 deployers per `reports/funder_cluster_diagnostic_2026-04-29.md`) AND drainer-spawn hub.
 - **4 drainer iterations across March 25 → May 1, 404 total victims:** `0xbaff5fe29cee…` (3-25, 2v), **`0x7b72595d62b1…`** (4-01 → 4-04, **399v — largest single-iteration drain count in corpus**), `0x16cd9c10664b…` (4-27 → 4-28, 2v), `0x0f5162779f6b…` (5-01, 1v). All on watchlist HIGH.
 - **Significance:** First documented case of an Infrastructure-Scale Operator running as a drainer-spawn hub. Confirms the lexicon's pre-stage / stockpile / live-extraction sub-types can co-exist with active drainer-spawn within one hub. Surfaced 2026-05-02 via Apr 1 ↔ May 1 cross-link probe (single shared funder across both days' drainer wallets).
@@ -389,9 +450,9 @@ Two structurally identical events 48h apart, **different operators and different
 ### X402 facilitator-drain coordinated endpoint (2026-05-02)
 - `0xa7b9874d15742358fb455dd56f97c6d19ad74f5c` — Base recipient of 4 of 7 X402_AGENT_DRAIN alerts in 2026-05-01 → 2026-05-02 window. Total ~$285K USD-equivalent received from two payers (escalating $20K/$101K/$102K USDC pattern + 26.9 ETH-worth). Watchlist HIGH (`x402_drain_endpoint_a7b9874d`). See `cases/CASE_X402_DRAINER_OPERATION.md` activity update 2026-05-01/02.
 
-### Industrial-scale PSO operator (case file pending, 2026-05-01)
-- `0xbb50ce87be3443ed137df1dfdbf2fb0ca8c0a9e0` — Optimism deployer, 38,016 lifetime contracts (2026-05-02), 7.7y mainnet age, watchlist HIGH (`pristine_solo_industrial_bb50ce87`). **Pulse-burst pattern**: 6 active days across 19-day lifespan, 13-day historical pause precedent, single 4-day burst window 2026-04-28 → 2026-05-01 deployed 33,016 contracts (peak 13,000 on 05-01). — `[CASE FILE PENDING]`
-- `0x6a9c2449c32779f89d0ccafd746152e237c1bdf2` — funder of the above, watchlist HIGH (`single_purpose_funder_industrial_bb50`). Near-Pattern-A (funds 2, but 99.99% of fleet via bb50ce87). — `[CASE FILE PENDING]`
+### Industrial-scale PSO operator (case file pending, 2026-05-01) — **RETRACTED 2026-05-09, Correction #20**
+- `0xbb50ce87be3443ed137df1dfdbf2fb0ca8c0a9e0` — **[CORRECTION #20 → Circle: contract deployer]** OLI-tagged as Circle's institutional contract deployer. Optimism deployer, 38,016 lifetime contracts (2026-05-02), 7.7y mainnet age, formerly watchlist HIGH (`pristine_solo_industrial_bb50ce87`). **Pulse-burst pattern**: 6 active days across 19-day lifespan, 13-day historical pause precedent, single 4-day burst window 2026-04-28 → 2026-05-01 deployed 33,016 contracts (peak 13,000 on 05-01). — Case file no longer pending; do not author trap-class case file.
+- `0x6a9c2449c32779f89d0ccafd746152e237c1bdf2` — formerly funder watchlist HIGH (`single_purpose_funder_industrial_bb50`). Near-Pattern-A (funds 2, but 99.99% of fleet via bb50ce87). **[CORRECTION #20 — partial]**: not OLI-tagged, but funds a known-legitimate institutional address. Pending identification (Circle-internal hot wallet vs. integrator vs. separate actor). Tier reassessment deferred.
 
 ### Mass dormant-wallet drain (EXTRACTION_010, 2026-04-30)
 - `0xA707034429c8E4E01df056C0CbCf478F0FBeFAd7` — mainnet drain hub, watchlist HIGH (`mass_dormant_drain_hub_a707`). 22h-old EOA receiving from 49+ distinct senders (5 of 8 sampled = 7+ years old), then bridging 324.741 ETH out via Thorchain. — `CASE_DORMANT_WALLET_DRAIN_20260430.md`

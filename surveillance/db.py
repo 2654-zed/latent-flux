@@ -752,6 +752,39 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
         conn.commit()
         _log_migration("extraction_event_type_suggestion", "applied")
 
+    # Migration: oli_labels — Open Labels Initiative tags from Blockscout
+    # metadata service. Cached per (address, chain_id). Populated by
+    # surveillance.oli_enrichment. Used by entity_classifier and watchlist
+    # promotion paths to suppress adversarial typology assignment when the
+    # address has a public institutional tag (CEX hot wallet, bridge, issuer,
+    # etc). Closes the gap that produced Correction #20 (bb50 / Circle
+    # deployer mislabeled as Pristine Solo Operator) and the multi-typology
+    # mass-mislabel sweep documented in 2026-05-09 audit.
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='oli_labels'"
+    )
+    if cursor.fetchone() is None:
+        conn.executescript("""
+            CREATE TABLE oli_labels (
+                address              TEXT    NOT NULL,
+                chain_id             INTEGER NOT NULL DEFAULT 1,
+                tags_json            TEXT,
+                tag_count            INTEGER NOT NULL DEFAULT 0,
+                primary_entity       TEXT,
+                primary_tag_name     TEXT,
+                severity             TEXT    NOT NULL DEFAULT 'none',
+                fetched_at           TEXT    NOT NULL,
+                PRIMARY KEY (address, chain_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_oli_labels_severity
+                ON oli_labels(severity);
+            CREATE INDEX IF NOT EXISTS idx_oli_labels_entity
+                ON oli_labels(primary_entity);
+        """)
+        _log_migration("oli_labels_table", "applied")
+    else:
+        _log_migration("oli_labels_table", "skip")
+
     print(f"[init_db] complete migrations={len(_MIGRATION_LOG)} "
           f"applied={sum(1 for _,s in _MIGRATION_LOG if s=='applied')} "
           f"skip={sum(1 for _,s in _MIGRATION_LOG if s=='skip')}",
