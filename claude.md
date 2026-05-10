@@ -134,7 +134,7 @@ Layer 3 is a production behavioral intelligence platform monitoring smart contra
 
 **Pulled from:** `https://stellar-embrace-production-2020.up.railway.app/stats` on 2026-05-09 (heartbeat 13 min before pull: `deployment_monitor_optimism 2026-05-09T22:09:10.140408+00:00`).
 
-**Note on the API surface:** The 19 endpoints documented in the section below (`/risk/{chain}/{address}`, `/check/...`, `/screen/...`, `/feed`, `/dump`, `/org/...`, `/deployer/...`, etc.) all return 404 on the new service. The `/dump` route returns 403 (alive but token-rotated) — re-enable for delta sync once new token is set. The other Tier 1/2/3/A routes appear to have been replaced with a stripped surface; section needs a reconciliation pass.
+**Note on the API surface:** The 19 endpoints documented in the section below (`/risk/{chain}/{address}`, `/check/...`, `/screen/...`, `/feed`, `/org/...`, `/deployer/...`, etc.) all return 404 on the new service. The new surface is read-only slices (recent activity windows), not a query interface — no per-address lookup endpoint and no table-export endpoint. **Note (2026-05-09 correction):** an earlier note in this section claimed `/dump` returned 403 "token-rotated"; that was wrong — `/dump` was never a Railway production endpoint, and the 403 was a generic deny. Production sync mechanism is whatever Jason uses manually (per `Trading/layer3_trading_exp/config.py`: "railway ssh + sqlite3 .dump, or any method he chooses"); the `delta_sync_from_railway.py` script is stale and its `/dump`-based path was never functional against any deployed service. Section needs a reconciliation pass once the actual sync method is confirmed.
 
 ---
 
