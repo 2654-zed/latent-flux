@@ -1,13 +1,53 @@
-# CASE FILE: Pre-Stage Warehouse — `0xc43f317e`
-**Case ID:** PRESTAGE_WAREHOUSE_C43F317E
-**Generated:** 2026-05-10 (post-sync from production; corpus snapshot 67,459 deployers)
-**Classification:** Infrastructure-Scale Operator candidate (residual Top-12, OLI-cleared per Correction #20)
+# CASE FILE: Meme-Token Deployment Shop — `0xc43f317e` (RECLASSIFIED)
+**Case ID:** PRESTAGE_WAREHOUSE_C43F317E (legacy ID — retained for backref; framing retracted)
+**Generated:** 2026-05-10 (initial "pre-stage warehouse" framing); **revised same day after bytecode decompilation**
+**Classification:** Meme-token deployment shop (vanilla ERC-20 launchpad). Out of trap-detection scope.
 **Chain:** Base
-**Threat Level:** UNDETERMINED — high stored potential, zero realized extraction
+**Threat Level (revised):** **LOW at contract layer.** Off-chain harm possible (rug-pulls, dump schemes) but outside Layer 3's L2 trap-detection surface.
 
 ---
 
-## Executive Summary
+> **[RECLASSIFICATION — 2026-05-10]** This case file was authored under the hypothesis that `0xc43f317e` was a **pre-stage trap warehouse** awaiting activation (Stored Potential framework). After bytecode decompilation of a downstream sample (`0xacfdc090ff9f5b160005bdaacb9a2d1025755baf`, "Kore Agent" / KORE), **the dominant bytecode template `49155b60033de73770...` is a verified vanilla OpenZeppelin v5.0.0 ERC-20 token contract.** Zero custom transfer logic, zero fee-on-transfer, zero blacklist, zero owner functions, zero delegatecall, zero selfdestruct. Constructor takes `(name, symbol, initialSupply)` and `_mint`s to deployer. Pure stock OZ ERC-20.
+>
+> The operator is a **meme-token deployment shop** — sustained-velocity ERC-20 token launchpad. Same operator class as the Dragon (`0x2e20b261` / 2,077 tokens in compressed burst). The "100% bytecode concentration" is exactly what an ERC-20 factory template produces; the "no realized extraction" is because vanilla ERC-20s have no extraction primitives.
+>
+> **Watchlist downgraded HIGH → MEDIUM** (`meme_token_shop_c43f317e`). Original "pre-stage warehouse" framing preserved below for historical record; the structural observations (2,535 deployers, sustained tempo, single-template) remain accurate, but the *interpretation* layer is retracted.
+
+---
+
+## Revised Executive Summary
+
+`0xc43f317ed4d81cbbfe2c9c98b4cc6f303519f078` is a meme-token deployment shop operating on Base since 2026-03-23. It funds 2,535 downstream wallets each deploying exactly one vanilla OpenZeppelin ERC-20 token contract. Token names follow a free-form parameter pattern ("Kore Agent" / "X1000XLiquidBGT" / "Laser Eagle" — though that last one is from a different operator's template; c43f317e's confirmed sample is "Kore Agent"). The operator is **not staging traps**; they are running an ERC-20 deployment-as-a-service or token-launchpad operation, possibly for:
+
+- Burner-token clients (deploy a token for a client who self-rugs)
+- Sybil airdrop wallet generation that happens to deploy a token per wallet
+- Per-event meme/scam token launches that get dumped via LP-rug outside L3's contract-layer scope
+
+The 27 bot wallets that have approved 102 of c43f317e's downstream contracts (798 total approvals) are **MEV/arbitrage scanners** probing newly-deployed tokens for arbitrage opportunities — not victims of an extraction primitive.
+
+**The off-chain harm of this operator class is real and substantial** (meme-coin rug pulls cost real users real money), but it operates through promotion/dump cycles outside the on-chain trap-extraction surface Layer 3 monitors. Tier MEDIUM watchlist retains visibility without elevating priority above genuinely predatory operators like Coffee Fleet (`0xc0ffeefeed8b`), drainer-spawn hub `0xf7883e3f`, or the newly-discovered honeypot operator `0x8ca70232` (see `CASE_HONEYPOT_TOKEN_OPERATOR_0x8ca70232.md`).
+
+---
+
+## Decompilation Evidence
+
+**Sample contract:** `0xacfdc090ff9f5b160005bdaacb9a2d1025755baf` (Base, deployed 2026-04-22)
+- Token: "Kore Agent" (KORE), 4.8B supply, 18 decimals
+- Compiler: Solidity 0.8.25
+- File: `OpenAI.sol` (filename appears intentionally provocative; the actual contract is named `OpenAI` and inherits OpenZeppelin `ERC20`)
+- Source verified via Blockscout
+- Full constructor: `OpenAI(string name, string symbol, uint256 initialSupply)` → `ERC20(name, symbol); _mint(msg.sender, initialSupply * 10**decimals());`
+- **No custom transfer / approval / mint logic beyond OpenZeppelin defaults.**
+
+Verified via Blockchain MCP `inspect_contract_code` against `eth.blockscout.com` for Base chain (chain_id 8453). Source code retrieved as `OpenAI.sol`, content matches OpenZeppelin v5.0.0 verbatim through `_spendAllowance`. Constructor at the bottom adds only the `_mint` to deployer.
+
+---
+
+## Original framing (preserved for historical record)
+
+The original "pre-stage warehouse" Executive Summary follows. The structural observations remain accurate; the interpretive layer is retracted per the reclassification above.
+
+### Original Executive Summary (RETRACTED 2026-05-10)
 
 `0xc43f317ed4d81cbbfe2c9c98b4cc6f303519f078` is the largest **still-active pre-stage warehouse operator** in the corpus that survived Correction #20's OLI mass-mislabel sweep. It funds 2,535 downstream deployer wallets on Base (up from 1,562 at the April 25 ISO snapshot — **+62% growth in two weeks**) and continues active operations as of 2026-05-10. **815 of those deployers have been active in the last 14 days.** Every deployer funded by this address has produced exactly one contract; the entire downstream fleet uses a **single bytecode template** (hash prefix `49155b60033de73770...`) at **100% concentration** across 1,206 hashed contracts.
 
@@ -18,6 +58,8 @@ Despite this scale, **zero realized extraction has been observed**:
 - All 2,366 known downstream contracts remain in `unknown` confidence tier (no classifier has graded them)
 
 This is the strongest **Stored Potential** signal in the corpus that is not yet either retracted (Correction #20) or attributed to a documented organization. The operator is depositing single-purpose contracts at ~95/day average with a single bytecode template, no third-party interaction, and no obvious adversarial signature in the bytecode classifier's surface. **Either the bytecode is genuinely benign (legit infrastructure with single-purpose-contract topology), the bytecode classifier is missing the predatory pattern, or the operator is staging a discharge event of unknown timing.**
+
+**Resolution:** Hypothesis 2 from the original "Disambiguation" section ("Non-trap infrastructure with single-purpose-contract topology") was the correct read. The bytecode IS genuinely benign — vanilla OZ ERC-20. The case-file authorship sequence demonstrates the load-bearing role of bytecode-level review: behavioral and topological signal alone could not disambiguate trap-stockpile from meme-token-shop.
 
 ---
 
