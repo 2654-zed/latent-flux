@@ -196,10 +196,31 @@
 - **Key wallets (top-3 burst-mass):** `0xb3c07d462cbcd384636d713aaaa8a841f180e509`, `0x0b701885fbee30213ce8847da8aef1202d13a4e4`, `0xd660fa35cd16f768e41c8e09729e39385b51f55c`
 
 ### Cross-Domain Compositional Harm references (anchor cases)
-- **Description:** Empirical anchors for lexicon entry [Cross-Domain Compositional Harm](lexicon.md#cross-domain-compositional-harm). Both off-chain (Vercel) and on-chain (Wasabi) instances are now documented; the framework's claim that the same compositional pattern operates across substrates is empirically anchored on both sides.
+- **Description:** Empirical anchors for lexicon entry [Cross-Domain Compositional Harm](lexicon.md#cross-domain-compositional-harm). Off-chain (Vercel), on-chain (Wasabi), and substrate-bridging (Grok/Bankr) instances are now documented; the framework's claim that the same compositional pattern operates across substrates is empirically anchored on all three sides.
 - **Vercel / Context.ai breach (2026-04-19, off-chain):** `cases/CASE_VERCEL_CONTEXT_BREACH_20260419.md`. Eight-domain composition chain (Lumma Stealer → Context.ai AWS → Google Workspace OAuth → Vercel SSO → env-var visibility → bulk customer credential extraction). Status: STRUCTURAL_REFERENCE — primary-source detail to be appended on future disclosure review.
 - **Wasabi Protocol admin-key compromise (2026-04-30, on-chain) — EXTRACTION_009:** `cases/CASE_WASABI_EXPLOIT_20260430.md`. ~$5M loss across Ethereum / Base / Berachain / Blast via UUPS proxy upgrade by compromised wasabideployer.eth (`0x5c629f8c0b53`). Same attacker helper deployed at `0x02228b0afcdbEdf8180D96Fc181Da3AF5DD1d1ab` on both mainnet and Base via CREATE2. Status: CONFIRMED. **Layer 3 had zero corpus coverage** — Wasabi predates monitoring window and production ingest was stuck during attack.
+- **Grok / Bankr AI-wallet permission chain attack (2026-05-04, substrate-bridging) — `cases/CASE_GROK_BANKR_EXPLOIT_20260504.md`.** Twitter → Grok (LLM translation deputy) → Bankrbot (on-chain execution deputy) → Base blockchain. ~3B DRB tokens (~$150–200K) drained from Grok-controlled wallet to `ilhamrafli.base.eth` via two-stage attack: (1) "Bankr Club Membership NFT" sent to Grok wallet granting "Executive" permissions; (2) Morse-encoded transfer instruction in a Twitter reply asking Grok to translate. Bankrbot treated decoded output as authenticated command and executed. Funds returned in full shortly after. SlowMist labeled "Permission Chain Attack" (2026-05-07). Status: CONFIRMED via multi-source public reporting. **Strongest bridging anchor for the typology** — each substrate's deputy executed correctly under its local rules; only the cross-substrate composition produced harm. **Layer 3 had zero coverage** — entirely off the L2-contract-deployment surveillance surface.
 - **Bancor EIP-7702 exploit (2026-04-29):** `cases/CASE_BANCOR_EIP7702_20260429.md`. Status: SKELETON — kept as research target. Wasabi now provides the live structural analog the Bancor file was hypothesizing.
+
+### Private-key drain via Telegram phishing — attacker `0xF7cFFC27` (2026-05-11)
+- **Description:** Telegram-phishing-vector private-key compromise drained ~$172K across Base / BSC / Ethereum in a 30-minute window 2026-05-11 00:37–00:56 UTC. Victim wallet `0x62acE10c…` is outside Layer 3's deployment-window corpus (DeFi participant, Sigma trading bot user, not a contract deployer); attacker EOA `0xF7cFFC27732a5C9c4E2D592F3E33435F8dDb019A` is now on watchlist HIGH (local + prod row 95).
+- **Forensic anchor:** Sigma tx `0xb81f9f0a1abb2330763d7b9498185404277955a18b3f766a31582c83ba70047e` on Base — EIP-7702 delegation from victim wallet to `0x0…0`, demonstrates attacker's full signing-key control. **First documented L3 case where EIP-7702 delegation is the dispositive forensic anchor.**
+- **Current attacker holdings (2026-05-11 ~05:00 UTC):** Base 52.56 ETH (~$122K), BSC 38.80 BNB (~$25K), Ethereum 10.20 ETH (~$24K). All drained tokens (POD on Base, FHE on BSC, SAT1 on Ethereum) already swapped to native via KyberSwap. **Attacker dormant ~4h** at file creation; recovery window open.
+- **Mechanism (Tier B per analyst):** Telegram CAPTCHA-bot clipboard injection → browser-stored credential / wallet-key exfiltration → manual cross-chain drain runbook.
+- **Framework mapping:** Configuration-Level Vulnerability at the operational-security layer; Cognitive Load Concentration empirical anchor; Forced Deterministic Neutrality at the signature-validation layer. **NOT a Distributed Confused Deputy Chain** — no contract composition failure; the failure was credential custody.
+- **Case file:** `cases/CASE_PRIVATE_KEY_DRAIN_F7CFFC27_20260511.md`.
+- **Tooling built:** `scripts/monitor_attacker_outflows.py` — polls Blockscout / Etherscan V2 for outbound txs from any EOA, emits stdout line per new tx (suitable for Claude Code Monitor or cron). Two backends; etherscan-v2 backend requires `ETHERSCAN_API_KEY`.
+- **Outstanding:** verify on first off-ramp (CEX deposit, bridge, mixer) → escalate to active recovery; BSC visibility (out of Blockscout free coverage); preemptive CEX freeze-intake reports filed by victim.
+
+### Distributed Confused Deputy Chain — Renegade Dark Pool proxy compromise (2026-05-10)
+- **Description:** First on-chain anchor for the [Distributed Confused Deputy Chain](lexicon.md#distributed-confused-deputy-chain) lexicon entry (added 2026-05-10 alongside this case). Proxy → vault → approvals architecture in which an unprotected initializer on the Renegade proxy let an attacker reset the implementation pointer; each downstream contract continued to execute correctly against the now-attacker-controlled proxy, draining user assets.
+- **Attacker EOA:** `0x777253F28AdC29645152b7b41BE5c772A9657777` (Arbitrum). Pre-positioned 2026-02-03 (first tx), dormant until exploitation burst 2026-05-10 16:51 → 17:14 UTC (10+ token `transfer` sweeps in ~45 seconds). Tier A.
+- **Pre-attack implementation:** `0xc038933d0b33359f5C87B4B2f92Ee0DAd11EaDc5` (Arbitrum, created 2025-05-21 by `0x812922c33079c3E2324D25Ef0352a2220686C2Ac`). Tier A.
+- **Renegade Darkpool Proxy:** `0x30bD8eAb29181F790D7e495786d4B96d7AfDC518` (Arbitrum, EIP-1967). **Tier A** — confirmed via Blockscout OLI public tag `"Darkpool proxy"` and Renegade deployer attribution (`0x98e4e5C6223bb2Cc945a7c2821E30929dEff3568`), created 2024-09-03.
+- **Post-attack implementation:** `0x58f876aAeeCBD5a0fca8F87e1313a9188C155bcC` named **"DarkpoolFrozen"** — protocol-team emergency-freeze swap already in place at file creation. Tier A.
+- **Case file:** `cases/CASE_RENEGADE_EXPLOIT_20260510.md`.
+- **Status:** CONFIRMED on-chain sweep burst + protocol-team emergency response observed. **Layer 3 had zero corpus coverage** — Renegade contracts predate monitoring window and the protocol sits outside the L2-deployment-burst surveillance surface.
+- **Outstanding:** loss-magnitude estimate; identify the caller of the implementation-swap-to-frozen tx; corpus-wide `proxy_initializer_scanner.py` detector proposed in case file.
 
 ### `0xe69f81b8` — High-Volume Bridge User — **RETRACTED 2026-05-09, Correction #20**
 
@@ -496,6 +517,24 @@ Flat alphabetical (lowercase). Use Ctrl-F. Format: `address  primary_classificat
 - `0xEe5c45DCB0064f9B097edBC5d8adfcE23baaC03b` — Wasabi vault (mainnet, observed in trace; `setWithdrawFeeBips` + `setFeeReceiver`). — `CASE_WASABI_EXPLOIT_20260430.md`
 - `0xfAe69F2C82747F878F74C1E57a1AeD945eD8558F` — Wasabi vault (Base, observed in trace). — `CASE_WASABI_EXPLOIT_20260430.md`
 
+### Renegade Dark Pool proxy compromise (2026-05-10)
+- `0x777253F28AdC29645152b7b41BE5c772A9657777` — attacker EOA, Arbitrum. First tx 2026-02-03 (3-month pre-positioning). Exploitation burst 2026-05-10 16:51 → 17:14 UTC (10+ token `transfer` sweeps). Tier A. — `CASE_RENEGADE_EXPLOIT_20260510.md`
+- `0x30bD8eAb29181F790D7e495786d4B96d7AfDC518` — Renegade Darkpool Proxy (EIP-1967), Arbitrum. OLI public tag `"Darkpool proxy"`. Created 2024-09-03 by Renegade deployer. Tier A. — `CASE_RENEGADE_EXPLOIT_20260510.md`
+- `0xc038933d0b33359f5C87B4B2f92Ee0DAd11EaDc5` — pre-attack implementation, Arbitrum. Created 2025-05-21 by `0x812922c33079c3E2324D25Ef0352a2220686C2Ac`. Tier A. — `CASE_RENEGADE_EXPLOIT_20260510.md`
+- `0x58f876aAeeCBD5a0fca8F87e1313a9188C155bcC` — post-attack "DarkpoolFrozen" implementation (emergency-freeze swap), Arbitrum. Tier A. — `CASE_RENEGADE_EXPLOIT_20260510.md`
+- `0x98e4e5C6223bb2Cc945a7c2821E30929dEff3568` — Renegade deployer (proxy creator), Arbitrum. Tier A. — `CASE_RENEGADE_EXPLOIT_20260510.md`
+
+### Private-key drain — attacker `0xF7cFFC27` (2026-05-11)
+- `0xF7cFFC27732a5C9c4E2D592F3E33435F8dDb019A` — attacker EOA, multi-chain (Base / BSC / Ethereum). Watchlist HIGH (`private_key_drain_attacker_F7cFFC27`) row 95 local + prod (2026-05-10). Tier A. — `CASE_PRIVATE_KEY_DRAIN_F7CFFC27_20260511.md`
+- `0x62acE10c7f2Aa0e9B5a8e09CbF5D18d0f8a1EE8A` — victim wallet (compromised private key, multi-chain). Tier A. — `CASE_PRIVATE_KEY_DRAIN_F7CFFC27_20260511.md`
+- Sigma forensic-anchor tx: `0xb81f9f0a1abb2330763d7b9498185404277955a18b3f766a31582c83ba70047e` (Base) — EIP-7702 delegation to null demonstrating attacker signing control. Tier A. — `CASE_PRIVATE_KEY_DRAIN_F7CFFC27_20260511.md`
+
+### Grok / Bankr AI-wallet permission chain attack (2026-05-04)
+- `0xB1058c959987E3513600EB5b4fD82Aeee2a0E4F9` — Grok victim wallet (sender of the 3B DRB transfer), Base. Tier A — verified via tx `0x6fc7eb7da93793…e525739a`. — `CASE_GROK_BANKR_EXPLOIT_20260504.md`
+- `0xE8E476bdd78b0aA6669509eC8d3E1c542d5A686B` — attacker recipient on Base (ilhamrafli.base.eth resolved). EIP-7702 Kernel smart account; first tx 2025-04-03. Tier A. — `CASE_GROK_BANKR_EXPLOIT_20260504.md`
+- `0x3ec2156D4c0A9CBdAB4a016633b7BcF6a8d68Ea2` — DRB token contract ("DebtReliefBot"), Base, ERC-20. The drained asset. Tier A. — `CASE_GROK_BANKR_EXPLOIT_20260504.md`
+- Principal extraction tx: `0x6fc7eb7da9379383efda4253e4f599bbc3a99afed0468eabfe18484ec525739a` (Base block 45543997, 2026-05-04T06:49:01 UTC). Tier A. — `CASE_GROK_BANKR_EXPLOIT_20260504.md`
+
 The remaining ~80 distinct addresses extracted from cases/ + reports/ are either victim/bot addresses without role attribution or appear in single auto-generated `CASE_0x*` files only. They are not enumerated here unless they have a documented role.
 
 ---
@@ -509,9 +548,10 @@ The remaining ~80 distinct addresses extracted from cases/ + reports/ are either
 - **Forced Deterministic Neutrality** — DOCUMENTED 2026-05-02, refined and authored 2026-05-02 — `docs/lexicon.md#forced-deterministic-neutrality`. Three key characteristics (no context window, no pause/override, no intent parsing). Six empirical examples spanning EVM / ECDSA / UUPS / Permit2 / OAuth / USD wires.
 - **Normative Shell Game** — DOCUMENTED 2026-05-02 — `docs/lexicon.md#normative-shell-game`. Two-layer governance posture (public Shell + Emergency Core) that emerges as the structural response to the Neutrality Trap. Empirical anchor: Arbitrum Security Council freezing KelpDAO funds (2026-04-20), The DAO Fork (2016), USDC/USDT freeze authority.
 - **Confused Deputy Problem** — DOCUMENTED 2026-05-02 — `docs/lexicon.md#confused-deputy-problem`. Three-role structure (Principal → Deputy → Attacker). The per-program vulnerability that Forced Deterministic Neutrality produces and the Neutrality Trap makes ecosystem-wide. Includes Agentic AI Supercharger sub-section. Empirical anchors: AI coding agents, Permit2 (EXTRACTION_010), Wasabi UUPS (EXTRACTION_009), Vercel/Context.ai OAuth.
+- **Distributed Confused Deputy Chain** — DOCUMENTED 2026-05-10 — `docs/lexicon.md#distributed-confused-deputy-chain`. Multi-contract systemic form of the Confused Deputy Problem in modular protocols. Three conditions (fragmented epistemic state, hardcoded trust bindings, single point of syntactic failure). Empirical anchors: Renegade Dark Pool Proxy (2026-05-10, Arbitrum, `0x30bD...DC518`), Wasabi UUPS (EXTRACTION_009, 2026-04-30), Grok/Bankr cross-domain (2026-05-04, Twitter → Grok → Bankr → Base).
 - **Adversarial Topology Framework** (5 primitives: position, permissions, trust bindings, mutability, observation capability) — DOCUMENTED — `docs/lexicon.md#adversarial-topology` + `claude.md` §Adversarial Topology Framework
 - **Compositional Harm** — DOCUMENTED — `docs/lexicon.md#compositional-harm`
-- **Cross-Domain Compositional Harm** — DOCUMENTED 2026-04-25 — `docs/lexicon.md#cross-domain-compositional-harm`. Anchors: Vercel/Context.ai breach (off-chain, 2026-04-19) + Wasabi Protocol admin-key compromise (on-chain, 2026-04-30, EXTRACTION_009 — `cases/CASE_WASABI_EXPLOIT_20260430.md`).
+- **Cross-Domain Compositional Harm** — DOCUMENTED 2026-04-25, extended 2026-05-10 — `docs/lexicon.md#cross-domain-compositional-harm`. Anchors: Vercel/Context.ai breach (off-chain, 2026-04-19), Wasabi Protocol admin-key compromise (on-chain, 2026-04-30, EXTRACTION_009 — `cases/CASE_WASABI_EXPLOIT_20260430.md`), and Grok/Bankr permission chain attack (substrate-bridging, 2026-05-04 — `cases/CASE_GROK_BANKR_EXPLOIT_20260504.md`). The Grok/Bankr instance is the strongest *bridging* anchor: Twitter → Grok → Bankrbot → Base, each deputy correct under local rules.
 - **Trust Amplification Factor** — DOCUMENTED with methodological caveat — `docs/lexicon.md#trust-amplification-factor`. **Two contradictory retractions of the 14.2× anchor figure exist** (`CORRECTIONS.md` 2026-04-02 vs `reports/correction_log.md` Correction #17 2026-04-25). Resolution open.
 - **Camouflage Ratio** — DOCUMENTED with methodological caveat (cluster-dominance impact) — `docs/lexicon.md#camouflage-ratio`. Original 14.2× claim retired (`CORRECTIONS.md`); equilibrium framing requires top-12-excluded re-run.
 - **Behavioral Laundering** (Patterns A–F) — DOCUMENTED — `docs/lexicon.md#behavioral-laundering`

@@ -1,6 +1,6 @@
 # Layer 3 Lexicon
 
-**Version:** 2026-05-08 (living document; update when new framework-level observations emerge)
+**Version:** 2026-05-10 (living document; update when new framework-level observations emerge)
 **Purpose:** Canonical definitional reference for Layer 3 methodology. Every entry specifies the term's definition, extended meaning, empirical grounding in the corpus where applicable, and cross-references. Intended for internal use and eventual external publication.
 **Discipline:** Each entry is either (a) deductive from on-chain corpus evidence, (b) inferential with explicit methodology application, or (c) framework-level observation with clear analytical basis. No entry is asserted without basis.
 
@@ -18,6 +18,7 @@
 - [Forced Deterministic Neutrality](#forced-deterministic-neutrality)
 - [Normative Shell Game](#normative-shell-game)
 - [Confused Deputy Problem](#confused-deputy-problem)
+- [Distributed Confused Deputy Chain](#distributed-confused-deputy-chain)
 - [Camouflage Ratio](#camouflage-ratio)
 
 ### Detection Methodology
@@ -251,7 +252,27 @@ The vulnerability arises because the deputy's authorization architecture checks 
 - **Wasabi UUPS upgrade (EXTRACTION_009, 2026-04-30).** The proxy contract is a deputy: it delegates execution to the implementation contract the proxy admin specifies. When the admin key is compromised, the attacker becomes the admin and points the proxy at a malicious implementation. The proxy executes the attacker's `drain()` calls because the admin key — the principal from the proxy's perspective — authorized the upgrade. The proxy cannot ask "is this admin key being held by its original owner?" The admin signature is valid; the execution proceeds. ~$4.5–5.5M extracted.
 - **Vercel/Context.ai breach (2026-04-19).** The Vercel employee's personal Context.ai account was a deputy: it held an OAuth grant with "Allow All" Google Workspace scope for the employee's Vercel identity. When Context.ai's environment was compromised and the attacker obtained the OAuth tokens, the Google OAuth infrastructure honored those tokens because the grant was valid — the consent screen had been clicked. The OAuth server is a deputy that cannot ask "did the user understand what they were consenting to, and are they still in control of the application they granted access to?"
 
-**Cross-references.** [Forced Deterministic Neutrality](#forced-deterministic-neutrality) (the mechanism that produces the per-program vulnerability), [Neutrality Trap](#neutrality-trap) (the ecosystem-level pattern that makes the per-program vulnerability unavoidable), [Stored Potential](#stored-potential) (the deputy's elevated permissions are themselves stored potential), [Compositional Harm](#compositional-harm) (Confused Deputy harm composes across principal/deputy/attacker boundaries), [Configuration-Level Vulnerability](#configuration-level-vulnerability) (the deputy's authorization configuration is the failure surface).
+**Cross-references.** [Forced Deterministic Neutrality](#forced-deterministic-neutrality) (the mechanism that produces the per-program vulnerability), [Neutrality Trap](#neutrality-trap) (the ecosystem-level pattern that makes the per-program vulnerability unavoidable), [Stored Potential](#stored-potential) (the deputy's elevated permissions are themselves stored potential), [Compositional Harm](#compositional-harm) (Confused Deputy harm composes across principal/deputy/attacker boundaries), [Configuration-Level Vulnerability](#configuration-level-vulnerability) (the deputy's authorization configuration is the failure surface), [Distributed Confused Deputy Chain](#distributed-confused-deputy-chain) (the multi-contract systemic form of this vulnerability in modular protocols).
+
+---
+
+### Distributed Confused Deputy Chain
+
+**Definition.** A systemic amplification of the [Confused Deputy Problem](#confused-deputy-problem) in modular smart contract architectures. When a protocol splits its logic across multiple contracts (Proxy, Router, Vault, Strategy, Oracle, Access Controller) that hardcode absolute trust in one another, an attacker who compromises or confuses a single contract in the chain can pass a malicious payload through the entire trust network. No single contract understands the full "story" of the transaction; each contract verifies its own localized state and hands execution to the next. The result is that the entire protocol participates in its own exploitation, one compliant deputy at a time.
+
+**Extended description.** The mechanism requires three conditions:
+
+1. **Fragmented epistemic state.** The protocol's logic is distributed across multiple contracts, each with a narrow, specialized view of the transaction. The Vault knows balances but not routing logic. The Router knows paths but not collateral requirements. The Oracle knows prices but not user intent. No single contract holds the full context.
+2. **Hardcoded trust bindings.** The contracts are designed for composability, so they trust one another implicitly. If Contract A calls Contract B with a valid signature, Contract B executes without verifying the broader transaction context. There is no cross-contract "story validator."
+3. **A single point of syntactic failure.** The attacker finds one contract in the chain with a syntactic vulnerability — an unprotected initializer, an unguarded delegatecall, a missing access modifier. Because all contracts trust one another, this single syntactic failure grants the attacker the authority of the entire protocol.
+
+**Empirical grounding.**
+
+- **Renegade Dark Pool Proxy (2026-05-10, `0x30bD...DC518` on Arbitrum).** Unprotected initializer allowed an attacker to reset the proxy's implementation address. The proxy, the token approvals, and the asset vault each functioned correctly; together, they constituted a Distributed Confused Deputy Chain that drained user assets. Attacker: `0x777253F28AdC29645152b7b41BE5c772A9657777`. Implementation at risk: `0xc038933d0b33359f5C87B4B2f92Ee0DAd11EaDc5`.
+- **Wasabi Protocol (EXTRACTION_009, 2026-04-30).** A compromised admin EOA triggered a UUPS proxy upgrade to a malicious implementation. The proxy obeys the admin; the vault obeys the proxy; the token approvals obey the vault. The chain of trust discharged stored potential instantly. See `cases/CASE_WASABI_EXPLOIT_20260430.md`.
+- **Grok/Bankr exploit (2026-05-04).** A cross-domain variant. Grok's wallet trusted the Bankr NFT (which expanded permissions); Bankr trusted Grok's tweets. The attacker injected a prompt that traversed the entire trust chain: Twitter → Grok → Bankr → Base blockchain. No single component understood the full story; all compliantly participated.
+
+**Cross-references.** [Confused Deputy Problem](#confused-deputy-problem) (the parent concept; this entry is the multi-contract systemic form), [Compositional Harm](#compositional-harm) (Distributed Confused Deputy Chains are the specific mechanism of compositional harm in modular architectures), [Forced Deterministic Neutrality](#forced-deterministic-neutrality) (the execution environment's inability to pause or question the chain), [Stored Potential](#stored-potential) (the proxy upgrade mechanism is a classic stored-potential node), [Cross-Domain Compositional Harm](#cross-domain-compositional-harm) (the Grok/Bankr variant spans multiple domains).
 
 ---
 

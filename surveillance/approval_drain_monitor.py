@@ -32,6 +32,30 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _oli_suppressed_deployers(conn: sqlite3.Connection) -> set:
+    # Contract deployers publicly attributed (Open Labels Initiative tags via
+    # Blockscout metadata) as known-legitimate institutions or projects.
+    # Drain detector cannot distinguish their legitimate batch/distribution
+    # flows from extraction by shape alone, so drain_detected promotion is
+    # gated. Mirrors the entity_classifier OLI redirect landed in
+    # Correction #20.
+    #
+    # `self-confirming` is excluded because that severity tier means the OLI
+    # tag agrees with our adversarial classification (scam, phishing, drain
+    # hub). Those drains are legitimate detections — keep them.
+    try:
+        return {
+            r[0]
+            for r in conn.execute(
+                "SELECT address FROM oli_labels "
+                "WHERE severity IN ('HIGH', 'LOW')"
+            )
+        }
+    except sqlite3.OperationalError:
+        # oli_labels table not yet migrated in this DB
+        return set()
+
+
 def ensure_tables(conn: sqlite3.Connection):
     """Create approval monitoring tables."""
     conn.execute("""
@@ -121,10 +145,16 @@ def check_drains(conn: sqlite3.Connection) -> dict:
     1. transferFrom() calls on watched contracts
     2. Any token transfer FROM a victim TO the deployer or unknown collector
     3. Contract interactions by the deployer AFTER approvals came in
+
+    OLI gate: skip rows whose contract was deployed by an OLI-tagged
+    institutional/project address. Mirrors the entity_classifier redirect
+    introduced in Correction #20. See `_oli_suppressed_deployers`.
     """
     ensure_tables(conn)
     now = _now()
     drains_found = 0
+    suppressed = _oli_suppressed_deployers(conn)
+    skipped = 0
 
     # Method 1: transferFrom() on watched contracts
     pending = conn.execute("""
@@ -135,6 +165,9 @@ def check_drains(conn: sqlite3.Connection) -> dict:
     """).fetchall()
 
     for p in pending:
+        if p["deployer_address"] and p["deployer_address"] in suppressed:
+            skipped += 1
+            continue
         # Check for transferFrom on this contract after the approval
         drain = conn.execute("""
             SELECT te.tx_hash, te.timestamp, te.interacting_address as caller
@@ -170,6 +203,9 @@ def check_drains(conn: sqlite3.Connection) -> dict:
     """).fetchall()
 
     for d in deployer_drains:
+        if d["deployer_address"] and d["deployer_address"] in suppressed:
+            skipped += 1
+            continue
         conn.execute("""
             UPDATE approval_watchlist
             SET drain_detected = 1, drain_tx_hash = ?, drain_timestamp = ?,
@@ -180,7 +216,50 @@ def check_drains(conn: sqlite3.Connection) -> dict:
         drains_found += 1
 
     conn.commit()
-    return {"drains_detected": drains_found}
+    return {"drains_detected": drains_found, "oli_suppressed_skips": skipped}
+
+
+def backfill_oli_suppression(conn: sqlite3.Connection) -> dict:
+    """Reset drain_detected on rows whose contract was deployed by an
+    OLI-tagged institutional/project address.
+
+    These rows promoted before the OLI gate was wired in (the gap surfaced
+    on 2026-05-10 — Animoca-deployed `0x752c5a95...` produced 4,587 phantom
+    drain rows from two callers). The contracts themselves likely remain
+    on the suspected/confirmed lists (separate bytecode-classifier signal);
+    only the drain promotion is rolled back.
+
+    The fix is non-destructive in that approval rows are retained — only
+    `drain_detected`, `drain_tx_hash`, `drain_timestamp`, `drain_caller` are
+    cleared. The bytecode classifier and confidence_tier fields are untouched.
+    """
+    ensure_tables(conn)
+    suppressed = _oli_suppressed_deployers(conn)
+    if not suppressed:
+        return {"reset": 0, "suppressed_deployers": 0}
+
+    placeholders = ",".join("?" * len(suppressed))
+    args = list(suppressed)
+    affected = conn.execute(
+        f"""
+        SELECT COUNT(*) FROM approval_watchlist
+        WHERE drain_detected = 1 AND deployer_address IN ({placeholders})
+        """,
+        args,
+    ).fetchone()[0]
+    conn.execute(
+        f"""
+        UPDATE approval_watchlist
+        SET drain_detected = 0,
+            drain_tx_hash = NULL,
+            drain_timestamp = NULL,
+            drain_caller = NULL
+        WHERE drain_detected = 1 AND deployer_address IN ({placeholders})
+        """,
+        args,
+    )
+    conn.commit()
+    return {"reset": affected, "suppressed_deployers": len(suppressed)}
 
 
 def get_summary(conn: sqlite3.Connection) -> dict:
@@ -245,6 +324,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Approval drain monitor")
     parser.add_argument("--scan", action="store_true", help="Scan for new approvals + check drains")
     parser.add_argument("--watchlist", action="store_true", help="Show current watchlist")
+    parser.add_argument(
+        "--backfill-oli-suppression",
+        action="store_true",
+        help="Reset drain_detected on rows whose contract deployer is OLI-tagged",
+    )
     args = parser.parse_args()
 
     conn = sqlite3.connect(str(DB_PATH), timeout=10)
@@ -254,11 +338,20 @@ if __name__ == "__main__":
         r1 = scan_approvals(conn)
         print(f"[approval_drain] New approvals tracked: {r1['new_approvals_tracked']}")
         r2 = check_drains(conn)
-        print(f"[approval_drain] Drains detected: {r2['drains_detected']}")
+        print(
+            f"[approval_drain] Drains detected: {r2['drains_detected']} "
+            f"| OLI-suppressed skips: {r2.get('oli_suppressed_skips', 0)}"
+        )
         print()
         print_watchlist(conn)
     elif args.watchlist:
         print_watchlist(conn)
+    elif args.backfill_oli_suppression:
+        r = backfill_oli_suppression(conn)
+        print(
+            f"[approval_drain] OLI backfill: reset {r['reset']} drain_detected rows "
+            f"across {r['suppressed_deployers']} suppressed deployers"
+        )
     else:
         parser.print_help()
 
