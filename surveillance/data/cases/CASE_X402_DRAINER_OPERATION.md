@@ -349,6 +349,41 @@ These homoglyph variants are designed to pass both visual inspection and naive s
 
 ---
 
+## Activity update — 2026-05-01 / 2026-05-02 (after monitor outage)
+
+After Layer 3 ingest came back online on 2026-04-30T21:37 UTC (ending an ~18-hour ingest gap), the X402 facilitator-drain monitor surfaced **7 X402_AGENT_DRAIN alerts in the May 1 → May 2 window** representing the largest single-day X402 drainage we have logged on production.
+
+### Recipient `0xa7b9874d15742358fb455dd56f97c6d19ad74f5c` — coordinated drain endpoint
+
+A single Base-side recipient received **4 of 7 alerts** within the window:
+
+| Alert time UTC | Payer | Token | Amount | USD-equiv |
+|---|---|---|---|---|
+| 2026-05-01T13:01:13 | `0x3e55d2cac1db…` | `0x2ae3f1ec7f1f…` (non-stable) | 0.0269 token-units | ~26.9 ETH-equiv |
+| 2026-05-01T17:36:15 | `0x06864af8a509…` | USDC (`0x833589fc…`) | 20,000.000219 USDC | ~$20,000 |
+| 2026-05-01T22:36:15 | `0x06864af8a509…` | USDC | 101,000.012414 USDC | ~$101,000 |
+| 2026-05-02T01:10:15 | `0x06864af8a509…` | USDC | 102,000.000722 USDC | ~$102,000 |
+
+Total visible inflow: **$223,000 USDC + 26.9 ETH-equivalent** to `0xa7b9874d…` from two distinct payers within ~12 hours. The three USDC drops from `0x06864af8a509…` show an **escalating amount pattern** ($20K → $101K → $102K) — same payer, same recipient, three increments in a 9-hour window. Either the operator is testing increasing amounts to see what clears, or this is a structured drain across the payer's account stages.
+
+**`0xa7b9874d15742358fb455dd56f97c6d19ad74f5c` was promoted to watchlist HIGH on 2026-05-02** (entity_name `x402_drain_endpoint_a7b9874d`). Has industrial-nonce and multi-chain footprint consistent with the existing A7B9 / E717 facilitators documented earlier in this file — worth investigating whether this is a new facility (cross-chain rotation) or a previously-uncategorized facilitator surfacing now.
+
+### Other May 1 → May 2 X402 drains (non-A7B9)
+
+- 2026-05-01T09:49:12 — `0xa3a1d7a54269…` → `0xce5ec7336f86…` for **192,035.000404 USDC** (~$192K). Largest single drain in the window. New payer-payee pair not previously seen in this case file's facilitator roster — worth follow-up to determine whether `0xce5ec7336f86…` is a 9th facility or a new operator.
+- 2026-05-02T02:48:04 — `0xe8406121173c…` → `0x5bfc99253164…` for $21 USDC (small)
+- 2026-05-02T02:48:28 — `0xfeec50ddae35…` → `0xe7176831c898…` for $23.85 USDC (small)
+
+### What this update changes
+
+1. **Total visible drainage in 24h: ~$436K** across 7 alerts. The "Activity update — 2026-04-14" section noted A7B9/E717 had nonces 80k-96k and estimated lifetime impact at ~$10M+. The May 1 → May 2 burst is consistent with that rate.
+2. **A new top-recipient (`0xa7b9874d…`) emerges with industrial coordination signal** — 4 of 7 alerts to one address, escalating-amount pattern. Behaviorally similar to A7B9/E717 documented earlier; case file's "single well-funded operator across multiple wallets" hypothesis (Open question #1) remains the most parsimonious read.
+3. **Two new potential payee-side facilities** (`0xa7b9874d…`, `0xce5ec7336f86…`) need cross-checking against the original 7-facilitator roster — they may be the same operator under fresh wallets, or genuinely new actors converging on the same tactic.
+
+This activity update **extends** the operation's documented scope without contradicting prior findings. Per Phase 4 of the session-start protocol: extension framing.
+
+---
+
 ## Open questions
 
 1. **Who operates these wallets?** A7B9 + E717 have industrial nonces (80k-96k) and ETH balances (272 + 125 ETH). This is not a hobbyist. Either a single well-funded drain operator running multiple chains, or multiple independent drain operators converging on the same tactic.

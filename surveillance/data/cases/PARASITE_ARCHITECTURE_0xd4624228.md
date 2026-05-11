@@ -7,6 +7,10 @@
 
 ---
 
+> **Correction #17 addendum (added 2026-04-29):** The "infrastructure parasite" framing and the 14.2× trust amplification figure cited in this file were retired from active claim status by Correction #17 in `reports/correction_log.md` (applied 2026-04-25). Two reconciliation drivers: (1) the 14.2× multiplier was computed against the `T2-eaef6a5d` bytecode family baseline, which was itself dissolved as a NULL-bucket artifact by Correction #3 (2026-04-16) — the comparator was retroactively invalidated; (2) Opus 4.7's reading of the bytecode framed the asymmetric routing pattern as obfuscated fee-on-transfer logic with incidental router exposure rather than deliberate router exploitation. Both readings have empirical merit. The contract self-extinguished on 2026-03-26 and produces no `trust_amplification` row in the live producer (drops below the 50-caller minimum). The 2,910-victim count and ~97% router-delivered traffic are Tier A direct measurements and remain canonical. **This case file is preserved as historical analysis.** The framing tension is documented in the lexicon's [Trust Amplification Factor](../../docs/lexicon.md#trust-amplification-factor) entry and in `reports/correction_log.md` Correction #17.
+
+---
+
 ## Executive Summary
 
 This is not a simple fee-on-transfer token. It is a **multi-interface contract** that simultaneously impersonates an ERC-20 token, a Uniswap Universal Router, a Uniswap pool, and an NFT receiver. By implementing selectors from multiple Uniswap components in a single contract, it can intercept swap flows at whichever layer the routing algorithm discovers it. The asymmetric buy/sell logic is gated by 12 CALLER checks and a storage-keyed fee lookup table whose parameters can be changed by the owner post-deployment.
