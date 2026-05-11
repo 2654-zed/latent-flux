@@ -33,6 +33,7 @@
 - [Single-Purpose Infrastructure Funder](#single-purpose-infrastructure-funder)
 - [Adversarial Vanity Branding](#adversarial-vanity-branding)
 - [Protocol-Family Specialist Operator](#protocol-family-specialist-operator)
+- [Self-Deploying Single-Contract Mass-Drain](#self-deploying-single-contract-mass-drain)
 
 ### Structural and Psychological
 - [Participatory Asymmetry / Predatory Literacy](#participatory-asymmetry--predatory-literacy)
@@ -526,6 +527,51 @@ This entry is structurally distinct from [Pattern D — Cross-Chain Reputation I
 **Layer 3 corpus involvement.** Zero direct coverage — TrustedVolumes is Ethereum mainnet, outside Base/Arbitrum/Optimism scope. Same gap pattern as EXTRACTION_009 (Wasabi) and EXTRACTION_010 (mass dormant-drain): the typology is observable in off-chain reference data but not in the L2 corpus. The classification is structural, not corpus-derived.
 
 **Cross-references.** [Pattern D — Cross-Chain Reputation Import](#pattern-d--cross-chain-reputation-import) (the cross-chain analog; Protocol-Family Specialist is the within-ecosystem mirror), [Configuration-Level Vulnerability](#configuration-level-vulnerability) (RFQ proxies are configuration-class — signed-quote acceptance scope is the soft surface), [Compositional Harm](#compositional-harm) (1inch routing → resolver → custom RFQ proxy is a three-layer composition; specialist exploits the seams between layers), [Trust Amplification Factor](#trust-amplification-factor) (the @trustedvolumes brand inherits 1inch routing trust without inheriting 1inch's audit surface).
+
+---
+
+### Self-Deploying Single-Contract Mass-Drain
+
+**Definition.** A drain operation in which a single EOA acts as **both deployer and drainer** of exactly one contract, paired with a dedicated single-purpose funder wallet. Within a tight time window (typically <24h), the operator: (1) receives funding from a previously-silent funder, (2) deploys one contract, (3) drives mass victim approval-spending against that contract, and (4) goes silent. The operator wallet has fleet=1 (one contract lifetime) and a clean record beyond the single drain event. The funder wallet has 1-2 corpus deployers funded (this drainer plus possibly one prior). The two-wallet pair is consumed by a single iteration.
+
+**Extended description.** Architecturally distinct from both the [Single-Purpose Infrastructure Funder](#single-purpose-infrastructure-funder) pre-stage stockpile (which deploys ≥50 contracts without extraction) and from drainer-spawn hubs like `0xf7883e3fef23` (where a persistent hub funds rotating disposable drainer wallets, each running one campaign). The Self-Deploying Single-Contract Mass-Drain has:
+
+1. **No persistent upstream hub** — the funder is also single-use; there is no scheduler-layer actor visible.
+2. **Self-deployment** — drainer EOA is the contract's deployer, eliminating the funder-→-deployer-→-drainer chain that other operator classes use to compartmentalize.
+3. **Single-contract operation** — fleet=1; the drainer is the contract's *only* downstream. By contrast, infrastructure-scale operators run many contracts per iteration and pre-stage stockpilers run many contracts per iteration with no contracts drained.
+4. **Mass-drain via approval-spending** — victims have prior MAX-allowance approvals on the contract (typically Permit2-class); the drainer sweeps in a tight time window using `transferFrom`-style flows. The operator does not need bot interaction or victim transactions during the drain window; only pre-existing approvals.
+
+The shape resembles a [Single-Purpose Infrastructure Funder](#single-purpose-infrastructure-funder) Pattern A *activation event* — Pattern A's pre-stage stockpile is the "what's loaded," the Self-Deploying Mass-Drain is the "what discharge looks like." But the corpus instances do not match Pattern A's stockpile signature (no pre-positioned fleet); the drain contract is freshly-deployed in the same operator wallet.
+
+**Detection rule (promoted to typology 2026-05-10 with three confirmed instances).** Required signals:
+
+1. **Funder layer** — pure funding wallet (no own deployer record), funds 1-2 corpus deployers, no public OLI tag, no shared infrastructure with documented org_001-004 or top-12 ISO funders.
+2. **Drainer layer** — same address is both the EOA receiving funds AND the deployer of exactly one contract. `fleet = 1`.
+3. **Drain layer** — `approval_watchlist.drain_detected = 1` for ≥10 distinct victims with `drain_caller` = the drainer EOA, concentrated within a single 24-72h window.
+4. **OLI cross-check passes** — neither funder nor drainer is publicly attributed to a known institution (per [Pristine Solo Operator](#pristine-solo-operator) FP class lesson).
+
+The third condition is what distinguishes activation events from the pre-stage variant: extraction is observable and bounded in time. The four-condition gate avoids the false-positive class that Correction #19 documented (self-funded farmers with no drain signal).
+
+**Empirical grounding (three confirmed instances, 2026-05-06 → 2026-05-10).**
+
+| Iteration | Drainer EOA | Funder | Funder class | Victims | Drain window |
+|---|---|---|---|---|---|
+| I (2026-05-06) | `0xfbf44e969d4fc5cbad62870207341c976f9e38f9` | `0x8c826f795466e39acbff1bb4eeeb759609377ba1` | **org_001 L2 Gas Station** (Coinbase-origin, 1,296 corpus deployers funded) | 113 | 2026-05-06 single-day |
+| II (2026-05-07) | `0x44a2ee1369c3eecf86f8de7c73c3e3602523a198` | `0x68b8b6d48dc6529d7eb4c7943613e04ba2e5b913` | **Single-purpose funder** (1 deployer funded, OLI-clean) | 37 | 2026-05-07 10:55 → 17:25 (6.5h) |
+| III (2026-05-09→10) | `0x72ed7949080a2c57bfe9788a7970fe39629fc6ca` | `0x8c8204b8da3defb2a2f525fa35f5026080963579` | **Single-purpose funder** (1 deployer funded, OLI-clean) | **148** | 2026-05-09 10:59 → 2026-05-10 09:49 (22h) |
+
+**Zero funder overlap across the three instances** — three distinct funders, one of which is org_001's known gas station and two of which are unattributed single-purpose wallets. The architecture is identical; the operator identity differs. This is [Convergent Calibration](#convergent-calibration) at the execution layer — three independent actors running the same operational template within a 5-day window with no observable coordination.
+
+**One instance (I) is operationally linked to a documented organization (org_001). The other two (II, III) are unattributed.** The org_001 instance is also documented in INDEX.md as the May 6 escalation event (CASE_ORG_001_INFRASTRUCTURE.md update) and marks the first confirmed direct-org-drainer linkage for org_001. The convergence of org_001's playbook expansion with two independent operators running the same architecture in adjacent days raises the question of whether the technique itself is the diffusing object (shared upstream tooling, shared training data, or convergent calibration against the same defensive surface).
+
+**Forward signal.** Inter-event interval observed: 1 day (I→II), 2 days (II→III). If the cadence is real, expect a fourth instance within 1-3 days of III; if absent for >5 days, the cadence framing weakens. **As of 2026-05-10 15:43 UTC, the III drainer (`0x72ed7949080a`) continues active drainage on contract `0xa68079da060e...` (most recent victim 2026-05-10 09:49 UTC); active operations should be considered concurrent with the next-iteration forecast.**
+
+**Distinguishing from neighboring typologies:**
+- **Vs. Single-Purpose Infrastructure Funder**: Pattern A stockpile has fleet ≥50 and no drain; this typology has fleet = 1 and active drain. The funder topology is similar (pure funder, 1-2 corpus deployers) but the deployer's behavior diverges.
+- **Vs. drainer-spawn hub** (`0xf7883e3fef23` class): hub-spawned drainers are funded by a *persistent* hub that funds N rotating drainer wallets over N iterations. The Self-Deploying Mass-Drain has *no upstream hub* — funder and drainer are both consumed in one iteration.
+- **Vs. Pattern E (Fake Legitimate Projects)**: Pattern E is about narrative cover (fake project → real-looking deployment → trap); this typology has no narrative cover, just the architecture.
+
+**Cross-references.** [Single-Purpose Infrastructure Funder](#single-purpose-infrastructure-funder) (the pre-stage analog; this typology is what activation looks like), [Convergent Calibration](#convergent-calibration) (three independent funder identities running identical architecture in a 5-day window), [Behavioral Laundering](#behavioral-laundering) (operator-class evasion: the single-contract / single-funder shape is *too narrow* to look like a service, just as Infrastructure-Scale Operators evade by being *too broad*; both evasions operate on the same heuristic), [Strategy Lifecycle](#strategy-lifecycle) (the III instance's 148-victim count exceeds I and II — the typology may be entering a growth phase, not a stable cadence), [Stored Potential](#stored-potential) (the unattributed funder wallets are themselves stored potential — they have no observed activity until the activation event; their pre-existence is the position primitive).
 
 ---
 

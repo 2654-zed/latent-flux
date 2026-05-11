@@ -984,9 +984,17 @@ The shared root cause across all 18 mismatches: **high-fanout funding-wallet top
 
 5. ~~Production sync.~~ **CLOSED.** Mechanism built and verified end-to-end. `scripts/sync_prod_db.py` uses `railway ssh` to dispatch `scripts/sync_prod_db_remote.py` on the production container, which performs SQLite online backup → gzip → base64-streams to stdout framed by `L3SYNC_PAYLOAD_START`/`_END` markers. Local wrapper captures stdout to a raw file (avoiding line-buffering fragility under railway ssh's transport), mmap-searches for markers, streams base64 chunks through `re.sub` → `base64.b64decode` → `gzip` → SQLite file with bounded memory (~16 MB working set regardless of payload size). Validates via `PRAGMA integrity_check` + table-count sanity, atomic-renames into place, retains prior DB as `.bak`. Path B (apply to prod first, then sync down) executed 2026-05-10: dispositions applied to production via `scripts/apply_correction_20_via_ssh.py` (compact SSH-dispatched companion to the local `apply_correction_20_to_prod.py`, hand-minified to fit Windows cmd.exe's 8,191-char command-line limit), verified persisted (10 deactivated / 5 noted / 6 infra-rejected confirmed on prod), then `sync_prod_db.py` pulled the corrected 10.0 GB DB down to local. Post-sync `oli_enrichment --backfill-flagged` re-populated the `oli_labels` cache against the fresh DB (9 HIGH hits visible in the active-flagged set + 5 previously-HIGH now correctly suppressed because their watchlist rows are active=0).
 
+**Partially closed 2026-05-10 (follow-up session):**
+
+6. **Bytecode-and-narrative review for the 4 unattributed Top-12 entries.** **Partial close: 1 of 4 covered.** Case file `surveillance/data/cases/CASE_PRESTAGE_WAREHOUSE_0xc43f317e.md` authored — the largest of the four, 2,535 downstream deployers (was 1,562), still active, 100% bytecode concentration on `49155b60033de73770...`, 815 deployers active last 14 days. Hypotheses + recommended decompilation steps documented in the case file. The other three (`0x0e6e9177` still active, 1,408 deployers diversified; `0x8ca70232` and `0xca7ece5e` both dormant since 2026-04-16 — possible operator overlap) remain documented in the INDEX.md Top-12 entry but without dedicated case files. **Decompilation of `49155b60033de73770...` is the next-priority action to sharpen the c43f317e typology.**
+
 **Still open:**
 
-6. **Bytecode-and-narrative review for the 4 unattributed Top-12 entries** (`0xc43f317e`, `0x0e6e9177`, `0x8ca70232`, `0xca7ece5e`). Topology supports adversarial classification but case files for individual investigation are not yet authored.
+7. **Decompile `0xc43f317e`'s dominant bytecode template `49155b60033de73770...`.** Per the case file, this is the load-bearing next step — without knowing what the bytecode computes, the c43f317e typology cannot be sharpened beyond "infrastructure-scale single-template depositor."
+
+8. **Author case files for the remaining 3 unattributed Top-12 entries** (`0x0e6e9177`, `0x8ca70232`, `0xca7ece5e`). Lower priority than #7 — the topology evidence already supports classification.
+
+9. **Investigate simultaneous April-16 stop for `0x8ca70232` + `0xca7ece5e`.** Two separate funder topologies going silent on the same day (when neither shares funding-trail upstream) is unusual. Check for shared upstream signals or shared off-chain trigger.
 
 ### Why this is one numbered correction, not seven
 
