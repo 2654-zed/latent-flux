@@ -454,3 +454,161 @@ Full log: `git -C "C:/Users/jason/Desktop/ai lang" log --oneline -20`
 ---
 
 *End of file. Append new sessions to the Session log section above.*
+
+---
+
+### 2026-05-13 — Memory-system bootstrap + first LOOP.md pass
+
+**Starting state:** Memory was distributed across `memory.md` (root), `docs/INDEX.md`, `docs/lexicon.md`, `reports/correction_log.md`, `CLAUDE.md`. No single session-start surface. No reflection protocol.
+
+**Session work — Phase 1-5 system analysis:**
+
+Was prompted to produce a SYSTEM_STATE breakdown of the repository. Discovered during exploration that the repo contains TWO structurally distinct subsystems sharing one git tree:
+- **Latent Flux DSL** (`flux_manifold/`, `stdlib/`, `tsp.lf`) — never deployed; the `.lf` language runtime
+- **L3 surveillance** (`surveillance/`, `web/`, `run_surveillance.py`) — the deployed Railway worker
+
+This was the dominant finding of the session — see SURPRISE block below.
+
+Produced a structured analysis (Phase 1: repository mapping; Phase 2: execution model; Phase 3: SYSTEM_STATE in canonical format; Phase 4: 6 named concepts; Phase 5: agent-readiness assessment).
+
+**Session work — Phase 1-4 improvement plan:**
+
+Then asked to transition analysis → improvement. Produced:
+- **Phase 1:** UNKNOWN resolution plan with 23 numbered UNKNOWNs categorized as Architecture / Subsystem / Theoretical / Operational
+- **Phase 2:** memory-system design (7 file layout, update protocol, automatability)
+- **Phase 3:** 3 integration paths between Latent Flux and L3 surveillance (regime-monitor / detector-as-DSL / behavioral-classifier-via-flow)
+- **Phase 4:** 5 high-leverage next actions with cross-action ordering
+
+**Session work — LOOP.md + bootstrap of memory system:**
+
+User proposed the missing piece: a mandatory reflection loop. I extended their 7-step proposal with three structural requirements (Step 6 citations, Step 5 Expected-vs-Observed, skipped-step accounting) and created:
+
+- `memory/LOOP.md` — the 7-step session-end protocol with confidence calibration on UNKNOWNs
+- `memory/STATE.md` — current snapshot (corpus, deploy surface, key entities, detector inventory, pointers)
+- `memory/UNKNOWNS.md` — all 23 UNKNOWNs populated with canonical schema
+- `memory/DECISIONS.md` — 5 ADRs backfilled (base64-framed SSH transport, OLI guardrail at boundary, two-detector pattern for hidden drain, memory/ canonical directory, 7-step loop adoption)
+- `memory/INVARIANTS.md` — 14 invariants populated (6 Latent Flux, 6 surveillance, 2 repository-level)
+- `memory/REFLECTION_LOG.csv` — audit-trail file initialized
+- `memory/JOURNAL.md` — migrated from root `memory.md` via `git mv` (history preserved)
+
+This is the first session of the memory architecture as documented in `memory/LOOP.md`.
+
+---
+
+### Reflection-loop pass for this session (executed per `memory/LOOP.md`)
+
+#### Step 1 — State Update Check: YES
+
+System-level facts changed:
+- New `memory/` directory created with 6 files
+- Root `memory.md` migrated to `memory/JOURNAL.md`
+- STATE.md initialized with current production snapshot
+
+→ `memory/STATE.md` is the snapshot itself; reflects all changes.
+
+#### Step 2 — Unknown Detection: YES (23 entries)
+
+All 23 UNKNOWNs surfaced during the Phase 1-5 analysis are logged in `memory/UNKNOWNS.md` with status OPEN. Categories: 4 Architecture, 6 Subsystem, 5 Theoretical, 8 Operational.
+
+Heuristic check — words I used this session that flag candidate unknowns: "UNKNOWN" (explicit, 22 hits), "inferred" (3 hits), "assumption" (4 hits), "likely" (8 hits), "probably" (3 hits). All resolved into UNKNOWNS.md entries except where they were direct citations of the canonical UNKNOWN format.
+
+#### Step 3 — Decision Extraction: YES (5 ADRs)
+
+All five non-trivial choices captured in `memory/DECISIONS.md`:
+- ADR-001 base64 SSH transport (backfilled from 2026-05-09)
+- ADR-002 OLI guardrail at classify_address boundary (backfilled from 2026-05-09)
+- ADR-003 two-detector pattern (backfilled from 2026-05-13 earlier session)
+- ADR-004 memory/ canonical directory (this session)
+- ADR-005 7-step reflection loop with citation requirement (this session)
+
+#### Step 4 — Invariant Check: YES (14 entries)
+
+All 14 invariants populated in `memory/INVARIANTS.md`. Categories: 6 Latent Flux (INV-001 to INV-006), 6 surveillance (INV-007 to INV-012), 2 repository-level (INV-013 to INV-014).
+
+Most of these were *discovered* (made explicit for the first time in this file) rather than violated. INV-011 (base64 framing) was actually surfaced during empirical testing on 2026-05-09 and is being codified now.
+
+No invariants violated this session.
+
+#### Step 5 — Surprise Logging: YES (2 surprises)
+
+```
+SURPRISE: The repo contains a major DSL subsystem (Latent Flux) coexisting with L3 surveillance.
+- Expected: The repo is the L3 surveillance system. All recent sessions have been entirely on surveillance side. The git remote name `latent-flux` I had registered as project codename, not as a separate subsystem.
+- Observed: `flux_manifold/` is a 25-module Python package implementing a `.lf` DSL with parser, interpreter, REPL, 8 primitives, ontology references (§2/§3/§4), and 17 test files. `tsp.lf` at repo root demonstrates the DSL solving Travelling Salesman. The git remote name IS the project name.
+- Implication: every prior session under-described the system. memory.md (now JOURNAL.md) sessions covered surveillance work exhaustively but never mentioned the DSL existed. Agent-context for future sessions needs both subsystems represented.
+- Resolution: STATE.md now leads with "repository contains TWO load-bearing subsystems sharing one git tree." UNKNOWNS.md captures all open questions about the DSL side.
+```
+
+```
+SURPRISE: README.md is 40 KB and has never been opened.
+- Expected: project framing was absorbed organically through working sessions.
+- Observed: I had been operating from inference. The README likely contains explicit project positioning I've never read.
+- Implication: My "Active Purpose" framing carries unverified assumptions about project intent.
+- Resolution: logged as UNK-001 (highest-priority blocker). Will resolve next session.
+```
+
+#### Step 6 — System Coherence Check (CRITICAL): YES
+
+Three anchor claims from prior STATE-equivalent content (memory.md before this session) that this session touched:
+
+```
+ANCHOR: "Layer 3 (L3) is a Base/Arbitrum/Optimism trap-detection surveillance system"
+        (memory.md preamble, pre-rename)
+- Status this session: REFINED
+- Evidence: Procfile (`worker: python run_surveillance.py`) confirms surveillance is the
+  deployed component. BUT discovered the repo contains Latent Flux DSL as separate
+  subsystem (flux_manifold/__init__.py, tsp.lf, stdlib/*.lf).
+- Action: STATE.md now reflects both subsystems, not just L3.
+```
+
+```
+ANCHOR: "The Procfile deploys ONLY the L3 surveillance service"
+        (memory.md "Project overview", pre-rename)
+- Status this session: CONFIRMED
+- Evidence: `cat Procfile` returned `worker: python run_surveillance.py` (single line).
+  nixpacks.toml `[start] cmd = "python run_surveillance.py"` confirms.
+- Action: none (claim stands; promoted to STATE.md "Deploy surface" section).
+```
+
+```
+ANCHOR: "Latent Flux technical work" (from CLAUDE skill registration; Praxis-adjacent framing)
+- Status this session: CONTRADICTED (in scope, not in content)
+- Evidence: memory.md's framing implied Latent Flux was an adjacent project. In reality,
+  the `latent-flux` git remote IS the project. flux_manifold/ is local to this repo,
+  not a separately-installed package.
+- Action: STATE.md explicitly identifies project name = "Latent Flux"; CLAUDE.md may
+  need reconciliation (deferred — flagged in UNK-001 area).
+```
+
+Contradiction summary: One claim contradicted (Latent Flux's relationship to this repo). Logged in this journal entry. No formal Correction in `reports/correction_log.md` needed since the prior framing was implicit (not asserted in any numbered finding).
+
+#### Step 7 — Next Unknown Selection
+
+Picked 3 UNKNOWNs for next session:
+
+- **UNK-001 — README.md content (40 KB unread).** BLOCKER for proper project framing. Every Active Purpose claim currently inferred. ~30 minute read.
+- **UNK-002 — CI configuration existence.** BLOCKER for Action 4 (surveillance test suite). 5-minute resolution.
+- **UNK-005 + UNK-006 — pma/ and sba/ subsystem purposes.** HIGH-IMPACT. Unblocks integration path planning. ~30 minute combined read.
+
+Estimated total resolution time: ~90 minutes. After: STATE.md can be hardened with confirmed (not inferred) project framing.
+
+#### Skipped steps: NONE
+
+All 7 steps executed.
+
+#### Loop self-monitoring
+
+Reflection-pass cost this session: ~25 minutes (atypically long because first pass + bootstrap of all memory files). Expected steady-state: 5-10 minutes per session.
+
+REFLECTION_LOG.csv updated (first row).
+
+---
+
+NEXT TARGETS (for session starting after 2026-05-13):
+- UNK-001 — README.md content
+- UNK-002 — CI configuration
+- UNK-005 / UNK-006 — pma/ and sba/ subsystem purposes
+
+---
+
+*End of file. Append new sessions above this footer.*
