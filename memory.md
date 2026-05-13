@@ -384,6 +384,54 @@ Full log: `git -C "C:/Users/jason/Desktop/ai lang" log --oneline -20`
 
 ## Session log
 
+### 2026-05-13 — Corpus-wide OLI backfill + semantic detector
+
+**Starting state:** Correction #20 fully closed as of last commit (`ca23c76`). Open work item #1 (corpus-wide OLI backfill) still on the list.
+
+**Session work:**
+
+1. **`scripts/sync_prod_db.py` UNCHANGED** — production sync remains the same.
+
+2. **Semantic detector for hidden balance mutation (`detect_privileged_caller_balance_mutation`):** Added to `surveillance/bytecode_classifier.py` as a complement (not substitute) for `detect_hidden_drain_function`. Pattern: inline CALLER+SLOAD+EQ gate co-located with SHA3+SSTORE balance write, with NO LOG3+Transfer-topic in the forward path to next function exit. Constants added: `EVENT_TOPIC_TRANSFER`, `OP_LOG3`. Registered in `PATTERN_REGISTRY` mapped to `has_asymmetric_transfer`.
+
+   **Coverage limitation discovered & documented:** the semantic detector MISSES the canonical `0xaeac0e69` honeypot because Solidity compiled `_msgSender()` as an internal helper function — CALLER ends up far from SLOAD in linearized bytecode, breaking the inline-proximity pattern. The signature detector (`detect_hidden_drain_function` with the `approev` selector) catches it. The two detectors are complementary by design: signature handles canonical case, semantic handles future inline-gate variants. Documented in detector docstring.
+
+   Tested against:
+   - Honeypot `0xaeac0e69` (0x8ca70232 fleet): signature TRUE, semantic FALSE (helper-indirected; documented gap).
+   - Vanilla `0xacfdc090` (Kore Agent, c43f317e fleet): both FALSE.
+   - Vanilla `0xcbbd17f9` (X1000XLiquidBGT, 0x0e6e9177 fleet): both FALSE.
+
+3. **OLI backfill — corpus-wide:** Extended `surveillance/oli_enrichment.py` with `all_deployer_addresses()` + `--backfill-all-deployers` CLI flag. Fixed SQLite parameter-limit overflow (chunked cache-check into 500-row groups). Ran against 69,732 addresses across 1,395 batches.
+
+   **Final `oli_labels` state:** 69,870 cached entries, 15 HIGH-severity, 422 LOW-severity, 17 self-confirming, 69,416 untagged.
+
+   **5 NEW institutional addresses surfaced** beyond the 10 from Correction #20's flagged audit:
+   - `0x076d6da60aaac6c97a8a0fe8057f9564203ee545` — **Aave: Deployer 31**
+   - `0x9098b50ee2d9e4c3c69928a691da3b192b4c9673` — **Balancer: Deployer 4**
+   - `0xcee78acc0358c1b2e02569abaa3389190fff1254` — **MEXC: Deposit Address**
+   - `0xa4a67404621771dea0df622ee2dca428f63cd6bc` — **binanceturkiye.blockchain**
+   - `0xd54bac01b0e10af697dd75e39c857939e631a32b` — **bybitexchange.crypto**
+
+   None of these 5 were in our watchlist. OLI guardrail in `entity_classifier.classify_address` is now PROACTIVE across the full corpus — any future detector hit on these 15 institutional addresses will auto-redirect to `COMMERCIAL/institutional_oli_tagged`.
+
+4. **14 NEW Etherscan-confirmed phishing addresses added to watchlist HIGH** (local + prod). These are addresses tagged `Fake_PhishingXXXXX` by Etherscan on mainnet that are also operating as L2 deployers in our corpus. Self-confirming OLI hits — Etherscan's adversarial flag agrees with what would be our classification if a detector fired. Watchlist entity_name pattern: `etherscan_phishing_<8-char-prefix>`. **Same key used for mainnet phishing now deploying on L2** — cross-chain operator-identity reuse.
+
+5. **2 already-known adversarial addresses got OLI corroboration:**
+   - `0x4cfe37d2` (Architect 0.799 alternate, watchlist HIGH) — OLI tags as `Fake_Phishing327625`. Reinforces Architect-cluster attribution. INDEX.md updated.
+   - `0xA707034429c8` (EXTRACTION_010 mass dormant drain hub) — OLI tags as `Fake_Phishing2831105`. Confirms our adversarial classification. INDEX.md updated.
+
+6. **Watchlist size**: was 91 active → now **103 active** (+ 12 since session start; the +14 phishing were against 89 base from Correction #20 cleanup of CEXes).
+
+**Files changed this session:**
+- `surveillance/bytecode_classifier.py` — added semantic detector + constants
+- `surveillance/oli_enrichment.py` — added `--backfill-all-deployers` + chunked cache-lookup
+- `docs/INDEX.md` — added Etherscan-phishing cluster section + 5 new institutional addresses + 2 corroboration notes
+- `memory.md` — this entry
+
+**Open work going into next session:** Items 2-12 from the prior session log. Highest-leverage remaining: **bulk-bytecode extraction of all 5×320 hardcoded blacklist addresses from 0x8ca70232's fleet** (potential ~1,600 victim addresses), and **semantic detector improvement** (control-flow-aware EVM disassembly tracking function boundaries via JUMPDEST — to catch helper-function-indirected honeypot variants).
+
+---
+
 ### 2026-05-10 — Correction #20 Items 7-11 closure + honeypot discovery
 
 **Starting state:** Correction #20 main sweep landed (commit 60787c5, 2026-05-09). Items 1-6 closed by 2026-05-10 morning. Production sync mechanism built and verified. Local DB freshly synced from prod (10.0 GB, integrity ok).

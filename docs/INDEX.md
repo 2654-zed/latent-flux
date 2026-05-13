@@ -71,7 +71,7 @@
 - **Key wallet roles:**
   - Primary: `0x9209c9f7dcb61937f1ec8160c22c0b2365079474`
   - Funder: `0x151b381058f91cf871e7ea1ee83c45326f61e96d` **[CORRECTION #20 → MoonPay 4]**
-  - Behavioral matches (watchlist HIGH): `0x4cfe37d2` (0.799), `0xc5d133296e17ba25df0409a6c31607bf3b78e3e3` (0.742) **[CORRECTION #20 → CryptoCauses: Deployer]**, `0x30e88ee4c417f126aacf6a4c3cd641424203fe6d` (0.711), `0x7930e1380157596ff82595d502083bf604eda922` (0.710), `0xd28e6a7ad806e85bd0544ed443d25e48f52c06c3` (0.719)
+  - Behavioral matches (watchlist HIGH): `0x4cfe37d2` (0.799) **[CORROBORATED 2026-05-10 — OLI tags as `Fake_Phishing327625`; Etherscan independently flagged this address as phishing on mainnet. Strong reinforcement of Architect-cluster attribution.]**, `0xc5d133296e17ba25df0409a6c31607bf3b78e3e3` (0.742) **[CORRECTION #20 → CryptoCauses: Deployer]**, `0x30e88ee4c417f126aacf6a4c3cd641424203fe6d` (0.711), `0x7930e1380157596ff82595d502083bf604eda922` (0.710), `0xd28e6a7ad806e85bd0544ed443d25e48f52c06c3` (0.719)
 
 ### X402 Drainer Operation — 7 rogue Permit2 facilitators
 - **ID:** X402_DRAINER (no canonical org_xxx ID assigned)
@@ -505,7 +505,7 @@ Flat alphabetical (lowercase). Use Ctrl-F. Format: `address  primary_classificat
 - `0x6a9c2449c32779f89d0ccafd746152e237c1bdf2` — formerly funder watchlist HIGH (`single_purpose_funder_industrial_bb50`). Near-Pattern-A (funds 2, but 99.99% of fleet via bb50ce87). **[CORRECTION #20 — partial]**: not OLI-tagged, but funds a known-legitimate institutional address. Pending identification (Circle-internal hot wallet vs. integrator vs. separate actor). Tier reassessment deferred.
 
 ### Mass dormant-wallet drain (EXTRACTION_010, 2026-04-30)
-- `0xA707034429c8E4E01df056C0CbCf478F0FBeFAd7` — mainnet drain hub, watchlist HIGH (`mass_dormant_drain_hub_a707`). 22h-old EOA receiving from 49+ distinct senders (5 of 8 sampled = 7+ years old), then bridging 324.741 ETH out via Thorchain. — `CASE_DORMANT_WALLET_DRAIN_20260430.md`
+- `0xA707034429c8E4E01df056C0CbCf478F0FBeFAd7` — mainnet drain hub, watchlist HIGH (`mass_dormant_drain_hub_a707`). 22h-old EOA receiving from 49+ distinct senders (5 of 8 sampled = 7+ years old), then bridging 324.741 ETH out via Thorchain. — `CASE_DORMANT_WALLET_DRAIN_20260430.md` **[CORROBORATED 2026-05-10 — OLI tags as `Fake_Phishing2831105`; Etherscan independently confirmed as phishing wallet.]**
 - `0xD37BbE5744D730a1d98d8DC97c42F0Ca46aD7146` — Thorchain mainnet deposit router, watchlist HIGH (`thorchain_router_known_offramp`). Off-ramp for the 324.741 ETH at 15:28:59 UTC. Not malicious itself; flagged for cross-chain laundering signal in our L2 corpus. — `CASE_DORMANT_WALLET_DRAIN_20260430.md`
 - Confirmed dormant victims (sample): `0xf44087b7e1CCb36019d231C7AD09ba9BF9783F3b` (6.8y), `0x006ac999c96020ba3e54653b2e98e59e92b8b829` (7.0y), `0x166bf677b8d8bb4efce2eab16dc6ba941ed9d3b3` (7.5y), `0x95ca15e460e3c39a1b81e86c90665c4b35052c55` (8.1y), `0x2a2bad8781ded48e4aa5aadad543e43196492575` (7.0y), `0x3a687fade4857dd7840fb04d8dc3dc66cf7f58ee` (7.0y). — `CASE_DORMANT_WALLET_DRAIN_20260430.md`
 
@@ -517,6 +517,21 @@ Flat alphabetical (lowercase). Use Ctrl-F. Format: `address  primary_classificat
 - `0xEe5c45DCB0064f9B097edBC5d8adfcE23baaC03b` — Wasabi vault (mainnet, observed in trace; `setWithdrawFeeBips` + `setFeeReceiver`). — `CASE_WASABI_EXPLOIT_20260430.md`
 - `0xfAe69F2C82747F878F74C1E57a1AeD945eD8558F` — Wasabi vault (Base, observed in trace). — `CASE_WASABI_EXPLOIT_20260430.md`
 
+### Etherscan-confirmed phishing cluster on L2 (surfaced 2026-05-10 by corpus-wide OLI backfill)
+- **Source:** `surveillance.oli_enrichment --backfill-all-deployers` run on 2026-05-10 against all 69,732 deployer/funder addresses. 17 self-confirming OLI hits surfaced; 14 NEW (not previously watchlisted) Etherscan `Fake_PhishingXXXXX` addresses are operating as L2 deployers in our corpus.
+- **Significance:** Same key used for mainnet phishing operations is now deploying contracts on Base/Arbitrum/Optimism. Confirms that mainnet-phishing operators carry their wallets across to L2 trap-deployment infrastructure. Cross-chain operator-identity reuse is a recurrent finding.
+- **All 14 added to watchlist HIGH 2026-05-10 (local + prod):** `0x19393c44abd699b0323083c8e77ed4780ab83539` (`Fake_Phishing1314163`), `0x21dc165921689fe7fe4934faa7a6570e7d0b31da` (`Fake_Phishing2386555`), `0x3959e49639d3b1bd9d1746a7971155e94fecf1f6` (`Fake_Phishing1688419`), `0x43b2f01186fda9814c5f40770554ac68fd8304bd` (`Fake_Phishing1738487`), `0x4676d66b0d5bebe27d99d9c4529ea53c179cd9d2` (`Fake_Phishing2387846`), `0x517d676071e3c656caaf92c2f19f9767dfc8ac04` (`Fake_Phishing2822026`), `0x57a66713bc3bb15d9dfed9173bed208f79b05581` (`Fake_Phishing2429531`), `0x6c50e008bb5414ac3aaf28309297beb578358a63` (`Fake_Phishing1172330`), `0x721bc1633350f86fd88b9e2cde1688a20929bddd` (`Fake_Phishing1737189`), `0xc118d14516f947a47e80319fcd3ffddfdead7777` (`Fake_Phishing2387832`), `0xc2fd9fc276a76e5915a491c385628f5785d7fca9` (`Fake_Phishing1198697`), `0xd7a8716bee0e22086079ab9199293c4735159ff5` (`Fake_Phishing1208616`), `0xdd202e6b7107a849fb50ed928f1756a2f60e4a04` (`Fake_Phishing1208614`), `0xde992badd92adaf9146255e9bde6a70770973664` (`Fake_Phishing2382301`). Watchlist entity_name pattern: `etherscan_phishing_<8-char-prefix>`.
+- **2 already-flagged corroborations:** `0x4cfe37d2` (Architect alternate 0.799 — see Entity_005 entry) and `0xA707034429c8` (EXTRACTION_010 mass dormant drain hub — see entry above) both OLI-tagged `Fake_Phishing*`. Confirms our adversarial classification of both.
+
+### Institutional addresses identified by corpus-wide OLI backfill (5 NEW beyond Correction #20)
+- **Surfaced 2026-05-10** by `--backfill-all-deployers` running OLI against all 69,732 deployer/funder addresses. Total HIGH-severity institutional cache size: **15** (was 10 from flagged-only audit). 5 NEW:
+  - `0x076d6da60aaac6c97a8a0fe8057f9564203ee545` — **Aave: Deployer 31** (Aave protocol). In our deployer corpus, not in watchlist.
+  - `0x9098b50ee2d9e4c3c69928a691da3b192b4c9673` — **Balancer: Deployer 4** (Balancer protocol). In our deployer corpus, not in watchlist.
+  - `0xcee78acc0358c1b2e02569abaa3389190fff1254` — **MEXC: Deposit Address** (CEX endpoint). Not in watchlist.
+  - `0xa4a67404621771dea0df622ee2dca428f63cd6bc` — **binanceturkiye.blockchain** (Binance Turkey affiliate). Not in watchlist.
+  - `0xd54bac01b0e10af697dd75e39c857939e631a32b` — **bybitexchange.crypto** (Bybit endpoint, ENS). Not in watchlist.
+- **OLI guardrail effect:** `entity_classifier.classify_address` will now block any future adversarial classification of these 15 addresses (10 prior + 5 new). The guardrail is now *proactive* across the full deployer corpus, not just retroactive against the 140 flagged subset.
+
 ### Renegade Dark Pool proxy compromise (2026-05-10)
 - `0x777253F28AdC29645152b7b41BE5c772A9657777` — attacker EOA, Arbitrum. First tx 2026-02-03 (3-month pre-positioning). Exploitation burst 2026-05-10 16:51 → 17:14 UTC (10+ token `transfer` sweeps). Tier A. — `CASE_RENEGADE_EXPLOIT_20260510.md`
 - `0x30bD8eAb29181F790D7e495786d4B96d7AfDC518` — Renegade Darkpool Proxy (EIP-1967), Arbitrum. OLI public tag `"Darkpool proxy"`. Created 2024-09-03 by Renegade deployer. Tier A. — `CASE_RENEGADE_EXPLOIT_20260510.md`
@@ -525,9 +540,13 @@ Flat alphabetical (lowercase). Use Ctrl-F. Format: `address  primary_classificat
 - `0x98e4e5C6223bb2Cc945a7c2821E30929dEff3568` — Renegade deployer (proxy creator), Arbitrum. Tier A. — `CASE_RENEGADE_EXPLOIT_20260510.md`
 
 ### Private-key drain — attacker `0xF7cFFC27` (2026-05-11)
-- `0xF7cFFC27732a5C9c4E2D592F3E33435F8dDb019A` — attacker EOA, multi-chain (Base / BSC / Ethereum). Watchlist HIGH (`private_key_drain_attacker_F7cFFC27`) row 95 local + prod (2026-05-10). Tier A. — `CASE_PRIVATE_KEY_DRAIN_F7CFFC27_20260511.md`
-- `0x62acE10c7f2Aa0e9B5a8e09CbF5D18d0f8a1EE8A` — victim wallet (compromised private key, multi-chain). Tier A. — `CASE_PRIVATE_KEY_DRAIN_F7CFFC27_20260511.md`
+- `0xF7cFFC27732a5C9c4E2D592F3E33435F8dDb019A` — attacker EOA, multi-chain (Base / BSC / Ethereum). Watchlist HIGH (`private_key_drain_attacker_F7cFFC27`) row 95 local + prod (2026-05-10). Active drain window 2026-05-11T00:52→01:27 UTC (35 min). Tier A. — `CASE_PRIVATE_KEY_DRAIN_F7CFFC27_20260511.md`
+- `0x62acE10c7f2Aa0e9B5a8e09CbF5D18d0f8a1EE8A` — victim wallet (compromised private key, multi-chain). EIP-7702 Kernel smart account. Tier A. — `CASE_PRIVATE_KEY_DRAIN_F7CFFC27_20260511.md`
 - Sigma forensic-anchor tx: `0xb81f9f0a1abb2330763d7b9498185404277955a18b3f766a31582c83ba70047e` (Base) — EIP-7702 delegation to null demonstrating attacker signing control. Tier A. — `CASE_PRIVATE_KEY_DRAIN_F7CFFC27_20260511.md`
+- **Victim-mimic vanity cluster** (`62ac…EE8A` 8-char shape, fourth Adversarial Vanity Branding sub-category):
+  - `0x62ace0e0ecf70f62399b26e28eaf74cc455bee8a` — EIP-7702 contract, first tx 2026-05-11T00:58:59 (6 min after drainer first tx). Dust + worthless memecoins to drainer. Tier A.
+  - `0x62Ac07AE9242c354f6c307BBd9b36c749a5aeE8a` — EOA, first tx 2026-05-05T05:28:35 (pre-positioned 6 days ahead). Dust only. Tier A.
+  - `0x62ac6095D7e9189353BcbF17d439348Ab7A1ee8A` — generated-but-unused on Ethereum mainnet (possibly active cross-chain). Tier A null-record.
 
 ### Grok / Bankr AI-wallet permission chain attack (2026-05-04)
 - `0xB1058c959987E3513600EB5b4fD82Aeee2a0E4F9` — Grok victim wallet (sender of the 3B DRB transfer), Base. Tier A — verified via tx `0x6fc7eb7da93793…e525739a`. — `CASE_GROK_BANKR_EXPLOIT_20260504.md`
