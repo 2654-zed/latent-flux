@@ -253,14 +253,19 @@ def enrich_batch(conn: sqlite3.Connection, addresses: list[str],
     addresses = list(dict.fromkeys(addresses))  # de-dup, preserve order
 
     if not force:
-        cached = {
-            r["address"]: dict(r)
+        # SQLite has a per-statement bound-parameter limit (default 999, configurable
+        # up to 32766). Chunk the IN-clause lookup so backfill against 67K+ addresses
+        # doesn't blow up. 500 keeps us well below any reasonable limit.
+        cached: dict[str, dict] = {}
+        CHUNK = 500
+        for i in range(0, len(addresses), CHUNK):
+            sub = addresses[i : i + CHUNK]
             for r in conn.execute(
                 f"SELECT * FROM oli_labels WHERE chain_id = ? AND address IN "
-                f"({','.join('?' * len(addresses))})",
-                (chain_id, *addresses),
-            ).fetchall()
-        }
+                f"({','.join('?' * len(sub))})",
+                (chain_id, *sub),
+            ).fetchall():
+                cached[r["address"]] = dict(r)
         to_fetch = [a for a in addresses if a not in cached]
     else:
         cached = {}
@@ -313,6 +318,35 @@ def flagged_addresses(conn: sqlite3.Connection) -> list[str]:
     return [r[0] for r in rows]
 
 
+def all_deployer_addresses(conn: sqlite3.Connection,
+                            min_fleet: int = 1,
+                            include_funders: bool = True) -> list[str]:
+    """All addresses appearing as deployers (optionally filtered by fleet size)
+    OR as funders. Used for the corpus-wide backfill to ensure the OLI
+    guardrail blocks classifications proactively, not just retroactively.
+
+    min_fleet=1 (default) returns every deployer with any contracts. min_fleet=10
+    is a useful cutoff to focus on operationally-significant addresses if
+    rate-limiting forces prioritization.
+    """
+    parts = []
+    parts.append(
+        "SELECT DISTINCT LOWER(deployer_address) AS address "
+        "FROM deployers WHERE total_contracts_deployed >= ?"
+    )
+    if include_funders:
+        parts.append(
+            "SELECT DISTINCT LOWER(funder_address) AS address "
+            "FROM infrastructure_operator_candidates"
+        )
+        # Also pull from funding_trail JSON in deployers — these are the upstream
+        # funders surfaced by auto_funder_tracer. We extract them via a simple
+        # LIKE-based dedupe in a follow-up step rather than parsing JSON in SQL.
+    union = " UNION ".join(parts)
+    rows = conn.execute(union, (min_fleet,)).fetchall()
+    return [r[0] for r in rows]
+
+
 # ─────────────────────────────────────────────────────────────────────
 # CLI
 # ─────────────────────────────────────────────────────────────────────
@@ -354,6 +388,11 @@ def main() -> int:
                     help="Enrich all active watchlist addresses")
     ap.add_argument("--backfill-flagged", action="store_true",
                     help="Enrich all malicious-flagged addresses (watchlist + classification + ISO candidates)")
+    ap.add_argument("--backfill-all-deployers", action="store_true",
+                    help="Enrich ALL deployer addresses in the corpus (~67K). Surfaces "
+                         "institutional addresses we haven't yet flagged. Takes 20-40 min.")
+    ap.add_argument("--min-fleet", type=int, default=1,
+                    help="With --backfill-all-deployers: only enrich deployers with at least N contracts (default 1)")
     ap.add_argument("--hits", action="store_true",
                     help="Print HIGH-severity entries from cache (no fetch)")
     ap.add_argument("--low-hits", action="store_true",
@@ -379,6 +418,16 @@ def main() -> int:
     if args.backfill_flagged:
         addrs = flagged_addresses(conn)
         print(f"Backfilling {len(addrs)} flagged addresses...", file=sys.stderr)
+        enrich_batch(conn, addrs, chain_id=args.chain_id, force=args.force)
+        _print_hits(conn, "HIGH")
+        if args.low_hits:
+            _print_hits(conn, "LOW")
+        return 0
+
+    if args.backfill_all_deployers:
+        addrs = all_deployer_addresses(conn, min_fleet=args.min_fleet, include_funders=True)
+        print(f"Backfilling {len(addrs)} deployer/funder addresses "
+              f"(min_fleet={args.min_fleet})...", file=sys.stderr)
         enrich_batch(conn, addrs, chain_id=args.chain_id, force=args.force)
         _print_hits(conn, "HIGH")
         if args.low_hits:

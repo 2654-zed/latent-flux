@@ -71,6 +71,14 @@ KNOWN_HIDDEN_DRAIN_SELECTORS: list[tuple[str, str]] = [
     ("approev", "3ed67ecd"),     # keccak256("approev(address)")[:4] — 0x8ca70232 fleet
 ]
 
+# Solidity event signature for ERC-20 Transfer(address,address,uint256).
+# When present as a PUSH32 immediate near a LOG3, the function emits Transfer.
+# When absent in the local window around a balance-mutation SSTORE, the function
+# is mutating balances WITHOUT emitting a Transfer event — the canonical
+# indexer-evasion / honeypot pattern.
+EVENT_TOPIC_TRANSFER = "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+OP_LOG3 = "a3"
+
 
 # =====================================================================
 # Pattern detectors
@@ -453,6 +461,163 @@ def detect_origin_eoa_gate(bytecode_hex: str) -> tuple[bool, str]:
     return False, ""
 
 
+def detect_privileged_caller_balance_mutation(bytecode_hex: str) -> tuple[bool, str]:
+    """
+    Semantic complement to detect_hidden_drain_function. Catches the structural
+    pattern of a privileged-caller-only balance manipulator regardless of
+    function name. Both detectors run; signature-match handles the canonical
+    `approev` case, semantic-match catches looser variants.
+
+    Co-occurrence detector for three signals:
+      (1) Privileged-caller gate inline in a function body: CALLER (0x33) within
+          20 bytes of SLOAD (0x54), followed within 10 bytes by EQ (0x14). This
+          is the EVM compilation of an INLINED `require(msg.sender ==
+          storedAddress)`. Standard Ownable.sol modifiers compile to this.
+      (2) Balance-mapping write: SHA3 (0x20) followed within 30 bytes by SSTORE
+          (0x55) — signature of writing to a Solidity mapping (SHA3 of (key,
+          slot) is the storage location of `_balances[key]`).
+      (3) Transfer event absent in forward path: scanning forward from each
+          SSTORE to the next JUMP/RETURN/STOP, NO LOG3 with the Transfer-event
+          topic constant appears. Legitimate Ownable.mint/burn functions emit
+          Transfer; honeypot balance manipulators do not.
+
+    Documented coverage limitations (CONFIRMED 2026-05-10):
+      - **Misses contracts where Solidity inlines `_msgSender()` via internal
+        helper functions.** When the privileged-caller check is split across
+        function boundaries (CALLER is in `_msgSender()` helper, SLOAD+EQ is
+        in caller's body), pattern (1) doesn't fire because CALLER is far
+        from SLOAD in the linearized bytecode. The 0xaeac0e69 honeypot
+        compiles this way and is NOT caught by this semantic detector;
+        the signature detector catches it via the `approev` selector list.
+      - **False-positive risk on contracts that emit Approval but not
+        Transfer for some writes.** The Approval event topic (0x8c5be1e5...)
+        is distinct from Transfer (0xddf252...). A vanilla ERC-20's
+        `_approve` does an SSTORE followed by LOG3-Approval, which our
+        check would flag as "silent" because we only look for Transfer.
+
+    Use this in combination with detect_hidden_drain_function. The two
+    overlap on simple inline-gate honeypots (caught by both); diverge on
+    helper-indirected honeypots (signature-only catches) and on name-rotated
+    honeypots with inline gates (semantic-only catches).
+
+    Future improvement: replace this pattern-match with control-flow-aware
+    EVM bytecode disassembly that tracks function boundaries via JUMPDEST.
+    Bigger lift; deferred.
+    """
+    bc = bytecode_hex.lower()
+    if bc.startswith("0x"):
+        bc = bc[2:]
+
+    # Must be ERC-20-shaped to be relevant
+    if SEL_TRANSFER not in bc and SEL_TRANSFER_FROM not in bc:
+        return False, ""
+
+    # Pattern 1: privileged-caller gate (CALLER → SLOAD → EQ chain)
+    caller_offsets = _find_all_offsets(bc, OP_CALLER)
+    sload_offsets = _find_all_offsets(bc, OP_SLOAD)
+    eq_offsets = _find_all_offsets(bc, OP_EQ)
+
+    if not caller_offsets or not sload_offsets or not eq_offsets:
+        return False, ""
+
+    gate_hits = []
+    for caller_off in caller_offsets[:100]:  # cap to avoid pathological bytecode
+        for sload_off in sload_offsets:
+            gap1 = sload_off - caller_off
+            if gap1 <= 0:
+                continue
+            if gap1 > 20:
+                continue
+            # find any EQ within 10 bytes after the SLOAD
+            for eq_off in eq_offsets:
+                gap2 = eq_off - sload_off
+                if 0 < gap2 <= 10:
+                    gate_hits.append((caller_off, sload_off, eq_off))
+                    break
+            if gate_hits and len(gate_hits) >= 20:
+                break  # plenty of gate candidates
+        if len(gate_hits) >= 20:
+            break
+
+    if not gate_hits:
+        return False, ""
+
+    # Pattern 2: balance-mapping write (SHA3 → SSTORE)
+    sha3_offsets = _find_all_offsets(bc, OP_SHA3)
+    sstore_offsets = _find_all_offsets(bc, OP_SSTORE)
+    if not sha3_offsets or not sstore_offsets:
+        return False, ""
+
+    write_hits = []
+    for sha3_off in sha3_offsets[:100]:
+        for sstore_off in sstore_offsets:
+            gap = sstore_off - sha3_off
+            if 0 < gap <= 30:
+                write_hits.append((sha3_off, sstore_off))
+                break
+        if len(write_hits) >= 30:
+            break
+
+    if not write_hits:
+        return False, ""
+
+    # Pattern 3: pair gate with write where the FORWARD path from SSTORE to
+    # next function-exit (JUMP/RETURN/STOP) does NOT contain LOG3+Transfer-topic.
+    #
+    # Legitimate ERC-20 _update emits: SSTORE -> ... PUSH32 <topic> ... LOG3 -> JUMP
+    # Honeypot approev emits:           SSTORE -> ...                    -> JUMP
+    #
+    # We scan forward up to FORWARD_BYTES bytes from SSTORE. If LOG3 appears
+    # before a function-exit AND a PUSH32 immediately preceding has the
+    # Transfer-event topic constant, the function is Transfer-emitting — skip.
+    # Otherwise we have a privileged-caller-gated silent balance mutation.
+    OP_JUMP = "56"
+    OP_RETURN = "f3"
+    OP_STOP_LOCAL = "00"
+    FORWARD_BYTES = 200
+    for gate in gate_hits:
+        caller_off, sload_off, eq_off = gate
+        for write in write_hits:
+            sha3_off, sstore_off = write
+            # Gate and write should be within same function (rough proximity)
+            if abs(sstore_off - eq_off) > 400:
+                continue
+
+            # Forward scan from SSTORE
+            scan_start = sstore_off * 2  # hex-char index of SSTORE
+            scan_end = min(len(bc), scan_start + FORWARD_BYTES * 2)
+            forward = bc[scan_start:scan_end]
+            # Walk byte-by-byte through `forward`, abort at first JUMP/RETURN/STOP
+            # at a top-level position. (Inside PUSH immediates these bytes are
+            # data, but our targets are opcodes — we approximate by simple scan.)
+            log3_with_transfer = False
+            forward_bytes = len(forward) // 2
+            for k in range(forward_bytes):
+                op = forward[k*2 : k*2+2]
+                if op == OP_LOG3:
+                    # Check the preceding ~50 bytes (100 hex chars) for the Transfer
+                    # event topic, which Solidity pushes via PUSH32 right before the
+                    # LOG3.
+                    push_window_start = max(0, k*2 - 100)
+                    if EVENT_TOPIC_TRANSFER in forward[push_window_start : k*2]:
+                        log3_with_transfer = True
+                    break
+                if op in (OP_JUMP, OP_RETURN, OP_STOP_LOCAL):
+                    break
+
+            if log3_with_transfer:
+                continue  # Transfer-emitting → legitimate
+
+            return True, (
+                f"privileged-caller gate (CALLER@0x{caller_off:x} → SLOAD@0x{sload_off:x} → "
+                f"EQ@0x{eq_off:x}) co-located with balance-mapping write "
+                f"(SHA3@0x{sha3_off:x} → SSTORE@0x{sstore_off:x}); "
+                f"forward path to function-exit contains no LOG3+Transfer-topic — "
+                f"hidden balance manipulation by privileged caller (semantic match)"
+            )
+    return False, ""
+
+
 def detect_hidden_drain_function(bytecode_hex: str) -> tuple[bool, str]:
     """
     Hidden balance-drain function exposed under a misspelled / near-homograph
@@ -551,6 +716,7 @@ PATTERN_REGISTRY: list[tuple[str, callable, str | None]] = [
     ("origin_eoa_gate", detect_origin_eoa_gate, "has_asymmetric_transfer"),
     ("obfuscated_fee", detect_obfuscated_fee, "has_unusual_fee_structure"),
     ("hidden_drain_function", detect_hidden_drain_function, "has_asymmetric_transfer"),
+    ("privileged_caller_balance_mutation", detect_privileged_caller_balance_mutation, "has_asymmetric_transfer"),
 ]
 
 # Minimum number of patterns that must fire to upgrade to SUSPECTED.
