@@ -17,7 +17,7 @@
 - **Adjacent arbitrage applications** (resolved 2026-05-13 via UNK-005/006):
   - `pma/` = **Prediction Market Arbitrage module** (Polymarket-style; consumes flux_manifold via reservoir_tracker.py)
   - `sba/` = **Sports Betting Arbitrage module** (consumes flux_manifold; has account_risk modeling)
-- **Documented integration claim NOT verified in code (UNK-024 OPEN):** README line 34 states *"Latent Flux primitives power Layer 3's analysis layer — AttractorCompetition for contract classification, ReservoirState for deployer behavioral baseline, RecursiveFlow for cluster resolution, FoldReference for data integrity."* But `grep -r "from flux_manifold\|AttractorCompetition\|ReservoirState\|RecursiveFlow\|FoldReference" surveillance/` returns ZERO matches. The integration the README advertises does not currently exist in the surveillance code path. Aspirational vs. rolled-back vs. via-pma/sba indirection is OPEN — see UNK-024.
+- **Documented integration claim is ASPIRATIONAL, not built (UNK-024 RESOLVED 2026-05-13):** README line 34 states *"Latent Flux primitives power Layer 3's analysis layer — AttractorCompetition for contract classification, ReservoirState for deployer behavioral baseline, RecursiveFlow for cluster resolution, FoldReference for data integrity."* Verified 2026-05-13 via 7 independent grep paths (current code, full git history, renamed implementations, indirect-use via pma/sba, surveillance/ARCHITECTURE.md) — ALL returned empty. The integration described in README has never existed in code. Adjacent finding: surveillance/ARCHITECTURE.md has the same stale corpus numbers as README (124K contracts vs current 284K) — both docs written ~2026-04-16 and unmaintained since. **lx-scanner is also independent** of both Latent Flux and L3 surveillance — pure MEV arbitrage scanner sharing nothing but the git tree.
 
 ## Deploy surface
 
@@ -171,9 +171,25 @@ sqlite3 surveillance/data/surveillance.db \
 curl -s https://stellar-embrace-production-2020.up.railway.app/stats | python -m json.tool
 ```
 
-## Open work (links into UNKNOWNS.md / per-Correction follow-ups)
+## Test coverage state (UNK-008 RESOLVED 2026-05-13)
 
-See `memory/UNKNOWNS.md` for the canonical list. Top three blocking items:
-- UNK-001 — README.md unread (blocks proper project framing)
-- UNK-006 / UNK-007 — `pma/` and `sba/` subsystem purposes (block integration planning)
-- UNK-008 — surveillance-side test coverage (blocks safe modification)
+**Zero surveillance-side tests exist.** The `tests/` directory contains 11 test files, all targeting `flux_manifold/` (parser/repl, core, primitives, interpreter, ontology, baselines, attractor competition, recursive flow, infrastructure, visualize, benchmarks). No `tests/surveillance/` directory. No test file imports from `surveillance/`.
+
+Agents modifying `surveillance/bytecode_classifier.py`, `entity_classifier.py`, `oli_enrichment.py`, etc., have **no verification surface**. The Action 4 from prior Phase 4 output (write `tests/surveillance/test_smoke.py`) is unblocked.
+
+## Open work (canonical list in `memory/UNKNOWNS.md`)
+
+| RESOLVED 2026-05-13 | OPEN (17) |
+|---|---|
+| UNK-001 (HIGH) README content | UNK-003 ontology §2/§3/§4 spec |
+| UNK-002 (HIGH) CI config | UNK-004 active vs archive scripts |
+| UNK-005 (MEDIUM) pma/ purpose | UNK-009 private flux_manifold modules |
+| UNK-006 (MEDIUM) sba/ purpose | UNK-010 rib_dataset usage |
+| UNK-007 (HIGH) lx-scanner | UNK-011 → UNK-023 (DSL theoretical + operational) |
+| UNK-008 (HIGH) test coverage | |
+| UNK-024 (HIGH) README integration claim | |
+
+**Recommended next session focus:** Move from UNKNOWN resolution → action execution. Top candidates:
+- **Action 4** (write `tests/surveillance/test_smoke.py`) — unblocked by UNK-008 resolution; ~90 minute task
+- **Action 5** (Integration Path 1, regime-monitor) — unblocked by UNK-024 resolution; multi-session
+- **README freshness fix** — update stale URL + corpus numbers + qualify the integration claim; ~20 minute task

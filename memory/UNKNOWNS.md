@@ -103,7 +103,10 @@ Confidence calibration (from LOOP.md):
 - **Resolution plan:**
   1. `Grep -r "reservoir\|flux_flow\|SuperpositionTensor" lx-scanner/`
   2. `Read lx-scanner/live_feed_scanner.py` and `mev_arbitration_router.py` headers
-- **Status:** OPEN
+- **Status:** RESOLVED
+- **Confidence:** HIGH (primary-source grep + docstring inspection)
+- **Resolved at:** 2026-05-13
+- **Resolved by:** **lx-scanner is independent of both Latent Flux and L3 surveillance.** `grep -r "from flux_manifold|reservoir|SuperpositionTensor|flux_flow" lx-scanner/` returns ZERO matches. `live_feed_scanner.py` docstring: *"Live Feed Scanner — watches 5 DEXs on Arbitrum, logs price gaps. Polls all 5 DEXs every 5 seconds for WETH/USDC quotes."* `mev_arbitration_router.py` docstring: *"MEV arbitration router — collects quotes from all 5 DEXs and picks the best. Phase 1: quote comparison only. No execution."* — implementation is plain Python dict comparison. lx-scanner is a self-contained MEV arbitrage scanner that happens to live in the same git tree but shares no code with the other subsystems.
 
 ### UNK-008 — Surveillance-side test coverage
 
@@ -111,7 +114,10 @@ Confidence calibration (from LOOP.md):
 - **Category:** Subsystem / Operational
 - **Why it matters:** `tests/` at repo root contains flux_manifold tests. UNKNOWN whether surveillance-specific tests exist. Without them, agents modifying `bytecode_classifier.py`, `entity_classifier.py`, `oli_enrichment.py` have no verification surface.
 - **Resolution plan:** `Glob tests/**/*surveillance* tests/**/*oli* tests/**/*classifier*`. If empty, the gap is real → Action 4 of the previous Phase 4 output applies.
-- **Status:** OPEN
+- **Status:** RESOLVED
+- **Confidence:** HIGH (primary-source verified — `ls tests/surveillance/` returns "No such file or directory"; all 11 test files in `tests/` are Latent Flux DSL tests; `grep -r "from surveillance|import surveillance" tests/` returns empty)
+- **Resolved at:** 2026-05-13
+- **Resolved by:** **Zero surveillance-side test coverage.** The full test suite (`tests/test_attractor_competition.py`, `test_baselines.py`, `test_benchmarks.py`, `test_convergence_reservoir.py`, `test_core.py`, `test_infrastructure.py`, `test_interpreter.py`, `test_ontology.py`, `test_parser_repl.py`, `test_primitives.py`, `test_recursive_flow.py`, `test_visualize.py`) targets `flux_manifold/` exclusively. No file imports anything from `surveillance/`. The gap is real and confirmed. → Unblocks Action 4 (write `tests/surveillance/test_smoke.py`) from the prior Phase 4 list.
 
 ### UNK-009 — `flux_manifold/cex_feed.py`, `kalman_reservoir.py`, `multi_scale_reservoir.py`, `changepoint.py`, `pheno_log.py`, `monitor.py` roles
 
@@ -275,25 +281,31 @@ Confidence calibration (from LOOP.md):
 - **Category:** Architecture
 - **Why it matters:** README line 34 makes an explicit integration claim: AttractorCompetition / ReservoirState / RecursiveFlow / FoldReference "power Layer 3's analysis layer." But `grep -r "from flux_manifold\|AttractorCompetition\|ReservoirState\|RecursiveFlow\|FoldReference" surveillance/` returns ZERO matches. The integration the README advertises does NOT exist in code (as of 2026-05-13 sync state).
 - **Why this is load-bearing:** (a) STATE.md and any external claims about the project may inherit this aspirational-as-real framing. (b) Phase 3 integration paths I proposed earlier ("propose integration") are partly already-proposed in the README. (c) Whether the integration was never built, rolled back, or implemented under different names changes which of the 3 paths to pursue.
-- **Possible explanations:**
-  1. **Aspirational README** — claim was written before integration; integration deferred; README never updated
-  2. **Integration done in pma/sba/** — flux_manifold is imported there; if surveillance EXECUTES pma/sba modules (e.g., via subprocess), the README claim is technically true but indirect
-  3. **Implementation re-named** — algorithm copied into surveillance under different names (no `from flux_manifold` but conceptually same)
-  4. **Integration rolled back** — was built, removed, README never updated
-- **Resolution plan:**
-  1. `Bash: git log -p --follow -S "AttractorCompetition" -- "surveillance/*"` to see if it was ever imported and reverted
-  2. `Grep -r "reservoir\|attractor\|fold_reference\|recursive_flow" --include="*.py" surveillance/` for renamed implementations
-  3. `Grep -r "import pma\|import sba\|from pma\|from sba" surveillance/` for indirect-use via adjacent subsystems
-  4. `Bash: ls surveillance/ARCHITECTURE.md && head -200 surveillance/ARCHITECTURE.md` — README points here for end-to-end system; might describe the actual integration
-  5. Reconcile finding in next session
-- **Status:** OPEN
-- **Priority:** HIGH for accurate STATE.md; LOW for unblocking concrete work
+- **Resolution plan:** *(see prior — git log -S, alt-name grep, pma/sba indirect, ARCHITECTURE.md)*
+- **Status:** RESOLVED
+- **Confidence:** HIGH (4 hypothesis tests all ran; all returned definitive empty/null)
+- **Resolved at:** 2026-05-13
+- **Resolved by:** **Hypothesis 1 (aspirational README) is correct.** All other hypotheses ruled out by primary-source verification:
+  - `git log --all -S "AttractorCompetition" -- surveillance/` → EMPTY (never imported, never rolled back)
+  - `git log --all -S "ReservoirState" -- surveillance/` → EMPTY
+  - `git log --all -S "RecursiveFlow" -- surveillance/` → EMPTY
+  - `git log --all -S "FoldReference" -- surveillance/` → EMPTY
+  - `git log --all -S "from flux_manifold" -- surveillance/` → EMPTY
+  - `grep -r "reservoir\|attractor\|fold_reference\|recursive_flow" surveillance/ --include="*.py"` → EMPTY (no renamed implementations)
+  - `grep -r "import pma\|import sba\|from pma\|from sba" surveillance/ --include="*.py"` → EMPTY (no indirect use)
+  - `surveillance/ARCHITECTURE.md` does NOT mention flux_manifold (the only matches for "latent.flux" are incidental repo-URL slug references in the `git clone` command and GitHub footer)
+  - The README claim is unique to README and has never been backed by code.
+- **Implications:**
+  - STATE.md "Project identity" should mark the integration as aspirational (DONE 2026-05-13 — already captured in the "Documented integration claim NOT verified in code" line)
+  - Phase 3 Integration Hypotheses (regime-monitor / detector-as-DSL / behavioral-classifier) are net-new work, NOT duplicating existing functionality
+  - README needs an update: either remove the claim or build the integration. **Decision deferred — see ADR-006 candidate**
+- **Adjacent finding:** ARCHITECTURE.md has the same stale corpus numbers as README ("124,341 contracts | 1.17M transaction events | 36,115 deployers" vs. current 284K / 16.8M / 67K). Both docs written together; neither updated since. Documentation-freshness is a separate pattern worth tracking.
 
 ---
 
 ## Resolved (with confidence)
 
-UNKNOWNs marked RESOLVED can be browsed inline above by status field. Index of RESOLVED entries (2026-05-13 first pass):
+UNKNOWNs marked RESOLVED can be browsed inline above by status field. Index of RESOLVED entries:
 
 | ID | Confidence | Resolved at |
 |---|---|---|
@@ -301,6 +313,13 @@ UNKNOWNs marked RESOLVED can be browsed inline above by status field. Index of R
 | UNK-002 | HIGH | 2026-05-13 |
 | UNK-005 | MEDIUM | 2026-05-13 (revisit-LOW candidate) |
 | UNK-006 | MEDIUM | 2026-05-13 (revisit-LOW candidate) |
+| UNK-007 | HIGH | 2026-05-13 |
+| UNK-008 | HIGH | 2026-05-13 |
+| UNK-024 | HIGH | 2026-05-13 |
+
+**RESOLVED count: 7 of 24 total (29%)**
+**OPEN count: 17**
+**revisit-LOW queue: 2 (UNK-005, UNK-006)**
 
 ---
 

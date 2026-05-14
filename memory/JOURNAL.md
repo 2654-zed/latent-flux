@@ -755,4 +755,136 @@ NEXT TARGETS (for session starting after 2026-05-13 continuation):
 
 ---
 
+### 2026-05-13 (3rd pass) — Execute Next Targets: 3 RESOLVED, transition to action mode
+
+**Starting state:** From prior reflection: UNK-024 (HIGH priority), UNK-007, UNK-008 in NEXT TARGETS.
+
+**Session work:**
+
+Executed the documented resolution plan for all three UNKNOWNs in one batch of grep + history checks. All three resolved decisively.
+
+**UNK-024 RESOLVED (HIGH):** **The README integration claim is aspirational — never built, never reverted.** All 4 hypotheses tested:
+- H1 (aspirational README): CONFIRMED
+- H2 (indirect via pma/sba): RULED OUT — `grep "import pma|sba|from pma|from sba" surveillance/` → empty
+- H3 (renamed implementations): RULED OUT — `grep "reservoir|attractor|fold_reference|recursive_flow" surveillance/ --include="*.py"` → empty
+- H4 (rolled back): RULED OUT — `git log --all -S "<each-flux-primitive>" -- surveillance/` → empty for all 5 search strings
+- Plus: `surveillance/ARCHITECTURE.md` (which README points to for the "end-to-end system") does NOT mention flux_manifold. The integration claim is unique to README and unbacked.
+
+**UNK-007 RESOLVED (HIGH):** lx-scanner is independent. `grep -r "from flux_manifold|reservoir|SuperpositionTensor|flux_flow" lx-scanner/` → empty. Docstrings confirm: pure MEV arbitrage quote-comparison scanner. Shares the git tree only.
+
+**UNK-008 RESOLVED (HIGH):** Zero surveillance tests. `ls tests/surveillance/` → No such directory. No file in `tests/` imports from `surveillance/`. All 11 test files target `flux_manifold/`. Action 4 unblocked.
+
+**Adjacent finding (not promoted to new UNKNOWN — documentation-freshness, observable directly):** ARCHITECTURE.md has the same stale corpus numbers as README ("124,341 contracts | 1.17M transaction events | 36,115 deployers" — current is 284K/16.8M/67K). Both docs were last updated around 2026-04-16 and have not tracked corpus growth or service migration (`spypy` → `stellar-embrace`).
+
+---
+
+### Reflection-loop pass for this session (per `memory/LOOP.md`)
+
+#### Step 1 — State Update Check: YES
+
+System-level facts changed:
+- 3 UNKNOWNs moved from OPEN to RESOLVED (UNK-024, UNK-007, UNK-008)
+- UNK-024's resolution materially changes "Active Purpose" framing — integration is aspirational, not real
+- The test-coverage gap is now codified (no surveillance tests at all)
+- lx-scanner is now characterized as independent
+
+→ `memory/STATE.md` updated: integration claim line rewritten from "OPEN" to "ASPIRATIONAL, not built"; new "Test coverage state" section codifies UNK-008 finding; "Open work" section restructured into RESOLVED-vs-OPEN table + recommended next-session focus.
+
+#### Step 2 — Unknown Detection: NO new explicit UNKNOWNs
+
+One adjacent observation surfaced but didn't warrant a new UNKNOWN entry: documentation-freshness pattern (README + ARCHITECTURE.md both stale). This is observable directly, the resolution is mechanical (update the numbers), and tracking it as an UNKNOWN would be log inflation. Recorded as adjacent finding in UNK-024 resolution.
+
+The discipline check: words flagged as candidate unknowns this session: "ASPIRATIONAL" (used in resolved sense, not unknown), "independent" (resolved), "stale" (observable). All resolved into explicit STATE.md or UNKNOWNS.md entries.
+
+Net UNKNOWNs delta this session: -3 resolved, 0 new. Total: 17 OPEN, 7 RESOLVED.
+
+#### Step 3 — Decision Extraction: 1 deferred candidate
+
+**ADR-006 candidate (still deferred): "Local-only git hooks management."** UNK-002 resolution found that `.git/hooks/pre-commit` and `post-commit` are NOT tracked. The decision-input pending: whether to move them into `scripts/hooks/` with an `install_hooks.sh`, or leave as-is and document manual install in STATE.md. Skipping again is acceptable — the existing local setup works for the current single-developer context; the decision becomes urgent only if other contributors arrive or a fresh clone is needed.
+
+**Skip count for ADR-006: 2 sessions running.** Rule-of-three: one more skip without forcing the decision and the protocol flags this as malformed.
+
+#### Step 4 — Invariant Check: NO violations; 1 candidate not yet promoted
+
+INV-015 candidate ("git hooks are LOCAL; fresh clones require install") still deferred — overlaps with ADR-006 candidate. Will be either an invariant (if hooks stay local-only) or absorbed into the action (if hooks move to tracked location).
+
+#### Step 5 — Surprise Logging: 1 minor surprise
+
+```
+SURPRISE: 7 independent verification paths for UNK-024 ALL returned empty.
+- Expected: at least one path would surface evidence — git history would show a deleted import, OR pma/sba would be imported by surveillance, OR ARCHITECTURE.md would mention flux_manifold, OR a renamed-primitive implementation would exist under different names.
+- Observed: ALL 7 paths empty. The integration claim is uniquely contained in README's line 34 and has zero downstream consequences anywhere in the codebase or git history.
+- Implication: When a marketing-tier claim has zero anchor in code or sibling docs, the most likely explanation is that someone wrote the README during planning and the planning didn't materialize. This is a documentation-aspiration pattern, not a documentation-stale pattern.
+- Resolution: documented in UNK-024 resolution. Decision deferred (README update vs. integration build).
+```
+
+The surprise is mild — I was already 60% confident in hypothesis 1 before running the checks. The confirmation just made it 99%.
+
+#### Step 6 — System Coherence Check (CRITICAL): YES — major hardening
+
+Anchors from prior session's STATE.md that this session touched:
+
+```
+ANCHOR: STATE.md "Project identity" line: "Documented integration claim NOT verified in code (UNK-024 OPEN)"
+- Status this session: HARDENED — UNK-024 now RESOLVED HIGH; the line rewritten to "Documented integration claim is ASPIRATIONAL, not built (UNK-024 RESOLVED 2026-05-13)."
+- Evidence: 7 grep/history paths all empty. See UNK-024 entry for the seven specific commands.
+- Action: STATE.md updated. lx-scanner finding folded in same paragraph.
+```
+
+```
+ANCHOR: STATE.md "Open work" section's three blocking items: UNK-001, UNK-005/006, UNK-008
+- Status this session: ALL RESOLVED (UNK-001 last session; UNK-005/006 last session; UNK-008 this session)
+- Action: STATE.md "Open work" section restructured with RESOLVED-vs-OPEN summary table and a "recommended next-session focus" pivoting to action-mode (Action 4 surveillance tests OR Action 5 regime-monitor OR README freshness fix).
+```
+
+No contradictions. The session was hardening + action-mode transition, not surprising findings.
+
+#### Step 7 — Next Unknown Selection
+
+The system now has 17 OPEN UNKNOWNs and zero CRITICAL ones (no "blocker" left). Recommend pivoting from UNKNOWN resolution → action execution:
+
+```
+NEXT TARGETS (for next session) — ACTION mode, not UNKNOWN mode:
+
+1. Action: Update README.md to remove or qualify the integration claim
+   Why: 20-minute mechanical fix; resolves the README-stale problem AND makes
+        STATE.md's aspirational-integration note redundant. May also auto-update
+        corpus numbers if the pre-commit AUTOGEN sections cover that.
+   Files: README.md (line 34 narrative; corpus numbers in line 5)
+
+2. Action: Write tests/surveillance/test_smoke.py (Phase 4 Action 4)
+   Why: UNK-008 unblocked it. ~90 min work. Six specific assertions documented
+        in prior Phase 4 output. Establishes verification surface for surveillance
+        modifications.
+   Files: tests/surveillance/__init__.py, tests/surveillance/test_smoke.py,
+          tests/surveillance/fixtures/honeypot_0xaeac0e69.bin (saved bytecode),
+          tests/surveillance/fixtures/vanilla_0xacfdc090.bin (saved bytecode)
+
+3. Decision: ADR-006 — resolve "local-only git hooks" deferral
+   Why: 3rd skip would flag it as malformed step. Two options A/B documented;
+        pick one and write the ADR.
+   Cost: ~15 min to decide + write ADR + execute if hook-move chosen
+```
+
+Total estimated next-session time: ~2 hours for items 1 + 3; +90 min for item 2 = ~3.5 hours. Or item 1 + 3 alone is ~35 min.
+
+#### Skipped steps: 1 acknowledged (3rd skip — Step 3)
+
+**Step 3 (Decision Extraction): SKIPPED — but with ADR-006 candidate explicitly tagged for forced decision next session.** This is the 2nd time ADR-006 has been deferred (1st: 2026-05-13 first continuation; 2nd: this session). Rule-of-three trigger: 3rd skip would mark Step 3 as malformed for this work-type. Setting a hard commit: ADR-006 gets written or marked WITHDRAWN next session.
+
+#### Loop self-monitoring
+
+Reflection cost this session: ~8 minutes (down from ~10 last). Steady-state is converging.
+
+REFLECTION_LOG.csv updated with third row.
+
+---
+
+NEXT TARGETS (for next session — pivot to ACTION mode):
+- Update README to remove/qualify integration claim + fix stale URL + corpus numbers
+- Write tests/surveillance/test_smoke.py
+- Resolve ADR-006 (3rd-skip rule-of-three trigger)
+
+---
+
 *End of file. Append new sessions above this footer.*
