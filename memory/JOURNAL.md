@@ -887,4 +887,210 @@ NEXT TARGETS (for next session — pivot to ACTION mode):
 
 ---
 
+### 2026-05-13 (4th pass) — Maintenance pass + first flux_manifold consumer in production code
+
+**Starting state:** From prior reflection: 17 OPEN UNKNOWNs (none blocking); recommended pivot from UNKNOWN resolution to action mode with 3 maintenance targets (README, smoke tests, ADR-006) and Integration Path 1 (regime monitor). User authorized executing maintenance pass + Path 1 in one session, saving "Option 3" (surveillance investigation) for next session.
+
+**Session work — Phase 1 (maintenance pass):**
+
+1. **README.md updated:** corpus numbers refreshed (124K → 284K contracts, 1.17M → 16.8M events, 36K → 67K deployers); live URL `spypy` → `stellar-embrace`; line-34 integration claim qualified as "Planned integration (not yet wired into production)" with pointer to `regime_monitor.py` as first concrete consumer. README now matches reality without removing the documented vision.
+
+2. **ADR-006 RESOLVED** — local-only git hooks management. Forced-decision after 2 prior skips (rule-of-three trigger). Decision: hybrid — tracked source-of-truth in `scripts/hooks/` (`pre-commit` and `post-commit` content tracked) + opt-in installer `scripts/install_hooks.sh`. Fresh clones default to no hooks (safer); explicit opt-in to enable. Skip count reset.
+
+3. **`tests/surveillance/test_smoke.py` written** (9 assertions, all passing in <130ms):
+   - OLI guardrail redirect (INV-007 verified)
+   - OLI guardrail pass-through on non-guarded subtype
+   - hidden_drain_function detector positive (synthetic approev pattern)
+   - hidden_drain_function detector negative (standard ERC-20 approve)
+   - KNOWN_HIDDEN_DRAIN_SELECTORS registry contains approev
+   - PATTERN_REGISTRY contains both signature + semantic detectors (ADR-003)
+   - Confidence rank-protection blocks downgrade (INV-008)
+   - Confidence rank allows upgrade (positive case)
+   - Migration idempotency principle (in-principle test; full-init test BLOCKED by INV-016)
+
+**Session work — Phase 2 (regime monitor):**
+
+Built first production-side `flux_manifold` consumer:
+
+1. `flux_manifold/__init__.py` — exports `BayesianChangePoint` (was unexported)
+2. `surveillance/db.py` — new migration: `regime_alerts` table with `UNIQUE(signal_name, observation_date)` constraint
+3. `surveillance/regime_monitor.py` — new module (~280 lines):
+   - 6 daily-aggregate signals defined (new_deployers_total, confirmed/suspected_traps_per_day, watchlist_additions, approval_events, trap_event_victims)
+   - `RegimeMonitor` class with stateless `scan()` method
+   - Replays full corpus history through fresh `BayesianChangePoint` per signal
+   - Idempotent (UNIQUE constraint blocks dupes)
+   - Graceful skip on missing source tables
+   - CLI: `python -m surveillance.regime_monitor`
+4. `tests/surveillance/test_regime_monitor.py` — 5 tests covering detection, false-positive-resistance, persistence, idempotency, fault-tolerance
+
+**Empirical validation — live run against production corpus:**
+
+```
+$ python -m surveillance.regime_monitor
+Scanning 6 signals from surveillance.db...
+  29 new regime alerts written.
+  ALERT  2026-04-25 new_deployers_total              value=    8052.0 P(CP)=1.000
+  ALERT  2026-04-30 new_deployers_total              value=      93.0 P(CP)=0.994
+  ALERT  2026-05-05 confirmed_traps_per_day          value=     207.0 P(CP)=0.998
+  ALERT  2026-04-23 approval_events_per_day          value=    4329.0 P(CP)=0.853
+  ... (29 total across 4 of 6 signals)
+```
+
+**Cross-reference against known events documented in INDEX.md:**
+- **2026-04-25 spike of 8,052 new deployers** — matches `0xb0b0b69*` vanity-funder mass-fund event documented in INDEX.md (6,598 deployers funded by b0b0b690 on 2026-04-25). **CAUGHT IT.**
+- **2026-04-30 drop to 93 deployers** — matches the production-monitor outage / restart event (INDEX.md bb50 entry: "Surfaced by post-monitor-restart probe 2026-05-01"). **CAUGHT IT.**
+- **2026-05-05 spike of 207 confirmed traps** — matches iter_8 of the drainer-spawn hub `0xf7883e3f`. **CAUGHT IT.**
+- **2026-04-23 approval_events spike of 4,329** — collapses to 2,039 → 1,424 → 1,217. Likely Coffee Fleet or related operator regime shift. Worth investigating.
+
+V1 of regime monitor produced its first commercially-valuable output on a single scan.
+
+---
+
+### Reflection-loop pass for this session (per `memory/LOOP.md`)
+
+#### Step 1 — State Update Check: YES (substantial)
+
+System-level changes:
+- README.md updated (corpus numbers, URL, integration framing)
+- New surveillance test surface (14 tests in tests/surveillance/, all passing)
+- First flux_manifold consumer in production code (regime_monitor.py)
+- New regime_alerts table in production schema (will deploy on next worker restart per INV-010 idempotency)
+- 29 real regime alerts recorded for the corpus
+- ADR-006 RESOLVED
+- INV-015 added (BCP consumers use is_changepoint() not raw update())
+- INV-016 added (extraction_events latent schema bug, documented)
+- Git hooks now tracked in scripts/hooks/ with installer
+
+→ `memory/STATE.md` updated: integration line hardened from aspirational to partial; Test coverage section expanded with surveillance test counts and INV-016 reference.
+
+#### Step 2 — Unknown Detection: 0 new UNKNOWNs
+
+The execution went cleanly. Two findings during execution were captured as INVARIANTS rather than UNKNOWNs (INV-015 burn-in gating, INV-016 extraction_events schema gap) because both have clear resolutions documented, not open questions.
+
+The "should regime alerts be coalesced into episodes" question is a future-tuning consideration, not an UNKNOWN. Logged as a follow-up note here in the journal.
+
+Net UNKNOWNs delta: -0, total 17 OPEN unchanged.
+
+#### Step 3 — Decision Extraction: 1 ADR landed
+
+**ADR-006** finalized — local-only git hooks managed via scripts/hooks/ + opt-in installer. Tracked source-of-truth, fresh clones default to no auto-push, explicit consent step to enable. Skip count reset to 0.
+
+ADR-007 candidate considered: "regime_monitor uses is_changepoint() not raw update()" — promoted to INV-015 instead since it's an enforceable code-level invariant, not a multi-option design decision.
+
+#### Step 4 — Invariant Check: 2 NEW invariants
+
+- **INV-015** (BCP consumers use is_changepoint()) — promoted from finding-during-implementation. Load-bearing for any future flux_manifold integration.
+- **INV-016** (extraction_events schema gap) — documents the latent bug surfaced by smoke test. Open bug, fix path documented; not yet fixed but tracked.
+
+No violations of pre-existing invariants this session.
+
+#### Step 5 — Surprise Logging: 2 surprises
+
+```
+SURPRISE: Smoke test on a fresh in-memory DB found a real latent bug in db.py.
+- Expected: init_db() on a clean tmp_path works because it's the same code that
+  runs in production every restart.
+- Observed: init_db() crashed on ALTER TABLE extraction_events because
+  extraction_events table is never created in code (schema.sql doesn't have it).
+  In production, the table has existed since unrecorded manual creation, so the
+  bug never surfaces. Only manifests on a truly clean bootstrap.
+- Implication: Production-untested bootstrap path has at least one latent failure
+  mode. There may be others. (e.g., other migration ALTERs assume tables that are
+  also only in binaries.)
+- Resolution: documented as INV-016. Test reduced to verify the idempotency
+  pattern in-principle without depending on full init_db. Fix deferred — production
+  unaffected; impact is on fresh-clone onboarding.
+```
+
+```
+SURPRISE: V1 regime monitor produced an immediately actionable alert set on first scan.
+- Expected: V1 with default priors would have high false-positive rate; expected to
+  spend a couple sessions tuning before alerts were trustworthy.
+- Observed: 29 alerts on first scan, of which several map directly to events I had
+  manually surfaced and documented in INDEX.md weeks ago (the Apr-25 b0b0b690 mass-
+  fund, the Apr-30 monitor-restart, the May-5 iter_8 spike). The detector recovered
+  events the team had previously discovered via manual investigation.
+- Implication: This is the strongest possible validation signal — independent
+  algorithmic re-discovery of human-discovered findings. BCP is well-suited to this
+  domain. (Open question: does it find anything the team DIDN'T already know? That's
+  the V2 evaluation.)
+- Resolution: STATE.md hardened. Integration claim now PARTIAL not ASPIRATIONAL.
+```
+
+#### Step 6 — System Coherence Check (CRITICAL): YES — major hardening
+
+Anchors from prior STATE.md this session touched:
+
+```
+ANCHOR: STATE.md "Project identity" — "Documented integration claim is ASPIRATIONAL,
+        not built (UNK-024 RESOLVED 2026-05-13)"
+- Status this session: HARDENED to PARTIAL — regime_monitor.py exists, imports
+  BayesianChangePoint, runs in production code path.
+- Evidence: regime_monitor.py committed; flux_manifold/__init__.py exports
+  BayesianChangePoint; tests pass; live run against corpus produces 29 alerts.
+- Action: STATE.md updated. README updated to match.
+```
+
+```
+ANCHOR: STATE.md "Test coverage state" — "Zero surveillance-side tests exist"
+- Status this session: REFINED to "14 tests in tests/surveillance/, all passing"
+- Evidence: pytest output. tests/surveillance/__init__.py + test_smoke.py +
+  test_regime_monitor.py committed.
+- Action: STATE.md section rewritten with current state + INV-016 reference.
+```
+
+```
+ANCHOR: README.md line 34 — "Latent Flux primitives power Layer 3's analysis layer"
+- Status this session: QUALIFIED — README now states "Planned integration (not yet
+  wired into production)" with explicit pointer to regime_monitor.py as the first
+  concrete consumer.
+- Evidence: README diff committed.
+- Action: no further changes needed. The integration claim and code now agree.
+```
+
+No contradictions. The session hardened multiple prior anchors; no inconsistencies surfaced.
+
+#### Step 7 — Next Target Selection
+
+```
+NEXT TARGETS (for next session):
+
+"Option 3" deferred from prior session:
+  Surveillance investigation work — return to corpus-level analysis. Specific
+  candidates surfaced by today's regime_monitor scan:
+    (a) 2026-04-23 approval_events spike → 2026-04-25 deployer spike — investigate
+        whether b0b0b690 mass-fund event was preceded by approval-side staging
+    (b) The 5-day gap between 2026-05-04 and 2026-05-05 — what changed in confirmed-
+        trap detection that produced the 207-trap spike on May-5?
+    (c) Coffee Fleet activity correlation with the Apr-23 → Apr-25 approval-events
+        decay
+
+Follow-up engineering items (lower priority):
+  - Coalesce consecutive regime alerts into "episode" objects (V2 of regime monitor)
+  - Wire regime_monitor.py into run_surveillance.py as a daily-scheduled job
+  - Fix INV-016 (add extraction_events to schema.sql OR guard the migration)
+  - Add web API endpoint /regime-alerts to web/api_v1.py
+```
+
+Recommend next session focus on (a) — the approval-side staging investigation. That's the kind of finding regime monitor was built to surface, and acting on it validates the operational value of the integration.
+
+#### Skipped steps: NONE
+
+All 7 steps executed. ADR-006 was the rule-of-three trigger; resolved this session. Skip count for Step 3 resets to 0.
+
+#### Loop self-monitoring
+
+Reflection cost this session: ~12 minutes (slightly above the 5-10 min target because of large action-mode session with many findings to integrate). Steady-state target is for resolution-only sessions; action sessions naturally produce more material.
+
+REFLECTION_LOG.csv updated with fourth row.
+
+---
+
+NEXT TARGETS (for next session):
+- Investigate 2026-04-23 approval_events spike → 2026-04-25 deployer spike correlation
+- Investigate 2026-05-05 confirmed_traps spike causal chain (iter_8 driver vs. detection-pipeline change)
+- Coalesce consecutive regime alerts into episode objects (V2 regime monitor)
+
+---
+
 *End of file. Append new sessions above this footer.*

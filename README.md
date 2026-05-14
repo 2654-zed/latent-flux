@@ -2,7 +2,7 @@
 
 **What's running:** A passive surveillance system monitoring smart contract deployments on Base, Arbitrum, and Optimism in real time. Detects trap contracts (honeypots, Permit2 drainers, fee skimmers), traces organizational structures, documents active criminal operations, and serves a pre-transaction risk API for AI agent frameworks.
 
-**Live deployment:** `https://spypy.up.railway.app` — 24/7 on Railway since March 2026. Corpus: 124,341 contracts, 1.17M transaction events, 36,115 deployers across 3 chains. $10-15M+ drain operation documented, 7 rogue facilitators tracked.
+**Live deployment:** `https://stellar-embrace-production-2020.up.railway.app` — 24/7 on Railway since March 2026 (migrated from earlier `spypy` service mid-2026). Corpus (as of 2026-05-10): **284,777 contracts, 16.8M transaction events, 67,459 deployers** across 3 chains; **1,404 confirmed traps + 115,514 suspected**. $10-15M+ drain operation documented, 7 rogue facilitators tracked. (Static numbers; live state in `memory/STATE.md` or the `/stats` endpoint.)
 
 ## Run It (3 commands)
 
@@ -31,7 +31,7 @@ The `/api/v1/agent/screen` endpoint returns `{risk_score, risk_tier, capabilitie
 
 ---
 
-> **Latent Flux primitives power Layer 3's analysis layer** — AttractorCompetition for contract classification, ReservoirState for deployer behavioral baseline, RecursiveFlow for cluster resolution, FoldReference for data integrity. Full language spec below.
+> **Planned integration (not yet wired into production):** Latent Flux primitives are documented for use in Layer 3's analysis layer — AttractorCompetition for contract classification, ReservoirState for deployer behavioral baseline, RecursiveFlow for cluster resolution, FoldReference for data integrity. As of 2026-05-13, this integration is staged in research/experimental code (see `surveillance/regime_monitor.py` for the first production-side consumer of `flux_manifold.changepoint`); the core classifier path under `surveillance/` does not yet import flux_manifold. The Latent Flux language spec below describes the substrate that the integration will build on. See `memory/STATE.md` for current integration status.
 
 ---
 
@@ -797,7 +797,7 @@ requirements.txt              # numpy>=1.24, scipy>=1.10, matplotlib>=3.7
 ## Tests
 
 <!-- AUTOGEN:TESTS -->
-409 tests across 18 test files.
+423 tests across 20 test files.
 <!-- AUTOGEN:END_TESTS -->
 
 ```bash

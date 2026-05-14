@@ -54,6 +54,10 @@ from flux_manifold.quantum_interference import (
     QuantumInterferenceEngine, InterferenceResult,
 )
 
+# Bayesian Online Changepoint Detection — consumed by surveillance/regime_monitor.py
+# First production-side flux_manifold consumer (added 2026-05-13).
+from flux_manifold.changepoint import BayesianChangePoint
+
 # Full interpreter
 from flux_manifold.interpreter import LatentFluxInterpreter
 
@@ -103,6 +107,8 @@ __all__ = [
     "hamiltonian_flow", "hamiltonian_flow_batch",
     # Quantum Interference
     "QuantumInterferenceEngine", "InterferenceResult",
+    # Bayesian Changepoint
+    "BayesianChangePoint",
     # Interpreter
     "LatentFluxInterpreter",
     # TSP

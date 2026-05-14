@@ -1,0 +1,11 @@
+#!/bin/sh
+# Pre-commit hook: auto-update README.md dynamic sections
+# Runs scripts/update_readme.py and stages the result if changed.
+#
+# Source-of-truth tracked copy. Install via scripts/install_hooks.sh.
+# Cf. memory/DECISIONS.md ADR-006.
+
+python scripts/update_readme.py 2>/dev/null
+
+# If README.md was modified, stage it
+git diff --quiet README.md 2>/dev/null || git add README.md

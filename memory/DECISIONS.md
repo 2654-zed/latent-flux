@@ -124,3 +124,38 @@ The pre-existing surveillance-side documents (`docs/INDEX.md`, `docs/lexicon.md`
 - Fewer steps (3-4): considered but each step covers a distinct class of integration; conflating would lose specificity
 - Don't enforce citations: rejected — vibes-checks aren't an integration mechanism
 - Make all steps optional: rejected — Step 6 is load-bearing; making it optional defeats the loop's purpose
+
+---
+
+## ADR-006 — Local-only git hooks managed via `scripts/hooks/` + opt-in installer
+
+**Date:** 2026-05-13 (forced decision after 2 prior skips; rule-of-three trigger)
+
+**Context:** UNK-002 resolution revealed that this repo uses two local git hooks installed in `.git/hooks/`:
+- `pre-commit` — runs `python scripts/update_readme.py` to refresh README AUTOGEN sections
+- `post-commit` — runs `git push origin HEAD` (auto-push every commit)
+
+`.git/hooks/` is not tracked by git. Fresh clones lack these hooks. A new contributor (or the same developer on a fresh machine) gets neither the README auto-regen nor the auto-push behavior.
+
+Two skip cycles in the reflection-loop deferred this decision (sessions 2026-05-13 pass 2 and pass 3). Rule-of-three trigger: 3rd deferral would mark Step 3 (Decision Extraction) as malformed.
+
+**Decision:** Hybrid — **tracked source-of-truth in `scripts/hooks/` + opt-in installer in `scripts/install_hooks.sh`**, NOT mandatory installation.
+
+Concretely:
+- `scripts/hooks/pre-commit` and `scripts/hooks/post-commit` are tracked copies of the current hook content
+- `scripts/install_hooks.sh` copies them into `.git/hooks/` when run
+- Neither runs automatically; a fresh clone deliberately omits them. Run `bash scripts/install_hooks.sh` once after clone to opt in.
+
+**Consequences:**
+- Source-of-truth for hook content is now in git history. Hooks can be reviewed, diffed, and updated like any other code.
+- Fresh clones default to NO auto-push, which is the safer default. The developer choosing to enable it is an explicit consent step.
+- The post-commit auto-push behavior is preserved for the primary developer (existing `.git/hooks/post-commit` is unchanged by this ADR; the tracked copy is just a reference).
+- New invariant candidate INV-015 was considered but not needed — the installer ergonomics are documented in STATE.md "Git hooks" section + this ADR. Not a system invariant.
+
+**Alternatives considered:**
+- **Move hooks to `core.hooksPath`** (`git config core.hooksPath scripts/hooks`): would make hooks mandatory and require zero opt-in. Rejected because auto-push is a developer-preference, not a project policy — making it mandatory imposes choice on others.
+- **Leave hooks fully local** (status quo, no tracked copies): rejected — source-of-truth is then in `.git/hooks/` which is fragile (lost on `.git` deletion or fresh clone with no backup).
+- **Use `husky` or another hook manager**: rejected — adds a Node.js dependency for a Python repo; overkill for two shell scripts.
+- **Encode in `pyproject.toml` via `pre-commit` framework**: rejected — overkill; the hooks are 4 lines each and the existing local setup works.
+
+**Status:** RESOLVED. Tracked hook copies + installer landed 2026-05-13. STATE.md "Git hooks" section will reference this ADR.

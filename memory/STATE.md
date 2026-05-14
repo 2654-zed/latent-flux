@@ -17,7 +17,7 @@
 - **Adjacent arbitrage applications** (resolved 2026-05-13 via UNK-005/006):
   - `pma/` = **Prediction Market Arbitrage module** (Polymarket-style; consumes flux_manifold via reservoir_tracker.py)
   - `sba/` = **Sports Betting Arbitrage module** (consumes flux_manifold; has account_risk modeling)
-- **Documented integration claim is ASPIRATIONAL, not built (UNK-024 RESOLVED 2026-05-13):** README line 34 states *"Latent Flux primitives power Layer 3's analysis layer — AttractorCompetition for contract classification, ReservoirState for deployer behavioral baseline, RecursiveFlow for cluster resolution, FoldReference for data integrity."* Verified 2026-05-13 via 7 independent grep paths (current code, full git history, renamed implementations, indirect-use via pma/sba, surveillance/ARCHITECTURE.md) — ALL returned empty. The integration described in README has never existed in code. Adjacent finding: surveillance/ARCHITECTURE.md has the same stale corpus numbers as README (124K contracts vs current 284K) — both docs written ~2026-04-16 and unmaintained since. **lx-scanner is also independent** of both Latent Flux and L3 surveillance — pure MEV arbitrage scanner sharing nothing but the git tree.
+- **Integration is now PARTIAL — first production-side flux_manifold consumer LIVE (2026-05-13):** `surveillance/regime_monitor.py` imports `BayesianChangePoint` from `flux_manifold.changepoint` and produces real alerts against production corpus (29 alerts on first scan including the Apr-25 b0b0b690 mass-fund event and the May-5 iter_8 confirmed-trap spike). This is the first concrete instantiation of the README's long-standing aspirational claim. The other primitives named in README (AttractorCompetition, ReservoirState, RecursiveFlow, FoldReference) remain unintegrated; the path is established but not yet executed. README has been updated 2026-05-13 to qualify the claim as "Planned integration (not yet wired into production)" with a pointer to `regime_monitor.py` as the first consumer. **lx-scanner is independent** of both Latent Flux and L3 surveillance (pure MEV arbitrage scanner; UNK-007 RESOLVED).
 
 ## Deploy surface
 
@@ -171,11 +171,17 @@ sqlite3 surveillance/data/surveillance.db \
 curl -s https://stellar-embrace-production-2020.up.railway.app/stats | python -m json.tool
 ```
 
-## Test coverage state (UNK-008 RESOLVED 2026-05-13)
+## Test coverage state
 
-**Zero surveillance-side tests exist.** The `tests/` directory contains 11 test files, all targeting `flux_manifold/` (parser/repl, core, primitives, interpreter, ontology, baselines, attractor competition, recursive flow, infrastructure, visualize, benchmarks). No `tests/surveillance/` directory. No test file imports from `surveillance/`.
+**Latent Flux DSL:** 11 test files in `tests/` covering parser/repl, core, primitives, interpreter, ontology, baselines, attractor competition, recursive flow, infrastructure, visualize, benchmarks.
 
-Agents modifying `surveillance/bytecode_classifier.py`, `entity_classifier.py`, `oli_enrichment.py`, etc., have **no verification surface**. The Action 4 from prior Phase 4 output (write `tests/surveillance/test_smoke.py`) is unblocked.
+**L3 surveillance (added 2026-05-13):** `tests/surveillance/` directory now exists with 14 tests in 2 files:
+- `test_smoke.py` (9 tests): OLI guardrail redirect + pass-through, hidden-drain signature detector (positive + negative), KNOWN_HIDDEN_DRAIN_SELECTORS registry, PATTERN_REGISTRY contents, confidence rank-protection (down + up), migration idempotency principle
+- `test_regime_monitor.py` (5 tests): obvious changepoint detection, stationary-series silence, table writes, idempotency, missing-source-table graceful skip
+
+All 14 surveillance tests pass in ~270ms. Run via `python -m pytest tests/surveillance/`. Verification surface for surveillance modifications is now established.
+
+**Known gap (INV-016):** `init_db()` on a truly fresh path crashes on the `extraction_events.chain` migration because `extraction_events` is never created in code (only in pre-existing binary DBs). Documented in INVARIANTS.md INV-016; fix path documented; production unaffected.
 
 ## Open work (canonical list in `memory/UNKNOWNS.md`)
 

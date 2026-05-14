@@ -1,0 +1,11 @@
+#!/bin/sh
+# Post-commit hook: auto-push to origin after every commit.
+#
+# Source-of-truth tracked copy. Install via scripts/install_hooks.sh.
+# Cf. memory/DECISIONS.md ADR-006.
+#
+# Convenience for solo development. If you don't want auto-push (e.g. you're
+# making WIP commits or working offline), comment out the push line or remove
+# the hook by deleting .git/hooks/post-commit.
+
+git push origin HEAD 2>&1

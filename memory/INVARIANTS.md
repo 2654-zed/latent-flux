@@ -114,3 +114,18 @@ A violation becomes a numbered Correction in `reports/correction_log.md`. A disc
 - **Enforcement:** Convention. No mechanical enforcement.
 - **How tested:** untested mechanically. Future enforcement: pre-commit hook checking that existing Correction sections are unchanged.
 - **Surfaced:** 2026-05-13 (existed implicitly since first correction)
+
+### INV-015 — Bayesian changepoint consumers use `is_changepoint()`, not raw `update()` return value
+
+- **Rationale:** `BayesianChangePoint.update(x)` returns `P(run_length < 10)` which is naturally ≥ 0.5 during the first ~20 observations (the burn-in period) because the run-length distribution starts with all mass at r=0. Treating this raw probability as a changepoint signal produces spurious alerts on every observation in the burn-in window. The `is_changepoint()` method has the proper gating: `MAP_run_length < 10 AND t > 20 AND cp_prob > threshold`.
+- **Enforcement:** `surveillance/regime_monitor.py:_scan_one_signal` — uses `detector.is_changepoint(threshold=...)` after `detector.update(value)`. Comment in code documents the reasoning.
+- **How tested:** `tests/surveillance/test_regime_monitor.py::test_regime_monitor_silent_on_stationary_series` asserts ≤ 1 alert over 60 stationary observations (would fail if raw `update()` value were used — currently 10 spurious alerts in pre-fix run).
+- **Surfaced:** 2026-05-13 (caught by smoke test on stationary series)
+
+### INV-016 — `extraction_events` table is NOT in `schema.sql` — known latent bug
+
+- **Rationale:** A migration in `surveillance/db.py` (line ~545-561) does `ALTER TABLE extraction_events ADD COLUMN chain TEXT` but `CREATE TABLE extraction_events` exists nowhere in code (only in binary DB files). Running `init_db()` against a truly fresh path fails on this migration. In production this never surfaces because the table has existed since unrecorded manual creation.
+- **Status:** OPEN BUG, not yet fixed.
+- **Where surfaced:** `tests/surveillance/test_smoke.py::test_migration_idempotency_principle` — original version of this test attempted `init_db(tmp_path / "test.db")` and failed with `sqlite3.OperationalError: no such table: extraction_events`. The test was reduced to verify the idempotency *pattern* directly without depending on full schema bootstrap.
+- **Fix path:** Either (a) add `CREATE TABLE extraction_events` to schema.sql, or (b) guard the `chain` column migration with a `SELECT name FROM sqlite_master WHERE name='extraction_events'` existence check. Option (b) is safer (zero-side-effect if missing); option (a) is more correct (a real schema needs to declare its tables).
+- **Surfaced:** 2026-05-13 (via smoke-test execution against fresh tmp_path)

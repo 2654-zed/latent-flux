@@ -752,6 +752,40 @@ def init_db(db_path: Optional[Path] = None) -> sqlite3.Connection:
         conn.commit()
         _log_migration("extraction_event_type_suggestion", "applied")
 
+    # Migration: regime_alerts — operational-tempo changepoint detections.
+    # Populated by surveillance.regime_monitor (first production-side
+    # consumer of flux_manifold.changepoint.BayesianChangePoint, 2026-05-13).
+    # Each row: a daily aggregate signal exhibited a Bayesian changepoint
+    # (regime shift) on a specific date. Used to detect operator pause /
+    # resume events, cross-chain coordinated waves, victim-pool shifts,
+    # and other phenomena the rule-based detectors miss because they
+    # operate at the per-contract level rather than per-day-aggregate.
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='regime_alerts'"
+    )
+    if cursor.fetchone() is None:
+        conn.executescript("""
+            CREATE TABLE regime_alerts (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                signal_name       TEXT    NOT NULL,
+                observation_date  TEXT    NOT NULL,
+                observed_value    REAL    NOT NULL,
+                cp_probability    REAL    NOT NULL,
+                detector_threshold REAL   NOT NULL,
+                hazard_rate       REAL    NOT NULL,
+                detected_at       TEXT    NOT NULL,
+                notes             TEXT,
+                UNIQUE(signal_name, observation_date)
+            );
+            CREATE INDEX IF NOT EXISTS idx_regime_alerts_date
+                ON regime_alerts(observation_date);
+            CREATE INDEX IF NOT EXISTS idx_regime_alerts_signal
+                ON regime_alerts(signal_name);
+        """)
+        _log_migration("regime_alerts_table", "applied")
+    else:
+        _log_migration("regime_alerts_table", "skip")
+
     # Migration: oli_labels — Open Labels Initiative tags from Blockscout
     # metadata service. Cached per (address, chain_id). Populated by
     # surveillance.oli_enrichment. Used by entity_classifier and watchlist
