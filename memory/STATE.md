@@ -7,26 +7,42 @@
 
 ## Project identity
 
-- **Git remote:** `origin = https://github.com/2654-zed/latent-flux.git` (project name: **Latent Flux**)
+- **Git remote:** `origin = https://github.com/2654-zed/latent-flux.git`
+- **README-declared project name:** **"Layer 3 — On-Chain Behavioral Threat Intel"** (README.md line 1, verified 2026-05-13 via UNK-001 resolution)
+- **Repository codename:** Latent Flux (= git remote slug; the DSL is the project's analysis-substrate, not its name)
 - **Local dev path:** `C:\Users\jason\Desktop\ai lang\`
 - **Repository contains TWO load-bearing subsystems sharing one git tree:**
-  - **Latent Flux DSL** (`flux_manifold/`, `stdlib/`, `tsp.lf`) — not deployed; runs locally via `python -m flux_manifold run <file.lf>`
-  - **L3 surveillance** (`surveillance/`, `web/`, `run_surveillance.py`) — deployed worker on Railway
-
-Plus adjacent applications: `pma/`, `sba/`, `lx-scanner/`, `backtest/` (purposes partially documented; see UNKNOWNS).
+  - **L3 surveillance** (`surveillance/`, `web/`, `run_surveillance.py`) — deployed worker on Railway. The product.
+  - **Latent Flux DSL** (`flux_manifold/`, `stdlib/`, `tsp.lf`) — not deployed; the documented analysis substrate. **10 primitives** (not 8 as I earlier analyzed — ↺ Recursive Flow and ⊗ Attractor Competition are first-class).
+- **Adjacent arbitrage applications** (resolved 2026-05-13 via UNK-005/006):
+  - `pma/` = **Prediction Market Arbitrage module** (Polymarket-style; consumes flux_manifold via reservoir_tracker.py)
+  - `sba/` = **Sports Betting Arbitrage module** (consumes flux_manifold; has account_risk modeling)
+- **Documented integration claim NOT verified in code (UNK-024 OPEN):** README line 34 states *"Latent Flux primitives power Layer 3's analysis layer — AttractorCompetition for contract classification, ReservoirState for deployer behavioral baseline, RecursiveFlow for cluster resolution, FoldReference for data integrity."* But `grep -r "from flux_manifold\|AttractorCompetition\|ReservoirState\|RecursiveFlow\|FoldReference" surveillance/` returns ZERO matches. The integration the README advertises does not currently exist in the surveillance code path. Aspirational vs. rolled-back vs. via-pma/sba indirection is OPEN — see UNK-024.
 
 ## Deploy surface
 
 | Component | Value |
 |---|---|
 | Procfile command | `worker: python run_surveillance.py` |
-| Production URL | `stellar-embrace-production-2020.up.railway.app` |
+| Production URL (current) | `stellar-embrace-production-2020.up.railway.app` |
+| Production URL (README, STALE) | `spypy.up.railway.app` — README needs update; old service |
 | Railway project | `blockchain` |
 | Railway service | `stellar-embrace` |
 | Active environment | `production` |
 | Last successful sync | 2026-05-10 (full 10 GB; integrity_check: ok) |
 | Sync mechanism | `python scripts/sync_prod_db.py` (railway ssh + base64 framing) |
 | Apply-to-prod template | `scripts/apply_correction_20_via_ssh.py` |
+
+## Git hooks (LOCAL — not tracked, manual install required on fresh clone)
+
+Installed in `.git/hooks/` (UNK-002 resolution, 2026-05-13):
+
+| Hook | Behavior |
+|---|---|
+| `pre-commit` | Runs `python scripts/update_readme.py` to refresh `<!-- AUTOGEN:* -->` README sections; re-stages README if modified |
+| `post-commit` | Runs `git push origin HEAD` — auto-pushes every commit to remote (explains why my commits during prior sessions pushed without explicit `git push`) |
+
+**No CI/CD pipeline exists** (no `.github/workflows/`, no `.pre-commit-config.yaml`). Fresh clones do NOT get these hooks. Agents working on a fresh clone need to install them manually, or accept that they'll need to `git push` explicitly and won't get README auto-regen on commit.
 
 ## Corpus snapshot (as of 2026-05-10 sync)
 

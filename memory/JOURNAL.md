@@ -611,4 +611,148 @@ NEXT TARGETS (for session starting after 2026-05-13):
 
 ---
 
+### 2026-05-13 (continuation) — Resolve 4 UNKNOWNs; surface UNK-024
+
+**Starting state:** Just bootstrapped the memory system. Previous session's NEXT TARGETS were UNK-001, UNK-002, UNK-005, UNK-006. Continued in same date because work is contiguous.
+
+**Session work:**
+
+Read README.md (lines 1-200 and 560-680), checked CI configuration paths, read `pma/__init__.py` and `sba/__init__.py`, verified the README's integration claim against actual code.
+
+**UNK-001 RESOLVED, HIGH confidence:** Project is "Layer 3 — On-Chain Behavioral Threat Intel." README line 34 documents Latent Flux primitives as the analysis substrate of L3. **10 primitives, not 8** as my earlier analysis claimed — ↺ Recursive Flow and ⊗ Attractor Competition are first-class. README has stale fields: live URL `spypy.up.railway.app` (actual: stellar-embrace-...), corpus numbers 124K contracts (actual: 284K). README documents `/api/v1/agent/screen/...` endpoints I haven't seen on the new service.
+
+**UNK-002 RESOLVED, HIGH confidence:** No CI/CD pipeline. No `.github/workflows/`, no `.pre-commit-config.yaml`. Local-only git hooks installed in `.git/hooks/`: `pre-commit` (auto-update README sections), `post-commit` (auto-push to origin). These are NOT tracked by git; fresh clones lack them.
+
+**UNK-005 RESOLVED, MEDIUM confidence:** `pma/` = **Prediction Market Arbitrage** (Polymarket-style). Single-line docstring confirmed. Confidence MEDIUM because implementation surface unread; revisit-LOW candidate.
+
+**UNK-006 RESOLVED, MEDIUM confidence:** `sba/` = **Sports Betting Arbitrage**. Has `account_risk.py` suggesting account-level constraint modeling. Confidence MEDIUM same reasoning; revisit-LOW candidate.
+
+**UNK-024 SURFACED (new):** README claims integration between Latent Flux and L3 surveillance that grep proves doesn't exist in code. Zero matches for `from flux_manifold`, `AttractorCompetition`, `ReservoirState`, `RecursiveFlow`, `FoldReference` anywhere in `surveillance/`. Four possible explanations logged; resolution path documented.
+
+---
+
+### Reflection-loop pass for this session (per `memory/LOOP.md`)
+
+#### Step 1 — State Update Check: YES
+
+Multiple system-level facts changed:
+- Project's README-declared name is "Layer 3 — On-Chain Behavioral Threat Intel" (was: "Latent Flux" per git remote)
+- The DSL has 10 primitives, not 8
+- Local-only git hooks exist (explains observed auto-push behavior)
+- README is partially stale (spypy URL, corpus numbers)
+- README claims an integration that doesn't exist in code
+
+→ `memory/STATE.md` "Project identity" + "Deploy surface" sections updated, new "Git hooks" section added.
+
+#### Step 2 — Unknown Detection: YES (1 new)
+
+UNK-024 surfaced: the README/code integration claim discrepancy. Added to `memory/UNKNOWNS.md` with full canonical schema + 4 possible explanations + resolution plan.
+
+Net UNKNOWNs delta this session: +1 surfaced, -4 resolved → 23 → 20 OPEN.
+
+#### Step 3 — Decision Extraction: NONE this session
+
+No new architectural choices made. ADR-006 ("Local-only git hooks; install instructions belong in STATE.md") is a *candidate* mentioned in UNK-002 resolution but not yet formalized as it requires a decision (do we move the hooks into git-tracked `scripts/hooks/` with an install script, or leave them as-is and document in STATE.md?). Deferred.
+
+#### Step 4 — Invariant Check: NO violations; 1 candidate to add
+
+INV-015 candidate: "Repository git hooks live in `.git/hooks/` (LOCAL); fresh clones require manual install." Not yet promoted to INVARIANTS.md because (a) it might be replaced by ADR-006 action, and (b) it's a deployment fact more than an invariant. Will revisit next session.
+
+#### Step 5 — Surprise Logging: YES (2 surprises)
+
+```
+SURPRISE: README claims flux_manifold integrates with surveillance, code shows zero imports.
+- Expected: README is descriptive — if it says "X powers Y", X imports Y. Or: the integration uses different naming and I'd find the implementations under different names.
+- Observed: README line 34 names four specific Latent Flux classes (AttractorCompetition, ReservoirState, RecursiveFlow, FoldReference) that "power Layer 3's analysis layer." Grep for any of these four names — or for `from flux_manifold` — returns ZERO matches in `surveillance/`. The marketing claim and the code don't agree.
+- Implication: One of (a) aspirational README, (b) integration in pma/sba/ that surveillance/ doesn't directly call, (c) renamed implementations, (d) rolled-back integration. Investigation deferred to UNK-024.
+- Resolution: Logged UNK-024 with 4 hypotheses and a concrete resolution plan (git log -S to check rollback history, grep for renamed primitives, check if surveillance imports pma/sba indirectly, read surveillance/ARCHITECTURE.md which README points to).
+```
+
+```
+SURPRISE: The README is auto-updated by a local git hook.
+- Expected: README is a regular Markdown file; agents update it manually like any doc.
+- Observed: `.git/hooks/pre-commit` runs `python scripts/update_readme.py` which auto-rewrites sections marked `<!-- AUTOGEN:* -->` (e.g., the primitives table) on every commit, and re-stages the result. So agent edits to those AUTOGEN sections will be silently overwritten on next commit.
+- Implication: An agent that edits the primitives table thinking it's static will lose their edits. Conversely: an agent that updates the underlying data source (some Python introspection module) will see the README update itself.
+- Resolution: Documented in STATE.md "Git hooks" section. New invariant candidate INV-015 deferred pending ADR-006 decision on hook tracking.
+```
+
+#### Step 6 — System Coherence Check (CRITICAL): YES
+
+Anchors from prior STATE.md (created in earlier bootstrap session) that this session touched:
+
+```
+ANCHOR: STATE.md "Project identity" line 1: "Git remote: ... project name: Latent Flux"
+- Status this session: REFINED (and partially CONTRADICTED)
+- Evidence: README.md line 1 explicitly names project "Layer 3 — On-Chain Behavioral Threat Intel."
+  The README's narrative positions Latent Flux as the analysis substrate of L3, not as the
+  project name. Git remote slug ≠ marketing name.
+- Action: STATE.md "Project identity" rewritten — distinguishes "README-declared project name"
+  from "repository codename."
+```
+
+```
+ANCHOR: STATE.md "Deploy surface" line: "Production URL: stellar-embrace-production-2020..."
+- Status this session: CONFIRMED current; README claim ADDED to stale-tracking
+- Evidence: README line 5 advertises `spypy.up.railway.app` — that's the OLD service the user
+  mentioned switching from. Both URLs are now documented in STATE.md "Deploy surface" table
+  with current/STALE labels.
+- Action: STATE.md updated. README itself is a candidate for explicit update; not done this
+  session because the pre-commit auto-update script might handle the dynamic sections — but
+  the URL string is narrative, not AUTOGEN, so it'd need a manual edit.
+```
+
+```
+ANCHOR: Phase 3 "Integration Hypothesis" output last session — "the relationship between them
+        [Latent Flux and L3 surveillance] is partial"
+- Status this session: CONFIRMED — but the README implies the integration EXISTS, which
+  raised the new UNK-024 puzzle.
+- Evidence: grep confirms zero imports; README claims four specific classes are integrated.
+  These are inconsistent.
+- Action: UNK-024 added to UNKNOWNS.md. Phase 3 path 1 (regime-monitor) remains a valid
+  proposal even if README claims something similar — verifying whether the existing claim
+  is real or aspirational is itself a prerequisite for any new integration work.
+```
+
+Contradiction summary: One STATE.md anchor (project name) refined; one README claim (live URL) marked stale; one structural inconsistency (README integration claim vs. code) escalated to UNK-024.
+
+#### Step 7 — Next Unknown Selection
+
+```
+NEXT TARGETS (for next session):
+
+- UNK-024 — README's integration claim vs. zero imports
+  Why: HIGH priority. Determines whether Phase 3 integration paths are net-new work or
+  whether existing integration just needs documentation. ~30 minute investigation
+  (git log -S, grep alternative names, read surveillance/ARCHITECTURE.md).
+
+- UNK-007 — lx-scanner/ integration with flux_manifold
+  Why: Same shape as the UNK-005/UNK-006 + UNK-024 pattern. Likely a quick read; resolves
+  the last "where does flux_manifold get used in production-ish contexts" question.
+  ~20 minute task.
+
+- UNK-008 — Surveillance-side test coverage
+  Why: BLOCKER for Action 4 (surveillance test suite). 10-minute resolution (Glob check).
+```
+
+Total estimated next-session resolution time: ~60 minutes.
+
+#### Skipped steps: 1 acknowledged
+
+**Step 3 (Decision Extraction): SKIPPED with reason.** No new architectural choices made this session (resolution work, not design work). ADR-006 candidate identified but deferred because it requires a decision input that hasn't been made yet. Skip is single-occurrence; rule-of-three not triggered.
+
+#### Loop self-monitoring
+
+Reflection cost this session: ~10 minutes (down from ~25 last session — bootstrap was the one-time cost).
+
+REFLECTION_LOG.csv updated with second row.
+
+---
+
+NEXT TARGETS (for session starting after 2026-05-13 continuation):
+- UNK-024 — README integration claim vs. zero imports
+- UNK-007 — lx-scanner integration with flux_manifold
+- UNK-008 — surveillance-side test coverage
+
+---
+
 *End of file. Append new sessions above this footer.*

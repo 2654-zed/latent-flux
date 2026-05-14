@@ -29,8 +29,10 @@ Confidence calibration (from LOOP.md):
 - **Category:** Architecture
 - **Why it matters:** My "Active Purpose" framing of the system is currently inferred. The README likely contains the explicit project positioning, the intended relationship between Latent Flux and surveillance, and the primary use case. Every downstream framing carries this inference as a load-bearing assumption.
 - **Resolution plan:** `Read C:/Users/jason/Desktop/ai lang/README.md` end-to-end. Map explicit statements to STATE.md "Project identity" section. Update if README contradicts.
-- **Status:** OPEN
-- **Priority:** Blocker for proper framing — this is the highest-leverage UNKNOWN to resolve
+- **Status:** RESOLVED
+- **Confidence:** HIGH (primary-source verified — README.md lines 1-200, 560-680 read directly)
+- **Resolved at:** 2026-05-13
+- **Resolved by:** Project framing is "Layer 3 — On-Chain Behavioral Threat Intel" with **Latent Flux DSL as the documented analysis substrate**. README line 34: *"Latent Flux primitives power Layer 3's analysis layer — AttractorCompetition for contract classification, ReservoirState for deployer behavioral baseline, RecursiveFlow for cluster resolution, FoldReference for data integrity."* HOWEVER: this integration claim does NOT match code reality (see UNK-024 below). README also documents **10 primitives, not 8** as I'd analyzed (↺ Recursive Flow and ⊗ Attractor Competition are first-class primitives, not "less common operators"). README live-URL is `spypy.up.railway.app` (STALE — current production is `stellar-embrace-production-2020.up.railway.app`). README corpus numbers (124,341 contracts) are STALE (current: 284,777). README documents `/api/v1/agent/screen/...` and `/api/v1/agent/facilitator/...` endpoints that are NOT in my probed production surface — possibly stale OR my probe missed them.
 
 ### UNK-002 — Whether `.github/workflows/` or any CI config exists
 
@@ -38,7 +40,10 @@ Confidence calibration (from LOOP.md):
 - **Category:** Architecture
 - **Why it matters:** Test discipline cannot be assessed without it. Agents don't know if tests must pass before commits or if production deploys are gated.
 - **Resolution plan:** `Bash: find .github .pre-commit-config.yaml -type f 2>/dev/null`. Also check `.git/hooks/`.
-- **Status:** OPEN
+- **Status:** RESOLVED
+- **Confidence:** HIGH (primary-source verified — `find` returned no `.github/` directory and no `.pre-commit-config.yaml`; `ls .git/hooks/` showed `pre-commit` and `post-commit` are LOCAL hooks)
+- **Resolved at:** 2026-05-13
+- **Resolved by:** **No CI/CD pipeline.** No `.github/workflows/`. No `.pre-commit-config.yaml`. Local-only git hooks installed in `.git/hooks/` (not tracked, not auto-installed on fresh clone): (1) `pre-commit` runs `python scripts/update_readme.py` to auto-update README dynamic sections marked `<!-- AUTOGEN:* -->` then re-stages README if modified; (2) `post-commit` runs `git push origin HEAD` — explains the auto-push behavior on every commit during prior sessions. **Implication:** test runs require manual invocation. No gate on production deploys. New agents working on a fresh clone won't have auto-push or auto-README behavior until they install the hooks manually. → Candidate for ADR-006: "Local-only git hooks; install instructions belong in STATE.md."
 
 ### UNK-003 — The "ontology §2/§3/§4" theoretical specification document
 
@@ -74,7 +79,10 @@ Confidence calibration (from LOOP.md):
 - **Category:** Subsystem
 - **Why it matters:** Imports `flux_manifold`. Has `reservoir_tracker.py`, `market_feed.py`, `pma_searcher.py`, `run_pma_backtest.py`. Naming suggests "Predictive Market Analysis" but no README confirms. Integration plans require knowing if pma is canonical Latent-Flux-applied-to-markets or deprecated prototype.
 - **Resolution plan:** `Read pma/__init__.py pma/run_pma_backtest.py pma/pma_searcher.py` (first 100 lines each). Document in a new `pma/README.md`.
-- **Status:** OPEN
+- **Status:** RESOLVED
+- **Confidence:** MEDIUM (primary-source verified for purpose; implementation surface not yet inspected)
+- **Resolved at:** 2026-05-13
+- **Resolved by:** `pma/__init__.py` single-line docstring: **"Prediction Market Arbitrage module"**. So pma = **Prediction Market Arbitrage** (e.g., Polymarket-style binary outcome markets), NOT "Predictive Market Analysis" as I'd guessed. Different domain: pma is a searcher/scanner for arbitrage opportunities across prediction markets, using flux_manifold's reservoir-state primitives via `reservoir_tracker.py`. **Confidence is MEDIUM** because the implementation surface (`pma_searcher.py`, `market_feed.py`, `run_pma_backtest.py`) has not been read yet. Promote to HIGH after reading those. → revisit-LOW candidate.
 
 ### UNK-006 — `sba/` subsystem purpose
 
@@ -82,7 +90,10 @@ Confidence calibration (from LOOP.md):
 - **Category:** Subsystem
 - **Why it matters:** Same shape as pma (`reservoir_tracker.py`, `account_risk.py`, `odds_feed.py`, `run_sba_backtest.py`). "Sports Betting Adjacent"? Unclear application surface.
 - **Resolution plan:** `Read sba/__init__.py sba/run_sba_backtest.py sba/odds_feed.py`. Presence of `odds_feed.py` strongly suggests sports betting odds; verify.
-- **Status:** OPEN
+- **Status:** RESOLVED
+- **Confidence:** MEDIUM (primary-source verified for purpose; implementation surface not yet inspected)
+- **Resolved at:** 2026-05-13
+- **Resolved by:** `sba/__init__.py` single-line docstring: **"Sports Betting Arbitrage module"**. Confirms "sports betting arbitrage" (vs. my earlier "sports betting adjacent" guess). Mirror structure to pma: a searcher/scanner for arbitrage opportunities across sportsbooks, using flux_manifold reservoir primitives via `reservoir_tracker.py`. `account_risk.py` suggests this also models account-level constraints (max stake per book, exposure limits). MEDIUM confidence — implementation files unread. → revisit-LOW candidate.
 
 ### UNK-007 — `lx-scanner/` integration with flux_manifold
 
@@ -258,9 +269,38 @@ Confidence calibration (from LOOP.md):
 
 ---
 
+### UNK-024 — README's "Latent Flux primitives power Layer 3's analysis layer" claim vs. zero imports in surveillance/
+
+- **Surfaced:** 2026-05-13 (resolving UNK-001)
+- **Category:** Architecture
+- **Why it matters:** README line 34 makes an explicit integration claim: AttractorCompetition / ReservoirState / RecursiveFlow / FoldReference "power Layer 3's analysis layer." But `grep -r "from flux_manifold\|AttractorCompetition\|ReservoirState\|RecursiveFlow\|FoldReference" surveillance/` returns ZERO matches. The integration the README advertises does NOT exist in code (as of 2026-05-13 sync state).
+- **Why this is load-bearing:** (a) STATE.md and any external claims about the project may inherit this aspirational-as-real framing. (b) Phase 3 integration paths I proposed earlier ("propose integration") are partly already-proposed in the README. (c) Whether the integration was never built, rolled back, or implemented under different names changes which of the 3 paths to pursue.
+- **Possible explanations:**
+  1. **Aspirational README** — claim was written before integration; integration deferred; README never updated
+  2. **Integration done in pma/sba/** — flux_manifold is imported there; if surveillance EXECUTES pma/sba modules (e.g., via subprocess), the README claim is technically true but indirect
+  3. **Implementation re-named** — algorithm copied into surveillance under different names (no `from flux_manifold` but conceptually same)
+  4. **Integration rolled back** — was built, removed, README never updated
+- **Resolution plan:**
+  1. `Bash: git log -p --follow -S "AttractorCompetition" -- "surveillance/*"` to see if it was ever imported and reverted
+  2. `Grep -r "reservoir\|attractor\|fold_reference\|recursive_flow" --include="*.py" surveillance/` for renamed implementations
+  3. `Grep -r "import pma\|import sba\|from pma\|from sba" surveillance/` for indirect-use via adjacent subsystems
+  4. `Bash: ls surveillance/ARCHITECTURE.md && head -200 surveillance/ARCHITECTURE.md` — README points here for end-to-end system; might describe the actual integration
+  5. Reconcile finding in next session
+- **Status:** OPEN
+- **Priority:** HIGH for accurate STATE.md; LOW for unblocking concrete work
+
+---
+
 ## Resolved (with confidence)
 
-*None yet — first pass of this file. As UNKNOWNs are resolved, move them here with `Status: RESOLVED`, `Confidence: HIGH|MEDIUM|LOW`, `Resolved at`, `Resolved by`.*
+UNKNOWNs marked RESOLVED can be browsed inline above by status field. Index of RESOLVED entries (2026-05-13 first pass):
+
+| ID | Confidence | Resolved at |
+|---|---|---|
+| UNK-001 | HIGH | 2026-05-13 |
+| UNK-002 | HIGH | 2026-05-13 |
+| UNK-005 | MEDIUM | 2026-05-13 (revisit-LOW candidate) |
+| UNK-006 | MEDIUM | 2026-05-13 (revisit-LOW candidate) |
 
 ---
 
