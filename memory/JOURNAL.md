@@ -1492,4 +1492,108 @@ NEXT TARGETS (for next session):
 
 ---
 
+### 2026-05-15 — Recent drain-wave analysis (May 9-15)
+
+**Trigger:** "analyze our db and recent drains and see if there's anything interesting." Surveyed the fresh corpus's drain landscape across approval_watchlist, trap_events, dormant_activations, x402_*, and extraction_events. The May-9..15 window turned out to contain the largest single-day drain event in corpus history.
+
+**Headline numbers, May 9-15 (`scripts/db_recent_drains_analysis.py`):**
+
+| Date | Drains | Distinct victims | Distinct drainers |
+|---|---|---|---|
+| 2026-05-09 | **6,294** | **6,284** | 12 |
+| 2026-05-10 | 11 | 11 | 5 |
+| 2026-05-11 | 548 | 540 | 11 |
+| 2026-05-12 | 140 | 129 | 9 |
+| 2026-05-13 | 362 | 362 | 5 |
+| 2026-05-14 | 531 | 531 | 7 |
+| 2026-05-15 | 13 | 13 | 3 |
+
+Total May 9-15: **7,899 drains** vs baseline ~150-200/day in late April. **Watchlist coverage: 2.4%** (192 drains by 4 known addresses); **97.6% off-watchlist** (7,707 drains by 34 unknown drain-caller addresses).
+
+#### Headline finding: 4,587-victim discharge from `0x752c5a95` in 30 minutes
+
+The single largest drain event in the corpus is also the cleanest Pattern A textbook case (v3 Attack 1 / Pattern A — Permission Harvesting + Routing Parasite, in the "harvest" phase):
+
+- **Bait contract** `0x752c5a95d202972e124390f30a50154409d3c858` (Base, confirmed-tier).
+- **Operator** `0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8` — already on watchlist as **HIGH priority "pristine-reputation solo operator"**, mainnet first tx 2019-05-23 (7-year cover identity). The 0x80b12bd0 → 0x752c5a95 → drain chain was correctly anticipated by the prior 2026-04-24 investigator review note: *"confirmed pre-drain, 1898 approvals, 0 drains."*
+- **OLI complication:** Correction #20 (2026-05-09) appended an OLI tag of "Animoca Deployer (LOW pending 2nd src)" to this address. The OLI guardrail (INV-007) only redirects HIGH-severity tags; the LOW tag did NOT redirect 0x80b12bd0 off the adversarial watchlist. **The same day the OLI guardrail decided "LOW = keep adversarial classification" — the address drained 4,587 victims.** This is either: (a) the OLI tag is a false-positive (Animoca attribution is wrong), or (b) the OLI tag is correct AND Animoca's deployer key was compromised. Either resolution is materially important.
+- **Timeline:**
+  - 2026-03-26: deployed (operator's first contract)
+  - 2026-04-11 → 2026-05-08: approvals accumulate (8,007 total, ~120/day peak Apr-11/12, then ~50/day steady)
+  - **2026-05-09 11:28–11:58 UTC: 4,587 drains in 30 minutes** (~150 victims/min, ~0.4s between txs — heavily automated)
+  - 2026-05-10..15: another 400/day of approvals still arriving, **no further drains** — bait remains "live" to bots that haven't updated their allowlists
+- **Drain cells (NOT the operator):**
+  - `0x1d81aff2a24c822d715ec09a0f81801face6e6fd` → 3,228 victims. Mainnet first tx **2025-01-25** (Pattern D cross-chain reputation import). NOT on watchlist.
+  - `0x0e2224685fe775b471b457c643913e4bbd66c8d2` → 1,359 victims. Not in `deployers` table at all (pure executor). NOT on watchlist.
+  - **Pairwise victim overlap: 0** between the two cells — they pre-partitioned the victim list to parallelize cleanly. This is two-cell drain coordination as a distinct operational pattern (worth a lexicon entry: "drain cell partition" / "execution sharding").
+
+Loss estimate: **not computable** — `drain_values` table has 7 rows, all `amount_human=0` with token_name `NO_TRANSFER_EVENT` (Attack 7 / custom-selector drain avoiding logs signature). Operational priority #14 from CLAUDE.md (drain-USD attribution gap) is confirmed unmoved at 7,899 drain events in a 7-day window.
+
+#### Second-largest May-9 cell: `0xa9f65861` (self-deploying drainer)
+
+Parallel to the 0x752c5a95 discharge, a separate operator ran a **self-deployed drain**:
+- `0xa9f65861c9bf68497bce6f30c5b20d0ed64d216e` deployed `0xb738b156` on **2026-05-05** (4 days before discharge).
+- Same address drained from its own contract: 1,520 victims on May-9, +98 on May-11.
+- Deployed 13 contracts total May 5-9; mainnet_first_tx=NULL (L2-native).
+- NOT on watchlist despite the textbook `self_deploying_drainer_*` signature.
+
+#### Pattern shift: deploy-and-drain-same-day cycle
+
+May-11..14 wave reveals a different pattern from the 0x752c5a95 long-accumulation model:
+
+| Contract | Deployed | Drained | Cycle |
+|---|---|---|---|
+| 0xc8da2602 | 2026-05-11 | 2026-05-11..12 | same-day |
+| 0xb0a4741f | 2026-05-11 | 2026-05-13 | 2-day |
+| 0xf768d7d1 | 2026-05-11 | 2026-05-11..12 | same-day |
+| 0x4f4f61e1 | 2026-05-11 | 2026-05-11 | same-day |
+| 0x9aa9aa05 | 2026-04-22 | 2026-05-14 | 3-week (Arbitrum) |
+
+Fast deploy-drain cycles (hours-to-days between deploy and discharge) replace the multi-week accumulation pattern of 0x752c5a95. Implication: detection windows shrink — pre-drain confidence_tier=`suspected` classification needs to surface within hours of deploy to be actionable for these cohorts.
+
+#### Cross-chain expansion in the wave
+
+May-13/14 wave includes 3 Arbitrum drains (0x9aa9aa0530, 0x3fd877dfc3, 0x4cc0de8d15). Prior drain activity was Base-concentrated. This is a recent expansion — worth tracking whether the same operator-class is now multi-chain.
+
+#### Adjacent finding: 2026-05-09 approval spike (the regime alert) is also Base-concentrated
+
+The 2026-05-09 approval_events_per_day=6,446 alert (new in this session's re-scan of regime_monitor) breaks down: **4,498 of 6,446 (70%) of May-9 approvals were on 0x752c5a95 alone**. The approval-side regime alert and the drain-side event are the **same operator's discharge moment** — approvals AND drains both spike on the same contract on the same day. This is regime monitor surfacing a real Pattern-A discharge in real time.
+
+#### Cross-reference against POTENTIAL_ATTACKS_V3.md
+
+- **Attack 1 (Permission Harvesting + Routing Parasite):** validated cleanly by 0x752c5a95 — 6 weeks of approval harvest → 30-minute discharge across two drain cells. Status promoted from "components observed, chain hypothetical" toward "observed" (pending one additional confirmation that the 0x752c5a95 drain used a routing-parasite step, not just direct `transferFrom`).
+- **Attack 7 (Custom Selector Drain Avoiding Logs):** strongly evidenced — `drain_values` table holds `NO_TRANSFER_EVENT` markers across all sampled drains. The May 9-15 wave's 7,899 drains have no USD attribution because they don't emit Transfer events.
+- **Pattern D (Cross-Chain Reputation Import):** drain cell `0x1d81aff2` is a textbook instance (mainnet 2025-01-25 → L2 first-seen 2026-04-16, ~15-month gap).
+
+#### Subordinate findings
+
+- **x402 events are massive** (1.59M total, ~70K/day). 5 facilitator addresses dominate at ~174K each (55% combined share with 0.35% volume variation between them) — strongly suggests one sharded operator (likely Coinbase, x402's originator). Not adversarial by current signal, but worth tracking.
+- **`0xd323cc9c` dormant-fleet activation:** 4,744-contract Base fleet, gradual wake-up May 12-13 (3 contracts activated per batch). Currently 438→441 active. Below the typical "trap activation" threshold but worth watching.
+- **Pattern D query against post-2026-05-09 deployers returned 0 candidates** — auto_funder_tracer may not have backfilled the latest cohort yet, OR Pattern D signature is fading from recent activity.
+- **`extraction_events` grew from 8 to 10** since last sync. New: EXTRACTION_009 (Wasabi, $5M, validates v3 Attack 11a entry) and EXTRACTION_010 (mass dormant-wallet drain hub `0xA707034429c8`, $733K, 49-node, Ethereum mainnet) — the latter is a NEW case not yet integrated into v3 attack categories; might warrant Attack 11c (mass small-balance recovery) or fit under existing Attack 11a.
+
+#### New UNKNOWNs surfaced
+
+- **UNK-031:** Is `0x80b12bd0` actually Animoca, or is the OLI tag a false-positive? The address drained 4,587 victims the same day the LOW-severity OLI tag was applied. Need 2nd-source verification of Animoca attribution.
+- **UNK-032:** Should 34 May-9..15 drain-caller addresses be added to the watchlist en masse? Specifically the three top May-9 cells (0x1d81aff2, 0xa9f65861, 0x0e222468) plus the secondary-wave cells (0xd4d0c2d8, 0x20473d1a, 0x8627d04f, 0x9c74f349, 0x2293e4bb, etc.).
+- **UNK-033:** EXTRACTION_010 mass dormant-wallet drain — does it fit v3 Attack 11 or warrant a new sub-category for mass small-balance recovery / dust-fishing on dormant wallets?
+- **UNK-034:** The 0x752c5a95 contract is STILL receiving approvals (400 May-10, 192 May-11, 26/day through May-15) AFTER its drain discharge. Are bots not updating allowlists, OR is the operator running a secondary harvest, OR is the contract auto-renewing approvals via some mechanism?
+- **UNK-035:** Why does the v3 Attack 1 (Permission Harvesting) live primarily on Base while v3 Attack 11 (Pooled Custody) lives on Ethereum+Base+multi-chain? Is this a chain-cost arbitrage by operator class, or a corpus-coverage artifact?
+
+#### Action recommendations (not done this session, surfaced for next-session work)
+
+1. **Add 34 drain-caller addresses to watchlist as HIGH priority `drain_executor_*`** — this fills a major coverage gap. The watchlist currently flags operators (deployers) but misses execution cells.
+2. **Revisit Correction #20's Animoca OLI tag** on 0x80b12bd0. Confirm Animoca's published deployer addresses; if 0x80b12bd0 is not on Animoca's public deployer list, retract the OLI attribution.
+3. **Build per-drain USD attribution** for the May 9-15 wave (operational priority #14). 7,899 drain events with zero USD context is the largest measurement gap in the corpus right now.
+4. **Episode coalescence in regime monitor (V2):** the May 9-15 wave is a 7-day episode generating ~10 regime alerts. Coalescing to 1 episode would make the alert surface actionable.
+5. **Cross-chain Pattern A enumeration:** the wave's Arbitrum entrants (0x9aa9aa0530, 0x3fd877dfc3, 0x4cc0de8d15) suggest a multi-chain replication pattern. Detect operators with multi-chain bytecode-family contracts.
+
+#### Files
+
+- `scripts/db_recent_drains_analysis.py` — broad survey (10 sections)
+- `scripts/investigate_may9_drainers.py` — three top May-9 drainers + victim overlap
+- `scripts/investigate_drain_operator.py` — 0x80b12bd0 full footprint + May 9-15 wave context
+
+---
+
 *End of file. Append new sessions above this footer.*

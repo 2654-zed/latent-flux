@@ -351,6 +351,46 @@ Confidence calibration (from LOOP.md):
 - **Resolution plan:** `git log --since="2026-05-04" --until="2026-05-06" -- surveillance/bytecode_classifier.py surveillance/pattern_*.py surveillance/db.py`. Also check `surveillance/scripts/` for any re-classification job around that date.
 - **Status:** OPEN
 
+### UNK-031 — Is `0x80b12bd0` actually Animoca, or is the OLI tag a false-positive?
+
+- **Surfaced:** 2026-05-15, by 2026-05-15-recent-drains
+- **Category:** Operational
+- **Why it matters:** `0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8` was OLI-tagged "Animoca Deployer (LOW pending 2nd src)" by Correction #20 on 2026-05-09. **The same day**, it drained 4,587 victims via two coordinated drain cells. Either (a) the OLI tag is wrong and 0x80b12bd0 is a 7-year-vintage adversarial operator that's been preparing the discharge since at least 2026-04-11, or (b) the tag is right and Animoca's deployer key was compromised (a v3 Attack 11a instance at company scale). Either resolution materially affects the OLI guardrail's calibration and the Correction #20 backfill correctness.
+- **Resolution plan:** Find Animoca's published deployer addresses (Animoca Brands public docs, Etherscan tags). If 0x80b12bd0 is not on the official list, retract the OLI tag and re-confirm the original "pristine-reputation solo operator" attribution. If 0x80b12bd0 IS Animoca-published, surface as a possible key-compromise event and notify the Animoca team.
+- **Status:** OPEN
+
+### UNK-032 — Should 34 May-9..15 drain-caller addresses be added to watchlist en masse?
+
+- **Surfaced:** 2026-05-15, by 2026-05-15-recent-drains
+- **Category:** Operational
+- **Why it matters:** The May 9-15 drain wave produced 7,899 drains across 34 distinct drain-caller addresses, of which only 4 are on the watchlist (2.4% coverage). The remaining 30 are textbook drain executors and should be flagged. Specifically: `0x1d81aff2a24c822d715ec09a0f81801face6e6fd` (3,228 drains, Pattern D mainnet 2025-01-25), `0xa9f65861c9bf68497bce6f30c5b20d0ed64d216e` (self-deployer + drainer, 1,618), `0x0e2224685fe775b471b457c643913e4bbd66c8d2` (1,359), `0xd4d0c2d83cef1587196be67961415c27361f9a16` (211), `0x9c74f3498a4e78e5211c3d0f21294f80ed9b3d12` (319), `0x2293e4bbd76963bd4f8f8d5a773f7350f2a4a45e` (499), plus 28 more lower-volume drainers.
+- **Resolution plan:** Build `scripts/add_may9_15_drainers_to_watchlist.py` analogous to Correction #20 application scripts. Add as HIGH-priority `drain_executor_*` entries with watch_reason citing this session's analysis. Apply to local + prod.
+- **Status:** OPEN
+
+### UNK-033 — Does EXTRACTION_010 (mass dormant-wallet drain hub) fit v3 Attack 11 or warrant a new sub-category?
+
+- **Surfaced:** 2026-05-15, by 2026-05-15-recent-drains
+- **Category:** Theoretical (threat-modeling)
+- **Why it matters:** EXTRACTION_010 (added since last sync): single mainnet hub `0xA707034429c8` received small ETH amounts from 49+ distinct sender wallets, total ~$733K, 2026-04-30 on Ethereum mainnet. This is mass small-balance recovery / dust-fishing on dormant wallets — a pattern not cleanly captured by v3's Attacks 1-15. Possible new Attack 11c (mass dormant-wallet collection mode) or sub-category under existing Attack 11.
+- **Resolution plan:** Read the EXTRACTION_010 case file (look in `surveillance/data/cases/`). Map mechanism to v3 categories. If novel, draft Attack 11c entry for v3.1 or queue as v4 candidate.
+- **Status:** OPEN
+
+### UNK-034 — Why does `0x752c5a95` continue receiving approvals after its May-9 drain discharge?
+
+- **Surfaced:** 2026-05-15, by 2026-05-15-recent-drains
+- **Category:** Subsystem / Operational
+- **Why it matters:** After the May-9 11:28-11:58 UTC drain of 4,587 victims, the bait contract `0x752c5a95` continued receiving approvals: 400 on May-10, 192 May-11, decaying to 26/day through May-15. Three hypotheses: (a) bot allowlists haven't updated post-discharge (scanner lag); (b) the operator is running a secondary harvest with discharge to come; (c) the contract has a self-renewing approval mechanism. Resolution affects how to interpret "post-discharge approval continuation" as a signal — is it a leading or lagging indicator?
+- **Resolution plan:** Sample the post-May-9 approvers — are they distinct from pre-May-9 approvers (lag) or do approvers re-appear (renewal)? Check the contract's bytecode for any approval-renewal pattern.
+- **Status:** OPEN
+
+### UNK-035 — Chain-distribution skew: Attack 1 on Base vs Attack 11 multi-chain
+
+- **Surfaced:** 2026-05-15, by 2026-05-15-recent-drains
+- **Category:** Theoretical
+- **Why it matters:** May 9-15 drain wave is heavily Base-concentrated for Attack 1 (Permission Harvesting) instances, while POTENTIAL_ATTACKS_V3.md's Attack 11 (Pooled Custody Adapter Compromise) instances live on Ethereum+Base+multi-chain (Wasabi was Ethereum+Base). Is this a chain-cost-arbitrage signal (cheap Base for high-volume bait+discharge; expensive Ethereum for high-value-per-event adapter compromise), a corpus-coverage artifact (Layer 3 monitors Base/Arbitrum/Optimism, possibly biased), or a real operator-class chain specialization?
+- **Resolution plan:** Compute Attack 1 vs Attack 11 (approximately: many-victim approval-bait + drain vs few-events high-USD adapter compromise) chain-distribution histograms across the corpus. Look for chain-specialized operator clusters.
+- **Status:** OPEN
+
 ---
 
 ## Resolved (with confidence)
@@ -367,8 +407,8 @@ UNKNOWNs marked RESOLVED can be browsed inline above by status field. Index of R
 | UNK-008 | HIGH | 2026-05-13 |
 | UNK-024 | HIGH | 2026-05-13 |
 
-**RESOLVED count: 7 of 30 total (23%)**
-**OPEN count: 23**
+**RESOLVED count: 7 of 35 total (20%)**
+**OPEN count: 28**
 **revisit-LOW queue: 2 (UNK-005, UNK-006)**
 
 ---
