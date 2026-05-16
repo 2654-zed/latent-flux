@@ -1,6 +1,6 @@
 # Layer 3 Lexicon
 
-**Version:** 2026-05-10 (living document; update when new framework-level observations emerge)
+**Version:** 2026-05-15 (living document; update when new framework-level observations emerge)
 **Purpose:** Canonical definitional reference for Layer 3 methodology. Every entry specifies the term's definition, extended meaning, empirical grounding in the corpus where applicable, and cross-references. Intended for internal use and eventual external publication.
 **Discipline:** Each entry is either (a) deductive from on-chain corpus evidence, (b) inferential with explicit methodology application, or (c) framework-level observation with clear analytical basis. No entry is asserted without basis.
 
@@ -60,6 +60,12 @@
 - [Verification-Path Trust Failure](#verification-path-trust-failure)
 - [Pooled Custody Amplification](#pooled-custody-amplification)
 - [Cross-Domain Compositional Harm](#cross-domain-compositional-harm)
+
+### Operational Doctrine
+- [Adversarial Maneuver](#adversarial-maneuver)
+- [Maneuver Primitives](#maneuver-primitives)
+- [Counter-Maneuver](#counter-maneuver)
+- [Vulnerability-Centric vs Maneuver-Centric Framing](#vulnerability-centric-vs-maneuver-centric-framing)
 
 ### Commercial / Positioning
 - [The Detection Gap as Product](#the-detection-gap-as-product)
@@ -254,6 +260,8 @@ The vulnerability arises because the deputy's authorization architecture checks 
 
 **Cross-references.** [Forced Deterministic Neutrality](#forced-deterministic-neutrality) (the mechanism that produces the per-program vulnerability), [Neutrality Trap](#neutrality-trap) (the ecosystem-level pattern that makes the per-program vulnerability unavoidable), [Stored Potential](#stored-potential) (the deputy's elevated permissions are themselves stored potential), [Compositional Harm](#compositional-harm) (Confused Deputy harm composes across principal/deputy/attacker boundaries), [Configuration-Level Vulnerability](#configuration-level-vulnerability) (the deputy's authorization configuration is the failure surface), [Distributed Confused Deputy Chain](#distributed-confused-deputy-chain) (the multi-contract systemic form of this vulnerability in modular protocols).
 
+**External taxonomy reference.** Maps to several `kadenzipfel/protocol-vulnerabilities-index` categories: `categories/bridge/access-control-misconfiguration.md`, `categories/cross-chain/access-control-and-privilege-escalation.md`, `categories/services/cross-chain-bridge-message-validation.md`, and the per-protocol-type `signature-replay` / `signature-validation` entries. Layer 3 surfaces this via `vuln_index` FTS in the Explore tab; see `scripts/ingest_vuln_index.py`.
+
 ---
 
 ### Distributed Confused Deputy Chain
@@ -268,11 +276,14 @@ The vulnerability arises because the deputy's authorization architecture checks 
 
 **Empirical grounding.**
 
-- **Renegade Dark Pool Proxy (2026-05-10, `0x30bD...DC518` on Arbitrum).** Unprotected initializer allowed an attacker to reset the proxy's implementation address. The proxy, the token approvals, and the asset vault each functioned correctly; together, they constituted a Distributed Confused Deputy Chain that drained user assets. Attacker: `0x777253F28AdC29645152b7b41BE5c772A9657777`. Implementation at risk: `0xc038933d0b33359f5C87B4B2f92Ee0DAd11EaDc5`.
-- **Wasabi Protocol (EXTRACTION_009, 2026-04-30).** A compromised admin EOA triggered a UUPS proxy upgrade to a malicious implementation. The proxy obeys the admin; the vault obeys the proxy; the token approvals obey the vault. The chain of trust discharged stored potential instantly. See `cases/CASE_WASABI_EXPLOIT_20260430.md`.
-- **Grok/Bankr exploit (2026-05-04).** A cross-domain variant. Grok's wallet trusted the Bankr NFT (which expanded permissions); Bankr trusted Grok's tweets. The attacker injected a prompt that traversed the entire trust chain: Twitter → Grok → Bankr → Base blockchain. No single component understood the full story; all compliantly participated.
+- **Renegade Dark Pool Proxy (2026-05-10, `0x30bD...DC518` on Arbitrum) — *unprotected-initializer sub-mechanism*.** Unprotected initializer allowed an attacker to reset the proxy's implementation address. The proxy, the token approvals, and the asset vault each functioned correctly; together, they constituted a Distributed Confused Deputy Chain that drained user assets. Attacker: `0x777253F28AdC29645152b7b41BE5c772A9657777`. Implementation at risk: `0xc038933d0b33359f5C87B4B2f92Ee0DAd11EaDc5`.
+- **Wasabi Protocol (EXTRACTION_009, 2026-04-30) — *UUPS-admin-key sub-mechanism*.** A compromised admin EOA triggered a UUPS proxy upgrade to a malicious implementation. The proxy obeys the admin; the vault obeys the proxy; the token approvals obey the vault. The chain of trust discharged stored potential instantly. See `cases/CASE_WASABI_EXPLOIT_20260430.md`.
+- **Aurellion Labs (2026-05-12, `0x0adc63e7…f296f1b2` on Arbitrum) — *diamond-facet-injection sub-mechanism*.** Attacker called `diamondCut(...)` on an EIP-2535 diamond to attach a malicious facet exposing `pullERC20(address,address,uint256)` and `sweepERC20(address,address)`, then invoked `pullERC20` against three USDC-pre-approved EOAs in the same tx. **456,442 USDC** swept (~99% from one victim `0x2e933518068b1c…`). The diamond was created 2026-03-17 (within Layer 3's monitoring window) but never entered our `contracts` table — primary detection gap. Distinguished from the Renegade and Wasabi sub-mechanisms because the upgrade primitive is *fine-grained per-selector facet registration* (not whole-implementation replacement), letting the attacker add a single hostile function while the rest of the diamond's surface stays trusted-looking. See `cases/CASE_AURELLION_DIAMONDCUT_20260512.md`.
+- **Grok/Bankr exploit (2026-05-04) — *cross-domain agent-coordination sub-mechanism*.** A cross-domain variant. Grok's wallet trusted the Bankr NFT (which expanded permissions); Bankr trusted Grok's tweets. The attacker injected a prompt that traversed the entire trust chain: Twitter → Grok → Bankr → Base blockchain. No single component understood the full story; all compliantly participated.
 
 **Cross-references.** [Confused Deputy Problem](#confused-deputy-problem) (the parent concept; this entry is the multi-contract systemic form), [Compositional Harm](#compositional-harm) (Distributed Confused Deputy Chains are the specific mechanism of compositional harm in modular architectures), [Forced Deterministic Neutrality](#forced-deterministic-neutrality) (the execution environment's inability to pause or question the chain), [Stored Potential](#stored-potential) (the proxy upgrade mechanism is a classic stored-potential node), [Cross-Domain Compositional Harm](#cross-domain-compositional-harm) (the Grok/Bankr variant spans multiple domains).
+
+**External taxonomy reference.** The "single point of syntactic failure" condition maps directly to `kadenzipfel/protocol-vulnerabilities-index` entries `categories/bridge/initialization-and-upgrade-flaws.md`, `categories/cross-chain/initialization-and-upgradeability.md`, `categories/cdp/initialization-and-upgradeability.md`, `categories/staking-pool/initialization-vulnerabilities.md` — the unprotected-initializer class that the Renegade exploit anchors.
 
 ---
 
@@ -518,6 +529,7 @@ The three documented sub-categories are not interchangeable — they target diff
 - **`0xc0ffee*`** (Coffee Fleet): 84 vanity bots in `bot_candidates` + 1 vanity deployer (`0xc0ffeefeed8b9d271445cf5d1d24d74d2ca4235e`). 100% c0ffee-on-c0ffee victim overlap as of `surveillance/data/cases/CASE_COFFEE_FLEET_0xc0ffeefeed8b.md` (2026-04-08). Single-operator hypothesis still leading.
 - **`0x01989c93890aed05*`** (org_001 vanity spoof): 2 wallets — the legitimate LP_POOL_2 and the vanity-spoofed Shadow Wallet 1. Documented in `surveillance/data/cases/CASE_ORG_001_INFRASTRUCTURE.md` Anti-Forensic Capability section (discovered 2026-04-11).
 - **`0xb0b0b69*`** (Optimism funder): 1 funder, 6,605 random-prefix downstream deployers, ~5,775 contracts using bytecode hash `476b15536fa9703e2c630e91ac976c514e1868a70e8c996f1bf8bb97a9b9e532` in a 2026-04-25 mass-deployment campaign. Pre-stage interval: 10 days dormant between funder creation (2026-04-15, 7 test deployers) and mass-deployment burst (2026-04-25, 6,598 deployers in one day). Documented in `docs/INDEX.md` Section 1 + Section 5.
+- **`62ac…EE8A` victim-mimic cluster** (Ethereum, 2026-05-11) — **fourth sub-category** introduced 2026-05-11: *victim-mimic vanity*. Attacker generated 3 wallets sharing the 8-char shape of an active drain victim (62ac start + EE8A end, random 32 middle chars), routed dust + worthless memecoins through them concurrent with the real drain, then mixed them into the inflow set on the attacker EOA. Distinct from operational / anti-forensic / funder sub-categories because the mimicry target is the *victim* (downstream-relational), not the operator or a legitimate institution. Compute cost ~268M attempts per address for the prefix alone, doubled for the suffix — ≥1 GPU-hour per generated wallet. Purpose hypothesis: trail confusion (pad inflow count to muddle attribution) + forward address poisoning (prime future copy-paste mistakes). Pre-positioning window: one of the three wallets had its first tx 6 days before the drain. Documented in `surveillance/data/cases/CASE_PRIVATE_KEY_DRAIN_F7CFFC27_20260511.md`.
 - **Compute cost for a 7-hex-char vanity prefix:** ~268M generation attempts on average. Visible cost — this is not zero-cost obfuscation. The cost is itself the signal that the prefix is intentional.
 - **Singularity check:** `0xb0b0b6*` is the only such address in the corpus. No vanity siblings, no rotation. Compare to Coffee Fleet (84+1 across its prefix) and org_001 spoofs (2 across its prefix).
 
@@ -839,6 +851,8 @@ The framework implication is that the population statistics of the L2 adversaria
 
 **Cross-references.** [Verification-Path Trust Failure](#verification-path-trust-failure), [The Bug-Bounty Structural Gap](#the-bug-bounty-structural-gap), [Cross-Domain Compositional Harm](#cross-domain-compositional-harm) (the off-chain analog where the configuration is at the application substrate — environment-variable visibility defaults, OAuth scope settings), [Protocol-Family Specialist Operator](#protocol-family-specialist-operator) (the operator class that systematically harvests configuration-class surfaces within a single trust-graph; EXTRACTION_011 is the joint anchor).
 
+**External taxonomy reference.** The Configuration-Level cluster has many `kadenzipfel/protocol-vulnerabilities-index` analogs across protocol types: `categories/*/access-control-*`, `categories/*/initialization-*`, `categories/*/admin-centralization-risks.md`, `categories/*/privileged-function-abuse.md`, `categories/*/centralization-risks.md`. The repo's 460-category taxonomy is the closest external benchmark for "code that did exactly what its spec said it would do, with the spec being the failure mode."
+
 ---
 
 ### Verification-Path Trust Failure
@@ -853,6 +867,8 @@ The framework implication is that the population statistics of the L2 adversaria
 - **EXTRACTION_008 (Kelp)**: 1-of-1 DVN signed forged cross-chain message → LayerZero endpoint accepted attestation → Kelp adapter minted on Ethereum.
 
 **Cross-references.** [Compositional Harm](#compositional-harm), [Configuration-Level Vulnerability](#configuration-level-vulnerability), [Pooled Custody Amplification](#pooled-custody-amplification).
+
+**External taxonomy reference.** Maps to the `kadenzipfel/protocol-vulnerabilities-index` oracle cluster: `categories/oracle/*` (12 categories including stale-oracle-price-data, twap-oracle-miscalculation, invalid-oracle-version-handling) and the cross-protocol `oracle-price-manipulation` / `oracle-price-feed-*` entries spanning lending, CDP, derivatives, leveraged-farming, options-vault, and synthetics. The trust-binding-without-question-mechanism failure mode appears under different labels in each protocol type.
 
 ---
 
@@ -885,6 +901,129 @@ The framework implication is that the population statistics of the L2 adversaria
 - Trust-amplification analog: the affected Vercel customers had no direct relationship with Context.ai, and Wasabi's vault depositors had no individual relationship with the deployer EOA. In both, users trusted the *structure* (Vercel as platform; Wasabi vault as audited-deposit primitive); the structure was correctly forwarding the attacker's reach to their assets. Structurally identical to the Universal Router case in EXTRACTION_003 (`0xd4624228`).
 
 **Cross-references.** [Compositional Harm](#compositional-harm) (the parent concept), [Trust Amplification Factor](#trust-amplification-factor) (the quantification framework that applies to both on-chain and off-chain versions), [Configuration-Level Vulnerability](#configuration-level-vulnerability) (Vercel's environment-variable visibility default is a configuration-level instance), [Operational Layer Attack](#operational-layer-attack) (related class).
+
+---
+
+## Operational Doctrine
+
+This section codifies the **maneuver frame** — the strategic posture that treats every exploit as a multi-phase campaign rather than a singular code defect. The entries here are not new attack categories; they are the *operational doctrine* that organizes every existing attack category in this lexicon into a single defender-facing model. The maneuver lens is where Layer 3's analytical primitives (stored potential, compositional harm, confused deputy chains, etc.) consolidate into actionable counter-intelligence.
+
+### Adversarial Maneuver
+
+**Definition.** A multi-stage operational sequence in which an attacker gains positional advantage over a deterministic system by exploiting the system's own trust architecture, information flows, and forced execution. The maneuver transforms benign capabilities into destructive outcomes through the strategic sequencing of actions, rather than through the exploitation of a single code defect.
+
+**Extended description.** The maneuver frame shifts security analysis from a bug-centric to a campaign-centric model. Every major DeFi exploit in the corpus, when decomposed, reveals the same six phases: reconnaissance, positioning (stored potential expansion), trust establishment (camouflage), trigger (exploiting forced deterministic neutrality), exploitation (confused deputy chains and compositional harm), and exfiltration (behavioral laundering). The phases are not optional — even smash-and-grab events compress the sequence into minutes, but every phase is present. See [Maneuver Primitives](#maneuver-primitives) for the canonical phase taxonomy.
+
+The strategic implication is that defense cannot be reactive. By the time the exploitation phase emits an observable artifact (the drain transaction), the attacker has already completed reconnaissance, positioning, and trust establishment. The transaction is the final phase, not the campaign. Therefore the **leading intelligence indicators are pre-exploitation** — stored potential expansion, camouflage signatures, capability injection events, and infrastructure pre-positioning. Layer 3's surveillance is built around capturing these indicators because they precede the discharge by days, weeks, or months.
+
+The maneuver frame also reframes adversary skill. The most effective attackers in the corpus are not the best coders; they are operational architects who understand tempo (how fast can the exploit execute before defenders react), deception (how can the exploit appear normal), redundancy (what fallback if a path is blocked), and cover (how to maintain access for future campaigns). This is closer to special-operations doctrine than to traditional software-vulnerability research, and the language of [maneuver warfare](https://en.wikipedia.org/wiki/Maneuver_warfare) maps cleanly onto the observed patterns.
+
+The terrain itself shapes which maneuvers are possible:
+- **Composability** is open terrain — easy to move through, hard to defend.
+- **Proxy upgradeability** is a road network — used by both attackers and defenders.
+- **Oracles** are intelligence assets — capture them, and the enemy is blinded or fed false data.
+- **ENS names and on-chain reputation** are identity markers — spoofable, poisonable, exploitable for deceptive trust amplification.
+
+The [Adversarial Topology](#adversarial-topology) framework is the terrain map: position, permissions, trust bindings, mutability, observation capability. The attacker maneuvers across it, seeking high ground (privileged positions) and chokepoints (single points of failure). The defender must read the same map and anticipate the avenues of approach.
+
+**Empirical grounding.**
+
+- **Grok/Bankr (2026-05-04, ~$175K AI agent drain).** Reconnaissance: attacker maps Grok's publicly-labeled wallet and its constrained transfer capability. Positioning (capability injection): gifts a Bankr Club Membership NFT that expands Grok's permissions to execute autonomous transfers — the equivalent of smuggling a key into the fortress. Trigger (prompt injection): delivers a crafted prompt that Grok's intent-parsing layer interprets as a legitimate command; [Forced Deterministic Neutrality](#forced-deterministic-neutrality) executes it without questioning the source. Exploitation: Bankr (the automation layer) signs and broadcasts the transfer; the trust chain (Twitter → Grok → Bankr → Base) functions correctly. Exfiltration: attacker bridges and dumps the tokens, then deletes the X account. The maneuver exploited not a bug but the absence of a judgment layer between "reading a helpful reply" and "authorizing a $175K transfer."
+
+- **THORChain (2026-05-15, $7.4M–$10.8M consensus forgery).** Reconnaissance: attacker studies Bifrost's gossip protocol and recognizes that validator signatures cover content but not the inbound/outbound bit. Positioning: attacker (or colluding proposer) has access to a real inbound observation with valid signatures — a legitimate deposit. Trigger: flips the inbound/outbound bit in the `ObservedTx` struct and re-proposes it to consensus; signatures remain valid, consensus accepts the forged outbound. Exploitation: THORChain's TSS signs real outbound transactions on ETH, BSC, and BTC; the composition of Bifrost + Tendermint + TSS produces the payout. Exfiltration: funds laundered through a consolidation hub and a cold wallet (3,156 ETH still held). The maneuver exploited the specification gap between *what the signatures attested to (content)* and *what they should have attested to (type + content)*. Not a cryptographic break — a protocol-trust-model outmaneuver.
+
+- **Renegade Dark Pool (2026-05-10, $209K initializer takeover).** Reconnaissance: maps Renegade's proxy/implementation split, identifies the unprotected `initialize()` function on a legacy Dark Pool proxy. Trigger: calls the initializer, becomes admin, points the proxy's `delegatecall` at a malicious implementation. Exploitation: the proxy (now a [Confused Deputy](#confused-deputy-problem)) executes the malicious implementation's `drain()` logic against tokens that users had pre-approved to the proxy — the drain uses those approvals without needing new victim signatures. Exfiltration: assets swept; 90/10 whitehat bounty saw most funds returned. The maneuver exploited the compartmentalization-composability contradiction — contracts blindly trust each other, no single contract evaluates the full attack story.
+
+- **Kelp (2026-04-18, ~$292M cross-chain DVN forgery).** Reconnaissance: identifies that Kelp's LayerZero OApp adapter is configured with `requiredDVNCount=1` — a single-verifier attestation path readable via `EndpointV2.getConfig(configType=2)`. Positioning: the configuration sits unchanged for **≥56.7 days** of accumulating user deposits. This is the longest stored-potential window in the corpus. Trigger: a forged cross-chain message signed by the (compromised or colluding) DVN operator. Exploitation: LayerZero accepts the attestation (1/1 satisfied), the adapter releases tokens from pooled custody. Exfiltration: ~116,500 rsETH freely composes into Aave as collateral because [Pooled Custody Amplification](#pooled-custody-amplification) makes the stolen tokens indistinguishable from legitimate holdings.
+
+- **`0x80b12bd0` Animoca-attributed operator (2026-05-09, 4,587-victim drain on Base; Layer 3 corpus).** Reconnaissance: attacker (presumably via key compromise) inherits a 2019-vintage mainnet identity with REVV / OneFootball Club / ANIMOCA portfolio holdings — institutional cover identity ready-made. Positioning: deploys bait `0x752c5a95` on Base 2026-03-26 03:12 UTC; bridges 1 OFC token from Ethereum to Base 50 minutes later as cross-chain control confirmation. Trust establishment: the 7-year mainnet vintage and Animoca-portfolio token holdings provide [Pattern A](#pattern-a--reputation-building-sacrifices) reputation by inheritance. Discharge: 4,587 victims drained in a 30-minute window via two coordinated execution cells with zero pairwise victim overlap (execution sharding). See [reports/animoca_deployer_investigation_2026-05-15.md](../reports/animoca_deployer_investigation_2026-05-15.md). This case is empirically important because Layer 3's behavioral classifier identified the discharge risk on 2026-04-24 — 15 days of pre-drain lead time, demonstrating that maneuver-centric pre-exploitation indicators are actionable.
+
+**Cross-references.** [Maneuver Primitives](#maneuver-primitives) (the six-phase taxonomy), [Counter-Maneuver](#counter-maneuver) (defender-side doctrine), [Vulnerability-Centric vs Maneuver-Centric Framing](#vulnerability-centric-vs-maneuver-centric-framing) (the methodological contrast), [Stored Potential](#stored-potential) (the leading indicator of positioning), [Compositional Harm](#compositional-harm) (the exploitation-phase substrate), [Confused Deputy Problem](#confused-deputy-problem) (canonical exploitation mechanism), [Forced Deterministic Neutrality](#forced-deterministic-neutrality) (canonical trigger mechanism), [Behavioral Laundering](#behavioral-laundering) (canonical exfiltration mechanism), [Adversarial Topology](#adversarial-topology) (the terrain map), [Camouflage Ratio](#camouflage-ratio) (trust-establishment quantification).
+
+---
+
+### Maneuver Primitives
+
+**Definition.** The canonical six-phase taxonomy of an [Adversarial Maneuver](#adversarial-maneuver). Every successful exploit in the corpus traverses these phases in order. The phases name *what the attacker does*; the cross-referenced lexicon concepts name *what they exploit* at each step.
+
+**Extended description.** The taxonomy serves two functions: (a) it gives defenders a checklist of pre-exploitation indicators to monitor (any phase observable before the trigger is leading intelligence), and (b) it gives analysts a decomposition framework for post-mortem reconstruction. The canonical sequence:
+
+| Phase | Lexicon concept exploited | What the attacker does |
+|---|---|---|
+| **Reconnaissance** | [Observational Edge Non-Convertibility](#observational-edge-non-convertibility) (asymmetric) | Maps the target's topology: admin keys, proxy patterns, trust bindings, oracle dependencies. Identifies the *vulnerability window* — the exact moment of minimum defensive readiness. |
+| **Positioning** | [Stored Potential](#stored-potential) expansion | Positions to exploit the window. Deploys a malicious contract, seeds a dormant trap, gifts an NFT that expands permissions, opens an unprotected initializer, configures a single-verifier DVN. |
+| **Trust Establishment** | [Camouflage Ratio](#camouflage-ratio), [Pattern A — Reputation-Building Sacrifices](#pattern-a--reputation-building-sacrifices), [Pattern D — Cross-Chain Reputation Import](#pattern-d--cross-chain-reputation-import) | Establishes legitimacy: low revert rates, fake audits, sock-puppet socials, community contributions, mainnet-vintage cover identity. The attacker becomes a "trusted" node. |
+| **Trigger** | [Forced Deterministic Neutrality](#forced-deterministic-neutrality) | Delivers the payload: a crafted transaction, a prompt injection, a proxy upgrade, a re-proposed observation. The system's determinism guarantees execution; no human can interpose. |
+| **Exploitation** | [Confused Deputy Problem](#confused-deputy-problem), [Distributed Confused Deputy Chain](#distributed-confused-deputy-chain), [Compositional Harm](#compositional-harm) | The system's own components — each functioning correctly — carry out the attacker's intent. The Vault trusts the Router, the Proxy trusts the Implementation, the AI trusts the prompt, consensus trusts the signature. |
+| **Exfiltration** | [Behavioral Laundering](#behavioral-laundering) | Routes extracted value through CEX hot wallets, cross-chain bridges, or vanity-mined addresses to obscure the trail and cash out. |
+
+**Defender's reading.** Phases 1–3 produce on-chain indicators that *precede* the trigger:
+- Reconnaissance leaves traces (probe transactions, contract reads from unusual addresses, view-function pattern queries).
+- Positioning leaves contracts (deployed but undocumented, dormant for a calibrated window).
+- Trust establishment leaves a [Camouflage Ratio](#camouflage-ratio) signature.
+
+Phase 4 (trigger) is the discharge moment — the point at which value moves. Phase 5 (exploitation) is the execution. Phase 6 (exfiltration) is the destination trail.
+
+**Defensive leverage by phase:** counter-maneuver effort allocated to phases 1–3 produces lead time; effort allocated to phases 4–6 produces investigation depth but rarely loss prevention. [Counter-Maneuver](#counter-maneuver) makes this allocation explicit.
+
+**Empirical grounding.** All five case studies under [Adversarial Maneuver](#adversarial-maneuver) decompose cleanly into these six phases. The decomposition is mechanical: given a documented exploit and its on-chain artifacts, the phases can be enumerated in under an hour. This is the test of the taxonomy's load-bearing status — if an exploit cannot be decomposed into these phases, either the taxonomy is incomplete or the exploit is being mis-interpreted.
+
+**Cross-references.** [Adversarial Maneuver](#adversarial-maneuver), [Counter-Maneuver](#counter-maneuver), [Stored Potential](#stored-potential), [Behavioral Laundering](#behavioral-laundering).
+
+---
+
+### Counter-Maneuver
+
+**Definition.** The defensive doctrine that mirrors and disrupts [Adversarial Maneuver](#adversarial-maneuver). Counter-maneuver allocates defensive effort across the same six phases the attacker traverses, with the explicit goal of *closing maneuver windows* rather than *patching individual bugs*. Success is measured in maneuver windows closed, not vulnerability counts reduced.
+
+**Extended description.** Patching bugs is necessary but insufficient; the maneuver frame shows that even a fully-audited codebase with zero CVEs can be outmaneuvered through positioning, trust establishment, and trigger-layer attacks that do not exercise any code defect (the Aethir, Wasabi, Grok/Bankr, THORChain, and Renegade cases each illustrate this in different forms). Counter-maneuver operationalizes five defensive verbs, one per attacker phase that produces an observable artifact:
+
+| Counter-verb | Targets attacker phase | Mechanism |
+|---|---|---|
+| **Deny Reconnaissance** | Reconnaissance | Obfuscate topology where consistent with operational requirements; deploy deception (honeypots, fake admin keys) to mislead attackers. Force the attacker to spend more time and exposure to map the target. |
+| **Impose Complexity Ceilings** | Positioning | Hardcoded circuit breakers that limit the attacker's freedom of maneuver. Examples: Liquity's Shutdown Threshold; per-asset deposit caps; max-TVL-per-adapter constraints. The ceiling is a structural cap on stored potential. |
+| **Disrupt Positioning** | Positioning, Trust Establishment | Monitor for [Stored Potential](#stored-potential) expansion (capability injection events, dormant-fleet wake-ups, NFT gifts that expand AI agent permissions, proxy admin grants) and alert before the trigger. This is Layer 3's primary product surface. |
+| **Delay Exploitation** | Trigger | Timelocks, multisig thresholds, and human-in-the-loop confirmations that *extend* the attacker's campaign, increasing detection probability per unit of value at risk. The delay turns a single-tx exploit into a multi-block window where defenders can intervene. |
+| **Track Exfiltration** | Exfiltration | [Behavioral Laundering](#behavioral-laundering) pattern detection: even when the attack succeeds, follow the money. Funds traced to a known CEX hot wallet or a cross-chain bridge produce intelligence for the next campaign. |
+
+**Strategic posture.** Counter-maneuver explicitly accepts that some attacks will succeed in the short term. The goal is not zero-loss; the goal is *raising the cost and complexity of every attack to the point where the attacker's operational tempo collapses*. An attacker who must spend 60 days on reconnaissance to find a viable trap, then 30 days on trust establishment, then minutes on execution, then weeks on exfiltration through detectable laundering — has a campaign that produces multiple chances for defensive intervention, multiple ways for the operator to make a mistake, and multiple post-mortem signals for the next campaign's prevention.
+
+The contrast with the patching mindset is sharp. Patching closes a specific code path. Counter-maneuver closes *operational pathways*. A patched contract still leaves the attacker free to find another contract; a counter-maneuvered protocol forces the attacker to develop a new campaign blueprint from scratch.
+
+**Empirical leverage.** Layer 3's 2026-04-24 pre-drain flag on operator `0x80b12bd0` (15 days of lead time before the May-9 4,587-victim discharge) is the canonical example of disrupt-positioning succeeding. The flag did not prevent the discharge — Layer 3 has no enforcement surface — but it did demonstrate that the leading indicators are detectable at scale and at lead times that would, in a system with enforcement authority, have closed the maneuver window.
+
+THORChain's Mimir governance freeze on 2026-05-15 is the canonical example of delay-exploitation succeeding *during* an active discharge: the protocol's parameter-level kill switch let the validator set halt all outbound flows mid-incident, before the entirety of the attacker's prepared maneuver completed. This is a defensive precedent worth modeling broadly — what fraction of cross-chain protocols have a parameter-level kill switch reachable in <1 hour?
+
+**Cross-references.** [Adversarial Maneuver](#adversarial-maneuver) (the attacker-side counterpart), [Maneuver Primitives](#maneuver-primitives) (the phase taxonomy), [Stored Potential](#stored-potential) (the primary positioning indicator), [The Detection Gap as Product](#the-detection-gap-as-product) (the commercial framing of disrupt-positioning), [Intelligence-as-Compounding-Asset](#intelligence-as-compounding-asset) (the track-exfiltration justification).
+
+---
+
+### Vulnerability-Centric vs Maneuver-Centric Framing
+
+**Definition.** The methodological contrast between two security paradigms. The *vulnerability-centric* frame treats exploits as singular events caused by code defects, scoped to individual components. The *maneuver-centric* frame treats exploits as multi-phase campaigns whose success or failure depends on the strategic sequencing of operational actions across a battlespace of trust relationships, information flows, and mutable states.
+
+**Extended description.** The two frames coexist; vulnerability-centric analysis remains useful for pre-deployment audit work (Attack 10 — Cross-Chain Proof Verification Bypass — is exactly the class of bug that audit-time fuzzing should catch). But the corpus shows that *most* successful exploits do not require a code defect at all. They require positional advantage, trust inheritance, and operational tempo — which are properties of campaigns, not properties of code.
+
+The contrast, laid out:
+
+| Dimension | Vulnerability-Centric View | Maneuver-Centric View |
+|---|---|---|
+| **What is the exploit?** | A singular event caused by a code defect. | A campaign of sequential actions designed to achieve positional advantage before the decisive blow. |
+| **What is the attacker's skill?** | Finding the bug. | Orchestrating the campaign: reconnaissance, capability injection, trust establishment, timing, execution. |
+| **What is defense?** | Patching the bug. | Counter-maneuver: disrupting the sequence, denying positional advantage, imposing complexity ceilings that make maneuvers impossible. |
+| **What is the system?** | A collection of components. | A battlespace of trust relationships, information flows, and mutable states. |
+| **What is success?** | Bug count reduced. | Maneuver windows closed. |
+
+**Why both frames matter.** The vulnerability frame is still load-bearing for traditional audit work and for incidents where the attack genuinely turns on a code defect (Hyperbridge's MMR proof bug; Renegade's unprotected initializer at the immediate-trigger level). The maneuver frame is load-bearing for incidents where no code is defective: Aethir, Wasabi, Drift's governance compromise, Grok/Bankr's prompt injection, the entire Operational Layer Attack class, the cross-domain compositional harm class, and the entire `Pattern A` long-accumulation drain class observed in the corpus.
+
+The shift is consequential in three ways:
+1. **Defense becomes proactive, not reactive.** Vulnerability-centric defense requires the bug to exist; maneuver-centric defense looks for the campaign assembling around any structure, with or without a defect.
+2. **Intelligence becomes the primary product, not the secondary.** Vulnerability databases are reactive; maneuver-monitoring corpora compound forward.
+3. **The bug-bounty model is partially obsoleted.** Bug bounties pay for code defects; they do not pay for configuration issues, operational compromises, or campaign-level pre-positioning — even though those produce the majority of recent losses. The [Bug-Bounty Structural Gap](#the-bug-bounty-structural-gap) names this directly.
+
+**Empirical grounding.** Of the documented April-May 2026 wave incidents, **vulnerability-centric framing is fully sufficient for only Hyperbridge (MMR proof bug) and Renegade (unprotected initializer at the trigger layer)**. The other ten major incidents (Drift, Silo, Aethir, Zerion, Kelp, Rhea, Wasabi, Volo, Grok/Bankr, THORChain) require the maneuver frame to be coherently analyzed.
+
+**Cross-references.** [Adversarial Maneuver](#adversarial-maneuver), [Counter-Maneuver](#counter-maneuver), [The Bug-Bounty Structural Gap](#the-bug-bounty-structural-gap), [The Detection Gap as Product](#the-detection-gap-as-product), [Intelligence-as-Compounding-Asset](#intelligence-as-compounding-asset).
 
 ---
 
