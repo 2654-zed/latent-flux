@@ -1,7 +1,7 @@
 # Current State
 
-**Last updated:** 2026-05-13
-**Last sync from production:** 2026-05-10 (10.0 GB local DB; production has continued to write since)
+**Last updated:** 2026-05-15
+**Last sync from production:** 2026-05-15 (10.8 GB local DB; first sync via v2 chunked protocol after v1 broke at the 11.6 GB raw / 4.4 GB base64 threshold)
 
 ---
 
@@ -29,8 +29,8 @@
 | Railway project | `blockchain` |
 | Railway service | `stellar-embrace` |
 | Active environment | `production` |
-| Last successful sync | 2026-05-10 (full 10 GB; integrity_check: ok) |
-| Sync mechanism | `python scripts/sync_prod_db.py` (railway ssh + base64 framing) |
+| Last successful sync | 2026-05-15 [pending verification] — see Session log for v2 protocol migration |
+| Sync mechanism | `python scripts/sync_prod_db.py` — **v2 chunked protocol since 2026-05-15** (railway ssh + base64 framing + 100-MB chunked retrieval; see ADR-007). v1 single-stream broke at 11.6 GB DB size with `tungstenite error`. |
 | Apply-to-prod template | `scripts/apply_correction_20_via_ssh.py` |
 
 ## Git hooks (LOCAL — not tracked, manual install required on fresh clone)
@@ -44,28 +44,21 @@ Installed in `.git/hooks/` (UNK-002 resolution, 2026-05-13):
 
 **No CI/CD pipeline exists** (no `.github/workflows/`, no `.pre-commit-config.yaml`). Fresh clones do NOT get these hooks. Agents working on a fresh clone need to install them manually, or accept that they'll need to `git push` explicitly and won't get README auto-regen on commit.
 
-## Corpus snapshot (as of 2026-05-10 sync)
+## Corpus snapshot (as of 2026-05-15 sync)
 
-| Metric | Value | Source |
-|---|---|---|
-| Total contracts | 284,777 | production `/stats` |
-| Confirmed traps | 1,404 | production `/stats` |
-| Suspected traps | 115,514 | production `/stats` |
-| Unique deployers | 67,459 | production `/stats` |
-| Transaction events | 16,810,247 | production `/stats` |
-| Bot candidates | 4,244 | production `/stats` |
-| Funder coverage | 91.9% | production `/stats` |
-| Gas stations | 253 | production `/stats` |
-| Org links | 4,382 | production `/stats` |
-| Cross-chain shared deployers | 1,046 | production `/stats` |
-| Local DB size | 10.0 GB | sqlite file mtime |
-| `oli_labels` rows | 69,870 | local DB query 2026-05-13 |
-| oli_labels HIGH severity | 15 | local DB query 2026-05-13 |
-| oli_labels LOW severity | 422 | local DB query 2026-05-13 |
-| oli_labels self-confirming | 17 | local DB query 2026-05-13 |
-| Watchlist active | 103 | local DB query 2026-05-13 |
-| Watchlist HIGH | 79+ | per priority breakdown |
-| Watchlist CRITICAL | varies | check `watchlist.priority` |
+| Metric | 2026-05-10 | **2026-05-15** | Δ |
+|---|---|---|---|
+| Total contracts | 284,777 | **321,578** | +36,801 (+12.9%) |
+| Unique deployers | 67,459 | **73,818** | +6,359 (+9.4%) |
+| Transaction events | 16,810,247 | **18,025,924** | +1,215,677 (+7.2%) |
+| Local DB size | 10.0 GB | **10.8 GB** | +0.8 GB |
+| Latest contract detection | (2026-05-09) | **2026-05-15T23:47:09Z** | 5 days |
+
+Stable since 2026-05-13 (not re-queried; from local sqlite, may drift from prod):
+- `oli_labels` rows: 69,870 (15 HIGH, 422 LOW, 17 self-confirming)
+- Watchlist active: 103 (79+ HIGH)
+
+**Note: `regime_alerts` table is empty in the fresh DB.** The 29 alerts from the 2026-05-13 manual `regime_monitor.py` run were local-only writes — `regime_monitor` is not yet wired into `run_surveillance.py` as a scheduled job. Re-run `python -m surveillance.regime_monitor` against the fresh corpus before Phase A of NEXT_SESSION_PLAN.
 
 ## API surface (production)
 

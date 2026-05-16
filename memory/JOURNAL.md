@@ -1093,4 +1093,80 @@ NEXT TARGETS (for next session):
 
 ---
 
+### 2026-05-15 — Production sync v2: diagnose tungstenite + chunked retrieval
+
+**Starting state:** Session began as "execute the NEXT_SESSION_PLAN.md Phase A investigation," but Phase A needs current production data, so the very first step was a production sync. The v1 sync (`scripts/sync_prod_db.py` from 2026-05-10, last verified-working) failed three consecutive times with `Error: WebSocket error: tungstenite error`.
+
+**Diagnostic test ladder (each test = one isolated SSH invocation):**
+
+| # | Bootstrap | Workload | Outcome |
+|---|---|---|---|
+| Trivial | 4 KB | print fixed string, exit | rc=0, 1.8s |
+| A | 350 chars | check file exists, report size | rc=0, 2.7s, **prod DB = 11.6 GB** |
+| B | 1234 chars | SQLite backup + gzip to /tmp, **no streaming** | rc=0, **441.5s**, backup 156.8s, gzip 282.6s, gz=3.28 GB |
+| C | 1734 chars | backup + gzip + stream **first 50 MB** of gz | rc=0, 451.8s, **66.7 MB stdout received cleanly** |
+| v1 sync | 4124 chars | backup + gzip + stream all 3.3 GB | **rc=1, tungstenite error** (three attempts) |
+
+**Diagnosis:** The Railway WebSocket SSH transport tolerates:
+1. Long-idle sessions (verified 7.4 minutes of pure compute with no stdout traffic)
+2. Small streams (verified 50 MB streamed cleanly)
+
+What kills it is **total-streamed-volume-per-SSH-invocation**, somewhere between 50 MB and 4.4 GB. The 2026-05-10 sync succeeded at 10.0 GB raw / ~3.0 GB gz / ~4.0 GB base64. The 2026-05-15 sync would have streamed 11.6 GB raw / 3.3 GB gz / 4.4 GB base64. Sometime in between, DB growth pushed total stream volume past the threshold.
+
+**Fix:** Two-phase protocol with chunked retrieval.
+
+1. **`scripts/sync_prod_db_remote.py` rewritten as a 4-mode tool:**
+   - `prepare` (default): backup + gzip → fixed path `/tmp/l3sync_snapshot.db.gz`; print `READY:<size>:<sha256>` on stdout.
+   - `chunk <off> <len>`: open prepared gz, seek, stream that slice as base64 framed by markers.
+   - `cleanup`: remove the prepared file.
+   - `sha256`: re-emit READY without re-running prepare (for `--resume`).
+   - Script size: 3547 bytes → 4732 b64 chars → 4794-char bootstrap (well under the 8191 Windows cmd.exe limit).
+
+2. **`scripts/sync_prod_db.py` rewritten as orchestrator:**
+   - Phase 1: invoke `prepare` (single long-running call, no streaming).
+   - Phase 2: loop chunks of 100 MB binary (≈ 133 MB base64) — each its own SSH session → its own WebSocket → size limit resets per call.
+   - Each chunk runs `extract_chunk_payload` (marker-bracketed base64 extraction + decode) and appends to local gz file. Running SHA-256 accumulates.
+   - Phase 2.5: verify local SHA-256 matches the one from prepare. Mismatch → exit 4 (no DB replace).
+   - Phase 3: decompress + integrity-check + atomic rename.
+   - Phase 4: remote cleanup (best-effort, non-fatal).
+   - New flag `--resume` skips Phase 1 and uses the prepared gz left on the container.
+   - Per-chunk retries: 2.
+
+**Files changed:**
+- `scripts/sync_prod_db_remote.py` — full rewrite to 4-mode protocol
+- `scripts/sync_prod_db.py` — full rewrite to chunked orchestrator
+- `memory/INVARIANTS.md` — INV-011a added documenting the streaming-volume threshold and the chunked-retrieval enforcement
+
+**Sync result (2026-05-15 23:48 UTC):** SUCCESS, total wall-clock ~23 minutes.
+
+- Phase 1 (prepare): 443.3s (7.4 min)
+- Phase 2 (chunks): 32 chunks of 100 MB each, all on first attempt — no retries. Per-chunk: 22-55s, mean ~30s. Total ~16 min.
+- Phase 2.5 SHA-256: verified `ddee35269e51899c...` (prepare-side matched local-assembled).
+- Phase 3 decompress: 3.1 GB gz → 10.8 GB db.
+- Phase 3 validate: `integrity_check: ok`.
+- Phase 4 cleanup: remote /tmp/l3sync_snapshot.db.gz removed.
+- Atomic rename: prior 13 GB local DB (which had grown beyond the 2026-05-10 sync size due to local writes from regime_monitor scans + SQLite WAL accumulation) → `.bak`; new 10.8 GB synced DB live.
+
+**New corpus snapshot:**
+
+| Metric | 2026-05-10 | 2026-05-15 | Δ |
+|---|---|---|---|
+| Total contracts | 284,777 | **321,578** | +36,801 (+12.9%) |
+| Unique deployers | 67,459 | **73,818** | +6,359 (+9.4%) |
+| Transaction events | 16,810,247 | **18,025,924** | +1,215,677 (+7.2%) |
+| Local DB size | 10.0 GB | 10.8 GB | +0.8 GB |
+| Latest contract detection | (2026-05-09 area) | **2026-05-15T23:47:09Z** | 5+ days fresh |
+
+**Important downstream finding:** The local `regime_alerts` table (29 entries from the 2026-05-13 manual regime_monitor scan) was overwritten by sync. The fresh DB has the schema (production picked up the migration on restart) but zero rows — because `regime_monitor.py` is NOT yet wired into `run_surveillance.py` as a scheduled job (it remains a manual-run-only script). The 29 alerts from the 2026-05-13 scan were local-only writes.
+
+**Implication for NEXT_SESSION_PLAN Phase A:** the "existing 29 regime alerts" referenced in the plan are gone. The pre-flight check needs to re-run `python -m surveillance.regime_monitor` against the fresh corpus before Phase A queries can target specific alerts. This is consistent with the plan's own caveat ("If sync was requested at session start... Re-run regime_monitor against the fresh DB before Phase A").
+
+**Why this is a real fix, not a band-aid:** The chunking architecture is robust to any future DB growth — each chunk is bounded at 100 MB regardless of total DB size. SHA-256 verification end-to-end catches off-by-one or stitching bugs that chunk-by-chunk transfers are vulnerable to. The `--resume` flag means a flaky chunk doesn't force a full re-prepare (which is the 7+ minute slow step).
+
+**Why this is a real fix, not a band-aid:** The chunking architecture is robust to any future DB growth — each chunk is bounded at 100 MB regardless of total DB size. SHA-256 verification end-to-end catches off-by-one or stitching bugs that chunk-by-chunk transfers are vulnerable to. The `--resume` flag means a flaky chunk doesn't force a full re-prepare (which is the 7+ minute slow step).
+
+**Open going into next session:** Phase A surveillance investigation (the originally-planned work for this session), now with fresh corpus data.
+
+---
+
 *End of file. Append new sessions above this footer.*

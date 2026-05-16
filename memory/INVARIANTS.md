@@ -90,6 +90,13 @@ A violation becomes a numbered Correction in `reports/correction_log.md`. A disc
 - **How tested:** verified end-to-end against 10 GB production DB on 2026-05-10
 - **Surfaced:** 2026-05-09 (during sync mechanism development; see ADR-001)
 
+### INV-011a — Production sync is two-phase (prepare on container, chunked retrieval) for large DBs
+
+- **Rationale:** A single `railway ssh` invocation cannot stream the full base64 payload of a multi-GB DB to stdout — fails with `Error: WebSocket error: tungstenite error` at some unknown threshold between 50 MB and 4.4 GB. The WebSocket transport tolerates long-idle sessions (verified: 7.4 min backup+gzip with no streaming succeeded) and small streams (verified: 50 MB streamed cleanly). What kills it is total streamed-volume-per-SSH-invocation. Chunking across multiple SSH sessions (each its own WebSocket) sidesteps the limit; SHA-256 from prepare phase catches any chunk-stitching error.
+- **Enforcement:** `scripts/sync_prod_db_remote.py` exposes 4 modes (prepare, chunk, cleanup, sha256). `scripts/sync_prod_db.py` runs phase 1 (prepare → READY:size:sha256), phase 2 loop (chunk by 100 MB), phase 3 (decompress + integrity), phase 4 (remote cleanup). Per-chunk retries: 2.
+- **How tested:** verified 2026-05-15 against 11.6 GB production DB after v1 (single-stream) protocol failed three times in a row with tungstenite error.
+- **Surfaced:** 2026-05-15 (DB size crossed the tungstenite-streaming threshold sometime between 2026-05-10 — last successful v1 sync at 10.0 GB — and 2026-05-15 at 11.6 GB)
+
 ### INV-012 — Watchlist deactivations preserve history (active=0, never DELETE)
 
 - **Rationale:** Corrections must be reversible. The full historical record of every watchlist entry — including ones since deactivated — supports audit trails and "why did we previously think X" investigations.

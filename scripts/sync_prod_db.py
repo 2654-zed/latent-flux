@@ -1,25 +1,49 @@
 """Local-side production-DB sync wrapper.
 
-Invokes `scripts/sync_prod_db_remote.py` on the Railway container via
-`railway ssh`, captures the framed base64 payload from stdout, streams
-it through base64-decode → gunzip → temp file, validates the result is
-a healthy SQLite database, and atomic-renames into place.
+Architecture (v2, 2026-05-15):
 
-Why this exists: Railway production exposes no `/dump`-style HTTP
-endpoint. Manual sync via `railway ssh` is the documented path. This
-script automates that with safety (validation + atomic rename + backup
-of prior DB) and streaming (no multi-GB in-memory buffering).
+Two-phase protocol via `scripts/sync_prod_db_remote.py`:
+
+    PHASE 1 (prepare, single SSH call, ~5-10 min wall):
+        railway ssh "python3 -c 'exec(...)' prepare"
+        -> remote does SQLite backup + gzip to /tmp/l3sync_snapshot.db.gz
+        -> stdout: READY:<size_bytes>:<sha256_hex>
+
+    PHASE 2 (chunk loop, N SSH calls, ~10s each):
+        for offset in range(0, size, CHUNK_SIZE):
+            railway ssh "python3 -c 'exec(...)' chunk <offset> <chunk_size>"
+            -> remote: open prepared gz, seek, read length bytes, base64 stream
+            -> local: capture stdout, mmap-search markers, decode -> append to local gz
+
+    PHASE 3 (cleanup, single SSH call, ~3s):
+        railway ssh "python3 -c 'exec(...)' cleanup"
+
+Why two-phase: empirically (2026-05-15) a single SSH call streaming the full
+~4.4 GB base64 payload of an 11.6 GB production DB fails with
+`Error: WebSocket error: tungstenite error` from the railway CLI. Smaller
+streams (verified: 50 MB) and long-idle sessions (verified: 7.4 min) both
+succeed. The cliff is total-volume-per-SSH-call. Chunking into ~100 MB
+slices keeps each invocation comfortably below the cliff.
+
+Each chunk is its own SSH session -> its own WebSocket -> size limits reset.
+SHA-256 from prepare is verified against the locally-assembled gz before
+gunzip, catching any chunk corruption or off-by-one stitching.
 
 Usage:
     python scripts/sync_prod_db.py
     python scripts/sync_prod_db.py --out /custom/path/surveillance.db
-    python scripts/sync_prod_db.py --dry-run   # don't replace local DB
+    python scripts/sync_prod_db.py --dry-run         # validate, don't replace
+    python scripts/sync_prod_db.py --chunk-mb 50     # smaller chunks (retry safety)
+    python scripts/sync_prod_db.py --resume          # reuse prepared gz on container
 
 Exit codes:
     0 success
-    1 railway ssh failed
-    2 marker frame not found in stdout
+    1 railway CLI not linked / not found
+    2 marker frame not found in a chunk's output
     3 SQLite integrity check failed on downloaded copy
+    4 SHA-256 mismatch between remote prepared gz and local assembled gz
+    5 prepare phase failed
+    6 chunk phase failed (after retries)
 """
 from __future__ import annotations
 
@@ -33,6 +57,8 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
+from hashlib import sha256
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -43,110 +69,112 @@ SERVICE = "stellar-embrace"
 MARKER_START = b"===L3SYNC_PAYLOAD_START==="
 MARKER_END = b"===L3SYNC_PAYLOAD_END==="
 
+DEFAULT_CHUNK_BYTES = 100 * 1024 * 1024  # 100 MB binary -> ~133 MB base64
+CHUNK_RETRIES = 2
+
 
 def fmt_bytes(n: int) -> str:
+    f: float = float(n)
     for unit in ("B", "KB", "MB", "GB"):
-        if n < 1024:
-            return f"{n:.1f} {unit}"
-        n /= 1024
-    return f"{n:.1f} TB"
+        if f < 1024:
+            return f"{f:.1f} {unit}"
+        f /= 1024
+    return f"{f:.1f} TB"
 
 
-def capture_stdout(stream, raw_path: Path) -> int:
-    """Stream stdout from subprocess to a raw file, no parsing. Returns bytes written.
+def resolve_railway_exe() -> str | None:
+    return (
+        shutil.which("railway.exe")
+        or shutil.which("railway.cmd")
+        or shutil.which("railway")
+    )
 
-    We defer all parsing until after the transfer completes. This avoids
-    intermittent base64-decode errors from SSH-transport buffering quirks
-    (line boundaries occasionally not preserved through railway ssh's
-    cmd.exe wrapper, observed 2026-05-10).
+
+def build_ssh_cmd(railway_exe: str, remote_mode_args: list[str], script_b64: str) -> list[str]:
+    """Build the cmd-line for `railway ssh` invoking the remote script in a
+    specific mode. `remote_mode_args` is appended after the bootstrap so
+    the remote sys.argv[1:] receives those tokens.
     """
-    n = 0
-    with open(raw_path, "wb") as f_out:
+    extra = (" " + " ".join(remote_mode_args)) if remote_mode_args else ""
+    bootstrap = (
+        f"python3 -c \"import base64; "
+        f"exec(base64.b64decode('{script_b64}'))\"{extra}"
+    )
+    if os.name == "nt" and railway_exe.lower().endswith((".cmd", ".bat")):
+        return ["cmd.exe", "/c", railway_exe, "ssh", bootstrap]
+    return [railway_exe, "ssh", bootstrap]
+
+
+def run_ssh(cmd: list[str], timeout: int = 1800) -> tuple[int, bytes, str]:
+    """Run an SSH cmd, capturing stdout to bytes and stderr to str.
+    Returns (returncode, stdout_bytes, stderr_str).
+    """
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout_chunks: list[bytes] = []
+    try:
+        # Drain stdout incrementally so the pipe never deadlocks
         while True:
-            chunk = stream.read(1024 * 1024)
+            chunk = proc.stdout.read(1024 * 1024)
             if not chunk:
                 break
-            f_out.write(chunk)
-            n += len(chunk)
-    return n
+            stdout_chunks.append(chunk)
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        raise
+    stderr_blob = proc.stderr.read().decode("utf-8", errors="replace")
+    return proc.returncode, b"".join(stdout_chunks), stderr_blob
 
 
-def extract_payload_from_file(raw_path: Path, gz_path: Path) -> tuple[int, int]:
-    """Parse the captured raw file: find MARKER_START/MARKER_END via mmap
-    (no full-file read), then stream-read the payload region in chunks,
-    filter non-base64 bytes, and decode in 4-char-multiples to keep
-    memory bounded. Returns (b64_chars_in, decoded_bytes_out).
-
-    Robust against transport-induced line-boundary jitter: chunk filtering
-    + 4-byte-aligned decode means line boundaries are irrelevant. The
-    base64 alphabet is closed under concatenation (any sequence of valid
-    base64 chars can be decoded as a stream).
+def parse_ready_line(stdout_bytes: bytes) -> tuple[int, str]:
+    """Find a `READY:<size>:<sha256>` line in stdout (transport may have
+    other banner lines). Return (size, sha256_hex).
     """
-    import mmap
+    text = stdout_bytes.decode("utf-8", errors="replace")
+    for line in text.splitlines():
+        m = re.match(r"^READY:(\d+):([0-9a-f]{64})\s*$", line.strip())
+        if m:
+            return int(m.group(1)), m.group(2)
+    raise RuntimeError(
+        f"READY line not found in remote output. Last 1KB: {text[-1024:]!r}"
+    )
 
-    with open(raw_path, "rb") as f:
-        size = os.fstat(f.fileno()).st_size
-        with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-            start_idx = mm.find(MARKER_START)
-            if start_idx < 0:
-                head = bytes(mm[:500]).decode("utf-8", errors="replace")
-                tail = bytes(mm[-500:]).decode("utf-8", errors="replace")
-                raise RuntimeError(
-                    f"MARKER_START not found in raw stream "
-                    f"({size:,} bytes captured).\nHead: {head!r}\nTail: {tail!r}"
-                )
-            payload_start = start_idx + len(MARKER_START)
-            end_idx = mm.find(MARKER_END, payload_start)
-            if end_idx < 0:
-                tail = bytes(mm[-500:]).decode("utf-8", errors="replace")
-                raise RuntimeError(
-                    f"MARKER_END not found after MARKER_START "
-                    f"(start={start_idx}, size={size:,}).\nTail: {tail!r}"
-                )
 
-        # Stream-read the payload region, filter, decode in 4-byte-aligned chunks
-        f.seek(payload_start)
-        bytes_remaining = end_idx - payload_start
-        b64_buf = bytearray()
-        b64_chars_in = 0
-        decoded_out = 0
-        non_b64_re = re.compile(rb"[^A-Za-z0-9+/=]")
-        chunk_size = 8 * 1024 * 1024  # 8 MB read chunks
-        with open(gz_path, "wb") as f_out:
-            while bytes_remaining > 0:
-                read_len = min(chunk_size, bytes_remaining)
-                chunk = f.read(read_len)
-                if not chunk:
-                    break
-                bytes_remaining -= len(chunk)
-                clean = non_b64_re.sub(b"", chunk)
-                b64_buf.extend(clean)
-                b64_chars_in += len(clean)
-                # Decode the part that's a multiple of 4 chars; carry the
-                # remainder (0-3 trailing chars) into the next iteration.
-                decode_len = (len(b64_buf) // 4) * 4
-                if decode_len > 0:
-                    decoded = base64.b64decode(bytes(b64_buf[:decode_len]))
-                    f_out.write(decoded)
-                    decoded_out += len(decoded)
-                    del b64_buf[:decode_len]
-            # Final flush: any trailing chars (with padding =) decode here
-            if b64_buf:
-                decoded = base64.b64decode(bytes(b64_buf))
-                f_out.write(decoded)
-                decoded_out += len(decoded)
-        return b64_chars_in, decoded_out
+def extract_chunk_payload(stdout_bytes: bytes) -> bytes:
+    """Given stdout from a `chunk` invocation, find MARKER_START / MARKER_END,
+    strip non-base64 chars in the payload region, and return decoded bytes.
+    """
+    start_idx = stdout_bytes.find(MARKER_START)
+    if start_idx < 0:
+        head = stdout_bytes[:500].decode("utf-8", errors="replace")
+        tail = stdout_bytes[-500:].decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"MARKER_START not found in chunk output "
+            f"({len(stdout_bytes):,} bytes captured).\n"
+            f"Head: {head!r}\nTail: {tail!r}"
+        )
+    payload_start = start_idx + len(MARKER_START)
+    end_idx = stdout_bytes.find(MARKER_END, payload_start)
+    if end_idx < 0:
+        tail = stdout_bytes[-500:].decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"MARKER_END not found (start={start_idx}, "
+            f"size={len(stdout_bytes):,}). Tail: {tail!r}"
+        )
+    payload_b64 = stdout_bytes[payload_start:end_idx]
+    # Strip everything outside the base64 alphabet (banner content, CRLF)
+    clean = re.sub(rb"[^A-Za-z0-9+/=]", b"", payload_b64)
+    return base64.b64decode(clean)
 
 
 def decompress_gz(gz_path: Path, db_path: Path) -> int:
-    """Stream gunzip the gz file → db file. Returns final db size."""
     with gzip.open(gz_path, "rb") as f_in, open(db_path, "wb") as f_out:
         shutil.copyfileobj(f_in, f_out, length=4 * 1024 * 1024)
     return db_path.stat().st_size
 
 
 def validate_sqlite(path: Path) -> dict:
-    """Open the file as SQLite read-only, run integrity_check, return summary."""
     conn = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
     try:
         integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
@@ -158,7 +186,8 @@ def validate_sqlite(path: Path) -> dict:
             tx = None
         try:
             heart = conn.execute(
-                "SELECT monitor_name, last_seen FROM heartbeat ORDER BY last_seen DESC LIMIT 1"
+                "SELECT monitor_name, last_seen FROM heartbeat "
+                "ORDER BY last_seen DESC LIMIT 1"
             ).fetchone()
         except sqlite3.OperationalError:
             heart = None
@@ -177,24 +206,7 @@ def run(args: argparse.Namespace) -> int:
     out_path = Path(args.out).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Read & base64-encode the remote script
-    remote_script = REMOTE_SCRIPT_PATH.read_text(encoding="utf-8")
-    script_b64 = base64.b64encode(remote_script.encode("utf-8")).decode("ascii")
-    bootstrap = (
-        f"python3 -c \"import base64; "
-        f"exec(base64.b64decode('{script_b64}'))\""
-    )
-
-    # On Windows, subprocess.Popen with a list of args does not resolve PATH
-    # the same way the shell does — it uses CreateProcess directly. Resolve
-    # the railway binary via shutil.which to get a full path. If the resolved
-    # binary is a .cmd/.bat (npm-installed railway is railway.CMD), Windows
-    # CreateProcess cannot execute it directly; wrap with cmd.exe /c.
-    railway_exe = (
-        shutil.which("railway.exe")
-        or shutil.which("railway.cmd")
-        or shutil.which("railway")
-    )
+    railway_exe = resolve_railway_exe()
     if not railway_exe:
         sys.stderr.write(
             "[sync] FATAL: 'railway' CLI not found in PATH. "
@@ -203,17 +215,17 @@ def run(args: argparse.Namespace) -> int:
         )
         return 1
 
-    # Precondition: the linked-project context must already be set, because
-    # `railway ssh -p/-s` flags expect project/service IDs (UUIDs), not the
-    # human-readable names. We rely on `railway link --project <name>` having
-    # been run interactively.
-    status_cmd = (
-        ["cmd.exe", "/c", railway_exe, "status"]
-        if os.name == "nt" and railway_exe.lower().endswith((".cmd", ".bat"))
-        else [railway_exe, "status"]
-    )
+    # Precondition: linked-project context must already be set
+    if os.name == "nt" and railway_exe.lower().endswith((".cmd", ".bat")):
+        status_cmd = ["cmd.exe", "/c", railway_exe, "status"]
+    else:
+        status_cmd = [railway_exe, "status"]
     status = subprocess.run(status_cmd, capture_output=True, text=True)
-    if status.returncode != 0 or PROJECT not in status.stdout or SERVICE not in status.stdout:
+    if (
+        status.returncode != 0
+        or PROJECT not in status.stdout
+        or SERVICE not in status.stdout
+    ):
         sys.stderr.write(
             f"[sync] FATAL: railway CLI is not linked to {PROJECT}@{SERVICE}.\n"
             f"[sync] Run interactively: railway link --project {PROJECT} && "
@@ -222,60 +234,159 @@ def run(args: argparse.Namespace) -> int:
         )
         return 1
 
-    if os.name == "nt" and railway_exe.lower().endswith((".cmd", ".bat")):
-        cmd = ["cmd.exe", "/c", railway_exe, "ssh", bootstrap]
+    # Read & base64-encode the remote script once (reused across phases)
+    remote_script = REMOTE_SCRIPT_PATH.read_text(encoding="utf-8")
+    script_b64 = base64.b64encode(remote_script.encode("utf-8")).decode("ascii")
+    sys.stderr.write(
+        f"[sync] remote script: {len(remote_script)} bytes "
+        f"({len(script_b64)} chars base64)\n"
+    )
+
+    chunk_bytes = args.chunk_mb * 1024 * 1024
+
+    # ---- PHASE 1: prepare (or skip via --resume) ----
+    if args.resume:
+        sys.stderr.write("[sync] phase 1: --resume requested, fetching sha256 of prepared gz...\n")
+        cmd = build_ssh_cmd(railway_exe, ["sha256"], script_b64)
+        rc, stdout_bytes, stderr_blob = run_ssh(cmd, timeout=120)
+        if rc != 0:
+            sys.stderr.write(
+                f"[sync] sha256 phase failed (rc={rc}). stderr:\n{stderr_blob[-2000:]}\n"
+            )
+            return 5
     else:
-        cmd = [railway_exe, "ssh", bootstrap]
-    sys.stderr.write(f"[sync] running railway ssh against {SERVICE}@{PROJECT}\n")
-    sys.stderr.write(f"[sync] railway binary: {railway_exe}\n")
-    sys.stderr.write(f"[sync] remote script size: {len(remote_script)} bytes "
-                     f"({len(script_b64)} chars base64)\n")
-
-    # Use temp paths so we never partially overwrite the live DB
-    with tempfile.TemporaryDirectory(dir=out_path.parent) as tmp_dir:
-        tmp_dir = Path(tmp_dir)
-        raw_path = tmp_dir / "stdout.raw"
-        gz_path = tmp_dir / "snapshot.db.gz"
-        new_db_path = tmp_dir / "snapshot.db"
-
-        # Phase 1: stream stdout from railway ssh to a raw file. No parsing.
-        sys.stderr.write("[sync] phase 1: capturing stdout to raw file...\n")
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        sys.stderr.write("[sync] phase 1: preparing snapshot (backup + gzip on container)...\n")
+        cmd = build_ssh_cmd(railway_exe, ["prepare"], script_b64)
+        t0 = time.time()
         try:
-            raw_bytes = capture_stdout(proc.stdout, raw_path)
-        finally:
-            proc.wait()
-            stderr_blob = proc.stderr.read().decode("utf-8", errors="replace")
+            rc, stdout_bytes, stderr_blob = run_ssh(cmd, timeout=2400)  # 40 min cap
+        except subprocess.TimeoutExpired:
+            sys.stderr.write("[sync] phase 1: TIMED OUT (>40 min). Aborting.\n")
+            return 5
+        sys.stderr.write(f"[sync] phase 1: done in {time.time()-t0:.1f}s\n")
+        if rc != 0:
+            sys.stderr.write(
+                f"[sync] phase 1 failed (rc={rc}). stderr (tail):\n{stderr_blob[-2000:]}\n"
+                f"[sync] stdout (tail): {stdout_bytes[-500:]!r}\n"
+            )
+            return 5
 
-        if proc.returncode != 0:
-            sys.stderr.write(f"[sync] railway ssh exited {proc.returncode}\n")
-            sys.stderr.write(f"[sync] stderr (last 2KB):\n{stderr_blob[-2000:]}\n")
-            return 1
+    try:
+        gz_size, expected_sha = parse_ready_line(stdout_bytes)
+    except RuntimeError as e:
+        sys.stderr.write(f"[sync] phase 1: cannot parse READY line: {e}\n")
+        return 5
+    sys.stderr.write(
+        f"[sync] phase 1: prepared gz = {fmt_bytes(gz_size)} ({gz_size:,} bytes), "
+        f"sha256={expected_sha[:16]}...\n"
+    )
 
-        sys.stderr.write(f"[sync] phase 1 done: raw stdout {fmt_bytes(raw_bytes)}\n")
-        sys.stderr.write(f"[sync] (remote stderr tail: {stderr_blob.strip()[-200:]!r})\n")
+    n_chunks = (gz_size + chunk_bytes - 1) // chunk_bytes
+    sys.stderr.write(
+        f"[sync] phase 2: streaming {n_chunks} chunks of "
+        f"{fmt_bytes(chunk_bytes)} each\n"
+    )
 
-        # Phase 2: parse markers, decode base64 → gz_path
-        sys.stderr.write("[sync] phase 2: extracting and decoding base64...\n")
-        b64_in, decoded_out = extract_payload_from_file(raw_path, gz_path)
-        sys.stderr.write(f"[sync] base64 chars: {b64_in:,}\n")
-        sys.stderr.write(f"[sync] gz on disk: {fmt_bytes(gz_path.stat().st_size)}\n")
+    with tempfile.TemporaryDirectory(dir=out_path.parent) as tmp_dir:
+        tmp_dir_p = Path(tmp_dir)
+        gz_path = tmp_dir_p / "snapshot.db.gz"
+        new_db_path = tmp_dir_p / "snapshot.db"
 
-        # Decompress gz → SQLite db
-        sys.stderr.write("[sync] decompressing...\n")
+        # ---- PHASE 2: chunk loop ----
+        hasher = sha256()
+        total_decoded = 0
+        with open(gz_path, "wb") as gz_out:
+            for i in range(n_chunks):
+                offset = i * chunk_bytes
+                length = min(chunk_bytes, gz_size - offset)
+                last_err: Exception | None = None
+                for attempt in range(CHUNK_RETRIES + 1):
+                    chunk_cmd = build_ssh_cmd(
+                        railway_exe,
+                        ["chunk", str(offset), str(length)],
+                        script_b64,
+                    )
+                    t0 = time.time()
+                    try:
+                        rc, ch_stdout, ch_stderr = run_ssh(chunk_cmd, timeout=600)
+                    except subprocess.TimeoutExpired as e:
+                        last_err = e
+                        sys.stderr.write(
+                            f"[sync]   chunk {i+1}/{n_chunks} attempt {attempt+1}: TIMED OUT\n"
+                        )
+                        continue
+                    if rc != 0:
+                        last_err = RuntimeError(
+                            f"chunk rc={rc}, stderr (tail): {ch_stderr[-500:]!r}"
+                        )
+                        sys.stderr.write(
+                            f"[sync]   chunk {i+1}/{n_chunks} attempt {attempt+1}: "
+                            f"rc={rc} -- {ch_stderr[-200:]!r}\n"
+                        )
+                        continue
+                    try:
+                        decoded = extract_chunk_payload(ch_stdout)
+                    except RuntimeError as e:
+                        last_err = e
+                        sys.stderr.write(
+                            f"[sync]   chunk {i+1}/{n_chunks} attempt {attempt+1}: "
+                            f"parse error: {e}\n"
+                        )
+                        continue
+                    if len(decoded) != length:
+                        last_err = RuntimeError(
+                            f"chunk length mismatch: expected {length}, got {len(decoded)}"
+                        )
+                        sys.stderr.write(
+                            f"[sync]   chunk {i+1}/{n_chunks} attempt {attempt+1}: "
+                            f"{last_err}\n"
+                        )
+                        continue
+                    # Success
+                    gz_out.write(decoded)
+                    hasher.update(decoded)
+                    total_decoded += len(decoded)
+                    elapsed = time.time() - t0
+                    sys.stderr.write(
+                        f"[sync]   chunk {i+1}/{n_chunks}: "
+                        f"{fmt_bytes(len(decoded))} in {elapsed:.1f}s "
+                        f"({fmt_bytes(total_decoded)}/{fmt_bytes(gz_size)})\n"
+                    )
+                    last_err = None
+                    break
+                if last_err is not None:
+                    sys.stderr.write(
+                        f"[sync] phase 2: chunk {i+1}/{n_chunks} failed after "
+                        f"{CHUNK_RETRIES+1} attempts: {last_err}\n"
+                    )
+                    # best-effort cleanup
+                    _try_cleanup(railway_exe, script_b64)
+                    return 6
+
+        # SHA-256 verification (catches any chunk-stitching error)
+        local_sha = hasher.hexdigest()
+        if local_sha != expected_sha:
+            sys.stderr.write(
+                f"[sync] phase 2: SHA-256 MISMATCH\n"
+                f"[sync]   expected (remote prepare): {expected_sha}\n"
+                f"[sync]   got (local assembled):     {local_sha}\n"
+            )
+            _try_cleanup(railway_exe, script_b64)
+            return 4
+        sys.stderr.write(f"[sync] phase 2: sha256 verified ({local_sha[:16]}...)\n")
+
+        # Decompress
+        sys.stderr.write("[sync] phase 3a: decompressing gz -> db...\n")
         db_size = decompress_gz(gz_path, new_db_path)
-        sys.stderr.write(f"[sync] decompressed db: {fmt_bytes(db_size)}\n")
+        sys.stderr.write(f"[sync] phase 3a: decompressed db = {fmt_bytes(db_size)}\n")
 
         # Validate
-        sys.stderr.write("[sync] validating...\n")
+        sys.stderr.write("[sync] phase 3b: validating SQLite...\n")
         try:
             summary = validate_sqlite(new_db_path)
         except sqlite3.DatabaseError as e:
             sys.stderr.write(f"[sync] FAILED: not a valid SQLite database: {e}\n")
+            _try_cleanup(railway_exe, script_b64)
             return 3
         sys.stderr.write(f"[sync]   integrity_check: {summary['integrity']}\n")
         sys.stderr.write(f"[sync]   deployers: {summary['deployers']:,}\n")
@@ -286,10 +397,17 @@ def run(args: argparse.Namespace) -> int:
             sys.stderr.write(f"[sync]   heartbeat: {summary['heartbeat']}\n")
         if summary["integrity"] != "ok":
             sys.stderr.write("[sync] INTEGRITY FAILED — refusing to replace local DB\n")
+            _try_cleanup(railway_exe, script_b64)
             return 3
 
+        # ---- PHASE 4: remote cleanup (best-effort) ----
+        _try_cleanup(railway_exe, script_b64)
+
         if args.dry_run:
-            sys.stderr.write(f"[sync] dry-run: snapshot at {new_db_path} (will be deleted on exit)\n")
+            sys.stderr.write(
+                f"[sync] dry-run: snapshot at {new_db_path} "
+                f"(deleted on exit). Local DB unchanged.\n"
+            )
             return 0
 
         # Atomic-replace
@@ -297,21 +415,53 @@ def run(args: argparse.Namespace) -> int:
         if out_path.exists():
             if bak_path.exists():
                 bak_path.unlink()
-            sys.stderr.write(f"[sync] backing up prior DB → {bak_path.name}\n")
+            sys.stderr.write(f"[sync] backing up prior DB -> {bak_path.name}\n")
             out_path.rename(bak_path)
-        # rename() across a tempdir mountpoint may fail on Windows; use shutil.move which falls back to copy
         shutil.move(str(new_db_path), str(out_path))
         sys.stderr.write(f"[sync] done. {out_path}\n")
 
     return 0
 
 
+def _try_cleanup(railway_exe: str, script_b64: str) -> None:
+    try:
+        cmd = build_ssh_cmd(railway_exe, ["cleanup"], script_b64)
+        rc, _, stderr_blob = run_ssh(cmd, timeout=60)
+        if rc == 0:
+            sys.stderr.write("[sync] phase 4: remote cleanup ok\n")
+        else:
+            sys.stderr.write(
+                f"[sync] phase 4: cleanup rc={rc} (non-fatal). stderr: {stderr_blob[-200:]!r}\n"
+            )
+    except Exception as e:
+        sys.stderr.write(f"[sync] phase 4: cleanup failed (non-fatal): {e}\n")
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
-    ap.add_argument("--out", default=str(DEFAULT_LOCAL_DB),
-                    help="Local DB path to replace (default: surveillance/data/surveillance.db)")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="Validate the snapshot but do not replace the local DB")
+    ap = argparse.ArgumentParser(
+        description="Sync production surveillance.db to local via chunked railway ssh."
+    )
+    ap.add_argument(
+        "--out",
+        default=str(DEFAULT_LOCAL_DB),
+        help="Local DB path to replace (default: surveillance/data/surveillance.db)",
+    )
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate the snapshot but do not replace the local DB",
+    )
+    ap.add_argument(
+        "--chunk-mb",
+        type=int,
+        default=DEFAULT_CHUNK_BYTES // (1024 * 1024),
+        help="Per-chunk binary size in MB (default 100). Smaller = more retry-safe.",
+    )
+    ap.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip phase 1; reuse the prepared gz from a prior run.",
+    )
     args = ap.parse_args()
     return run(args)
 

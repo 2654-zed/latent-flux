@@ -159,3 +159,54 @@ Concretely:
 - **Encode in `pyproject.toml` via `pre-commit` framework**: rejected — overkill; the hooks are 4 lines each and the existing local setup works.
 
 **Status:** RESOLVED. Tracked hook copies + installer landed 2026-05-13. STATE.md "Git hooks" section will reference this ADR.
+
+---
+
+## ADR-007 — Production sync v2: two-phase chunked protocol over per-call SSH sessions
+
+**Date:** 2026-05-15
+
+**Context:** v1 sync (`scripts/sync_prod_db.py`, ADR-001) failed three consecutive times against the 2026-05-15 production DB (11.6 GB raw → 3.3 GB gz → 4.4 GB base64) with `Error: WebSocket error: tungstenite error`. Diagnostic ladder isolated the failure mode:
+- Test A (file-size ping, 350 char bootstrap): rc=0, 2.7s
+- Test B (backup + gzip on remote, **no streaming**, 1234 char bootstrap): rc=0, **441.5s** — proves long-idle sessions OK
+- Test C (backup + gzip + stream **first 50 MB only**, 1734 char bootstrap): rc=0, 50 MB streamed cleanly — proves small streams OK
+- v1 sync (backup + gzip + stream full 4.4 GB): rc=1, tungstenite error
+
+Conclusion: the failure is **total streamed volume per single SSH invocation**, threshold somewhere between 50 MB and 4.4 GB. The 2026-05-10 sync succeeded at ~4.0 GB base64; the 2026-05-15 sync at ~4.4 GB did not.
+
+**Decision:** Replace v1 single-stream with v2 two-phase chunked retrieval.
+
+1. **Remote `scripts/sync_prod_db_remote.py` exposes 4 modes** (via `sys.argv[1:]`):
+   - `prepare` (default, no args): backup + gzip → `/tmp/l3sync_snapshot.db.gz`; emit `READY:<size>:<sha256>` on stdout.
+   - `chunk <off> <len>`: open prepared gz, seek, stream the slice as base64 framed by `===L3SYNC_PAYLOAD_START===` / `===L3SYNC_PAYLOAD_END===`.
+   - `cleanup`: remove prepared gz.
+   - `sha256`: re-emit READY from existing prepared gz (for `--resume`).
+
+2. **Local `scripts/sync_prod_db.py` orchestrates:**
+   - Phase 1: prepare (one long SSH call, no streaming).
+   - Phase 2: chunk loop (one SSH call per 100 MB binary slice). Each chunk → fresh WebSocket → size limit resets.
+   - Phase 2.5: SHA-256 verify (catches stitching bugs).
+   - Phase 3: decompress + integrity + atomic rename.
+   - Phase 4: remote cleanup (best-effort).
+
+3. **Resilience features:**
+   - Per-chunk retries: 2 (3 attempts total).
+   - `--resume` flag: skip prepare, reuse existing prepared gz on container.
+   - `--chunk-mb N` flag: tune chunk size if 100 MB ever proves too aggressive.
+   - SHA-256 from prepare prevents silent corruption from chunk-stitching errors.
+
+**Consequences:**
+- Sync time mostly unchanged (~10-20 min for ~10 GB DB): prepare phase dominates; the chunk loop adds ~5-10 min of overhead vs the single-stream that no longer works at all.
+- Resilient to future DB growth — each chunk capped at 100 MB regardless of total size.
+- ~33 SSH invocations per sync (was 1). Higher Railway API call volume but each call is small.
+- Bootstrap size kept under 5 KB so it fits the Windows cmd.exe 8191-char limit (was: original v1 was 4124; v2 is 4794 with the larger 4-mode script).
+- INV-011 (base64 framing) still holds; INV-011a added documenting the streaming-volume invariant.
+
+**Alternatives considered:**
+- **Increase compression level (compresslevel=9 instead of 6)** to shrink the stream: rejected — would maybe save 5-10% gz size; still well above the unknown threshold. Doesn't solve the root issue.
+- **Stream via stdin instead of base64 in cmd-line** (`railway ssh "python3 -" < remote_script.py`): considered — would let us embed the script via stdin and pass args differently. Rejected because per-session stdin doesn't help with the streaming-volume cliff; would still need chunking.
+- **Add a `/dump` HTTP endpoint to the deployed API:** still rejected for the same reasons as ADR-001 (attack surface).
+- **Upload to external object storage** (S3, transfer.sh): rejected — adds credentials and a third-party dependency for what should be a self-contained workflow.
+- **Run Railway's `database` backup feature**: rejected — Railway's managed backups exist for their Postgres/MySQL services, not for application-managed SQLite files inside the container's volume.
+
+**Status:** [LANDED] 2026-05-15. Updates: `scripts/sync_prod_db.py`, `scripts/sync_prod_db_remote.py`, `memory/INVARIANTS.md` (INV-011a), `memory/JOURNAL.md` (2026-05-15 entry).
