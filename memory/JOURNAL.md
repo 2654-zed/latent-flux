@@ -1169,4 +1169,327 @@ What kills it is **total-streamed-volume-per-SSH-invocation**, somewhere between
 
 ---
 
+### 2026-05-15 — Phase A investigation against fresh corpus + Potential Attacks v3
+
+**Starting state:** Production sync v2 just landed (commit `fb979bd`). Fresh local DB at 10.8 GB / 73,818 deployers / 321,578 contracts / 18.0 M tx_events / latest 2026-05-15T23:47Z. Re-ran `regime_monitor.py` against the fresh data — produced **31 alerts** (was 29 last session). Two new alerts emerged: 2026-05-09 approval_events_per_day=6,446 (P(CP)=0.841 — a NEW spike not present in the 2026-04-30 cut-off) and trailing tail through 2026-05-15.
+
+Phase A from `memory/NEXT_SESSION_PLAN.md` then executed in full. Pre-registered predictions evaluated below.
+
+#### A1 — Apr-23 approval spike → Apr-25 deployer spike correlation
+
+**Hypothesis:** Apr-25 mass-fund event (8,052 new deployers attributed to `0xb0b0b690` vanity-funder) was preceded by approval-side victim accumulation on Apr-23 (4,329 approvals).
+
+**Pre-registered prediction:** LIKELY — staging pattern fits the b0b0b690 operator profile.
+
+**Observed (`scripts/phase_a1_investigate.py`, `scripts/phase_a1_op_deepdive.py`):**
+
+| Date | Base new deployers | Arbitrum | Optimism | Total approvals (Base 99%) |
+|---|---|---|---|---|
+| Apr-22 | 802 | 71 | 6 | 754 |
+| Apr-23 | 1,458 | 142 | 61 | **4,329** |
+| Apr-24 | 1,234 | 99 | 34 | 2,039 |
+| Apr-25 | 1,335 | 79 | **6,638** | 1,424 |
+| Apr-26 | 1,280 | 72 | 5 | 2,438 |
+| Apr-27 | 1,107 | 84 | 15 | 1,119 |
+
+Five disproof findings:
+
+1. **Different chains.** Apr-23 approval spike is **99% Base** (4,284 of 4,329); Apr-25 deployer mass is **99% Optimism** (6,638 of 6,701).
+2. **`0xb0b0b6` is not in the corpus at all** — zero matches across `deployers.funding_sources` and `deployers.known_associated_deployers`. The "vanity-funder mass-fund" framing was based on prior-session memory that no longer points at evidence I can recover.
+3. **Zero deployer overlap** between Apr-23 approval-side deployers (149 distinct) and either Apr-25 Optimism (6,638) or Apr-25 Base (1,335).
+4. **Funding_sources empty for all 6,638 Apr-25 OP deployers**, and `typical_gas_price_gwei` NULL for all — suggests they bypassed the standard funding-trace path (likely AA / paymaster-sponsored gas).
+5. **Apr-25 OP mass is two-template scripted mass-deploy**, not a fleet-from-one-funder:
+   - `0x476b1553...`: **5,775 contracts** (87%)
+   - `0xc3314989...`: **831 contracts** (12.5%)
+   - 6,612/6,638 deployers (99.6%) have `total_contracts_deployed=1`
+   - Hourly distribution mechanistic at ~470/hr for 00:00–13:00 UTC, then near-zero
+   - 838/6,646 contracts (12.6%) already classified `suspected`
+
+**Conclusion:** Pre-registered prediction **disproven**. The Apr-23 and Apr-25 events are unrelated. The Apr-25 OP event is a new pattern: **two-template scripted mass deploy with paymaster-sponsored gas and one-deployer-per-contract pristine pattern**, characteristic of AA-era L2 deployments. Bytecode templates `0x476b1553` and `0xc3314989` are new entities to investigate.
+
+**Output:** Journal note (this entry). INDEX.md update for the two new bytecode families. No case file (no named entity yet; awaiting bytecode classification).
+
+#### A2 — May-5 confirmed-traps spike (210 vs ~30-50 baseline)
+
+**Hypothesis space:** (a) iter_8 of drainer-spawn hub `0xf7883e3f`; (b) classifier rule change → retroactive re-classification; (c) backfill / re-scan job.
+
+**Pre-registered prediction:** SPLIT — partly (a), more likely (b) or (c).
+
+**Observed (`scripts/phase_a2_a3_investigate.py`):**
+
+| Date | confirmed-tier count |
+|---|---|
+| May-1 | 34 |
+| May-2 | 24 |
+| May-3 | 43 |
+| May-4 | 57 |
+| **May-5** | **210** |
+| May-6 | 41 |
+| May-7 | 32 |
+| May-8 | 23 |
+| May-9 | 87 |
+| May-10 | 5 |
+| May-11 | 28 |
+
+Three findings:
+
+1. **iter_8 hypothesis RULED OUT.** Zero contracts directly deployed by `0xf7883e3fef23c8e645deba4b540549d78028a616`, zero deployers funded by it, zero deployers funded by the iter_8 wallet prefix `0xa8c7ac1cdc33`. iter_8 contributed **0%** to the May-5 spike.
+2. **Backfill/re-scan signature: 53.8%.** Of 210 May-5 confirmed contracts, 113 (53.8%) have `deployer.first_seen` BEFORE May-5 — they were deployed earlier and only newly classified on May-5. Matches (b)/(c).
+3. **Genuine new-deployment wave: 46.2%.** 97 of 210 contracts have same-day deployer.first_seen.
+
+Top deployer on May-5 (`0xdf8d48e98be68f31057ba9f32bea69ea92f8382c`) produced 20/210 (9.5%) — no dominant operator. Bytecode hashes dispersed (top 10 cover 25%). This is **a wave from many small operators plus a re-classification pulse**, not iter_8.
+
+**Conclusion:** Pre-registered prediction was **partly right** (split — backfill + new wave), but the iter_8 contribution was wrong (predicted "partly iter_8", observed 0%). Correct split is ~54% backfill/classifier-change : ~46% genuine new-deployment.
+
+**Output:** Journal note. Worth checking git log on `bytecode_classifier.py` around May-4/5 to identify the backfill trigger (deferred follow-up).
+
+#### A3 — Coffee Fleet vs approval-events decay
+
+**Hypothesis:** Coffee Fleet (`0xc0ffeefeed8b9d271445cf5d1d24d74d2ca4235e`) victim acquisition slowed Apr-23 → Apr-25 (totals: 4,329 → 2,039 → 1,424 → 2,438 → 1,119). Candidate causes: bots learned, operators retired contracts, victim pool saturated.
+
+**Pre-registered prediction:** SYSTEMIC — corpus-level decay; Coffee Fleet's share roughly constant.
+
+**Observed:**
+
+| Date | Coffee approvals | Total approvals | Coffee share |
+|---|---|---|---|
+| Apr-22 | 0 | 754 | 0.0% |
+| Apr-23 | 0 | 4,329 | 0.0% |
+| Apr-24 | 0 | 2,039 | 0.0% |
+| Apr-25 | 0 | 1,424 | 0.0% |
+| Apr-26 | 0 | 2,438 | 0.0% |
+| Apr-27 | 0 | 1,119 | 0.0% |
+
+Coffee Fleet has 416 deployed contracts and was actively deploying (9 new contracts Apr-23, 33 Apr-24, 6 Apr-27) — but received zero approval-watchlist entries on any of its 416 contracts across the 6-day window.
+
+**Conclusion:** Pre-registered prediction "SYSTEMIC — share roughly constant" is **wrong about the share**. Coffee Fleet's share is **zero**, not roughly constant. Most likely explanation: `approval_watchlist` filters by `contract_tier` and excludes confirmed-tier contracts (Coffee Fleet's 416 are confirmed; new approvals are tracked on suspected-tier contracts elsewhere). Deferred follow-up: verify by reading `surveillance/approval_monitor.py`.
+
+#### Pre-registered prediction scorecard
+
+| Hypothesis | Pre-reg prediction | Observed | Surprise |
+|---|---|---|---|
+| A1 — Apr-23/Apr-25 causal chain | LIKELY (staging) | DISPROVEN (different chains, no overlap) | HIGH |
+| A2 — May-5 iter_8 contribution | SPLIT (partly iter_8) | 0% iter_8; 54% backfill + 46% new | MEDIUM |
+| A3 — Coffee Fleet share constant | SYSTEMIC (share constant) | Share is zero (tier-filter likely) | MEDIUM |
+
+Pattern across all three: pre-reg predictions were based on prior-session memory of named entities (b0b0b690, iter_8, Coffee Fleet) that turned out to either be absent from the corpus, contribute nothing to the alert in question, or not be indexed by the table queried. Step 5 of the loop captures this — predictions should index against the actual queryable substrate, not against named-entity heuristics.
+
+#### New entities surfaced
+
+- **Bytecode hash `0x476b1553...`** — 5,775 contracts deployed on Optimism Apr-25 from 5,775 distinct one-contract-each deployers with empty `funding_sources` and null `typical_gas_price_gwei`. Likely AA-era / paymaster-sponsored mass-deploy template. Type unknown until bytecode-classifier inspects.
+- **Bytecode hash `0xc3314989...`** — 831 contracts, same cohort, same characteristics. Possibly a variant of `0x476b1553`.
+
+Both deserve INDEX.md Section 5 (bytecode families) entries with "category pending bytecode inspection" status.
+
+#### Open follow-ups
+
+1. Bytecode inspection of `0x476b1553` and `0xc3314989` to determine if benign (AA wallet template) or malicious (trap variant).
+2. Git-log review of `surveillance/bytecode_classifier.py` between 2026-05-04 and 2026-05-06 to identify what changed and produced the May-5 re-classification pulse.
+3. Code-read `surveillance/approval_monitor.py` to confirm tier-filter hypothesis for Coffee Fleet zero result.
+4. The Apr-25 OP cohort's mechanistic 00:00–13:00 UTC hourly distribution: Alchemy reorg-window catch-up vs cross-protocol coordinated event.
+
+#### Potential Attacks v3
+
+Updated `POTENTIAL_ATTACKS_V2.md` → preserved as archive; new `POTENTIAL_ATTACKS_V3.md` integrating four newly-confirmed exploits:
+
+- **Wasabi Protocol (2026-04-30, ~$5M+ across Ethereum + Base):** Attack 11 confirmation. Compromised deployer EOA → ADMIN_ROLE grant → UUPS proxy upgrade on perp vaults / LongPool → drain. Blockaid: "admin-key compromise exploit". First multi-chain instance of Attack 11.
+- **Renegade Finance (2026-05-10/11, $209K on Arbitrum):** Attack 11 variant. Unprotected initializer on legacy Dark Pool proxy → attacker called `initialize()` → became admin → delegatecall-injected malicious logic → drained 27 ERC-20s. 90/10 whitehat bounty; most funds returned. Blockaid caught the exposed initializer. **Code-defect-acquired-admin variant — split as Attack 11b** in v3.
+- **THORChain (2026-05-15, $7.4M–$10M+):** cross-chain exploit across BTC, ETH, BNB, Base. Protocol suspended trading + activated Mimir governance freeze. Latest validation of cross-chain pooled-custody surface (Attacks 9, 10). Mechanism TBD — flagged as Attack 15 candidate.
+- **Volo Protocol (2026-04-21, $3.5M)** + Juicebox V3 / Thetanuts Finance late April: continuations of the April access-control / admin / proxy pattern.
+
+Attack 11 split into 11a (key-compromise mode — Aethir, Wasabi, Volo) and 11b (acquired-admin-via-code-defect — Renegade). Same downstream amplification, different upstream defense locus.
+
+Status count: v2 was 6 observed / 5 components-observed / 3 unconfirmed across 14 attacks. v3 stays at **14 attacks (no new categories yet pending THORChain mechanism)**; observed count rises to 8 (added Wasabi + Renegade + Volo + THORChain instance evidence across Attacks 9/10/11).
+
+### LOOP.md 7-step reflection pass (Phase C, mandatory)
+
+This session: action-mode with three major work blocks (sync v2 already reflected above in 2026-05-15 prior entry; Phase A surveillance investigation; POTENTIAL_ATTACKS_V3.md). Loop runs over Phase A + v3 only since sync-v2 was already integrated into the prior entry.
+
+#### Step 1 — State Update Check: Y
+
+State-level changes:
+- Last sync: 2026-05-10 → 2026-05-15 (already updated in prior entry)
+- Corpus stats: refreshed in prior entry
+- regime_alerts count: 29 → 31 (re-scan against fresh corpus produced 2 new alerts; the 2026-05-09 approval_events=6,446 spike is the headline new finding)
+- New entities surfaced: bytecode hashes `0x476b1553...` and `0xc3314989...` — added as UNK-025
+- New top-level doc: `POTENTIAL_ATTACKS_V3.md` (with `POTENTIAL_ATTACKS_V2_ARCHIVE.md` preserved)
+
+STATE.md updates done in prior entry; this entry does not need additional STATE.md changes.
+
+#### Step 2 — Unknown Detection: Y
+
+Six new UNKNOWNs logged (UNK-025 through UNK-030):
+- UNK-025 — Bytecode classification of Apr-25 OP mass-deploy templates (open; high-impact for corpus characterization)
+- UNK-026 — Does approval_watchlist filter confirmed-tier? (open; affects signal interpretation)
+- UNK-027 — Identity of `0xb0b0b690` (open; named-entity verification)
+- UNK-028 — INDEX.md iter_8 May-5 spawn-day claim verification (open; named-entity verification)
+- UNK-029 — THORChain mechanism for Attack 11/9/10/15 mapping (open; threat-modeling)
+- UNK-030 — May-5 classifier pulse cause (open; subsystem provenance)
+
+UNKNOWN count: 30 (was 24). RESOLVED count unchanged at 7. OPEN count: 23.
+
+#### Step 3 — Decision Extraction: Y
+
+One material framework decision: **split Attack 11 into 11a (key-compromise) and 11b (acquired-admin-via-code-defect)**. The downstream amplification is identical but the upstream defense locus is categorically different. Captured in POTENTIAL_ATTACKS_V3.md itself; not formalized as a separate ADR since v3 IS the decision record. If future agents need to re-derive the rationale, the v3 Attack 11 section has the full justification.
+
+Other decisions:
+- v2 → V2_ARCHIVE rename: follows the v1 archive convention, not a new decision pattern
+- Chunk size 100 MB for sync v2: already ADR-007
+- Skipping bytecode inspection of `0x476b1553`/`0xc3314989` this session: deferred to UNK-025 next-session work, not an architectural choice
+
+#### Step 4 — Invariant Check: skip(no-new-invariants)
+
+No new invariants discovered. The candidate "approval_watchlist filters confirmed-tier" hypothesis is OPEN (UNK-026) — it would become an invariant if confirmed, but is not one yet.
+
+#### Step 5 — Failure / Surprise Logging: Y
+
+Three pre-registered predictions evaluated; two falsified, one partially correct:
+
+```
+SURPRISE: Apr-23/Apr-25 staging hypothesis is wrong about chain.
+- Expected: Apr-23 Base approvals stage victims for Apr-25 Base/multi-chain
+  deployer mass via 0xb0b0b690 vanity-funder.
+- Observed: Apr-23 is Base-side (99% of 4,329 approvals); Apr-25 mass is
+  99% Optimism (6,638 of 6,701); 0xb0b0b690 not in corpus at all; zero
+  deployer-overlap between the two cohorts.
+- Implication: Prior-session named-entity heuristics (b0b0b690 attribution)
+  produce spurious causal models. Predictions should index against
+  queryable substrate, not memory-of-named-entities.
+- Resolution: logged as UNK-027 (identity of b0b0b690) — possible
+  prior-session hallucination.
+```
+
+```
+SURPRISE: iter_8 contributes 0% to May-5 confirmed-trap spike.
+- Expected: iter_8 (0xf7883e3f) drives some of the May-5 spike since
+  May-5 = iter_8 spawn day per INDEX.md (NEXT_SESSION_PLAN.md cited).
+- Observed: Zero contracts deployed by 0xf7883e3f or the iter_8 wallet
+  prefix 0xa8c7ac1cdc33 on May-5 or anywhere in the corpus.
+- Implication: Either iter_8's wallet attribution is wrong, the May-5
+  spawn-day mapping is wrong, or the entire iter_8 designation is stale.
+  Same pattern as SURPRISE 1: named-entity heuristic without queryable
+  substrate.
+- Resolution: logged as UNK-028 (INDEX.md iter_8 entry verification).
+```
+
+```
+SURPRISE: Coffee Fleet contributes ZERO approvals across Apr-22..27 window.
+- Expected: Coffee Fleet's share of daily approvals is "roughly constant"
+  during the decay window — SYSTEMIC framing implies its share isn't the
+  causal variable.
+- Observed: Coffee Fleet's share is exactly zero across all 6 days,
+  despite 416 deployed contracts and 48 new deployments during the window.
+- Implication: The approval_watchlist table likely filters by contract_tier
+  (excludes confirmed-tier). The regime-monitor's approval_events_per_day
+  signal is "new-victim signal on suspected-tier", not "any approval
+  anywhere". Has implications for how to read that signal.
+- Resolution: logged as UNK-026 (verify tier-filter in approval_monitor.py).
+```
+
+Pattern across all three SURPRISEs: predictions made on named-entity memory (b0b0b690, iter_8, Coffee Fleet) were systematically wrong, while predictions made on aggregate signals (Apr-25 surge magnitude, May-5 spike volume) were correct. The lesson is to index predictions against the queryable substrate (chains, dates, counts, top-N lists), not against named entities that may be stale or hallucinated.
+
+#### Step 6 — System Coherence Check (CRITICAL): Y
+
+##### 6a. Anchor claims touched this session
+
+```
+ANCHOR: "Last successful sync: 2026-05-10 (full 10 GB; integrity_check: ok)"
+       (STATE.md line ~32, pre-this-session)
+- Status: CONTRADICTED → REFINED → updated to "2026-05-15 [10.8 GB]"
+- Evidence: scripts/sync_prod_db.py run produced integrity_check: ok with
+  73,818 deployers / 321,578 contracts; commit fb979bd
+- Action: STATE.md updated in prior 2026-05-15 sync-v2 entry; this entry
+  does not need a further STATE update.
+```
+
+```
+ANCHOR: "Note: `regime_alerts` table is empty in the fresh DB" (STATE.md
+       line ~70, prior entry)
+- Status: REFINED — table now has 31 rows after re-running regime_monitor
+- Evidence: scripts/sync_prod_db.py output shows table existed empty;
+  `python -m surveillance.regime_monitor` wrote 31 alerts. Verified via
+  preflight query.
+- Action: noted in this entry's opening; STATE.md note can stay
+  (clarifies the "empty after sync, re-run regime_monitor" pattern).
+```
+
+```
+ANCHOR: "29 alerts on first scan" (prior session journal, 2026-05-13 entry)
+- Status: REFINED — re-scan against fresh corpus produced 31 alerts. The
+  prior 29 reflected the Apr-30 data cutoff; the new 31 includes the
+  2026-05-09 approval_events=6,446 spike and the trailing May-15 alerts.
+- Evidence: scripts/phase_a1_investigate.py STEP 2 output
+- Action: no contradiction; the 29 still describes the prior cut-off.
+  This entry documents the 31 as the fresh-corpus baseline.
+```
+
+```
+ANCHOR (NEW WEAKNESS): "Apr-25 b0b0b690 vanity-funder mass-fund event"
+       (NEXT_SESSION_PLAN.md, 2026-05-13)
+- Status: CONTRADICTED. The b0b0b690 attribution is not supported by the
+  corpus. The Apr-25 surge is real but its driver is the 0x476b1553 +
+  0xc3314989 bytecode templates, not a single named operator.
+- Evidence: scripts/phase_a1_investigate.py STEPs 4-7
+- Action: log UNK-027 for the b0b0b690 identity question.
+  NEXT_SESSION_PLAN.md should NOT be retroactively edited (it's a
+  prior-session prediction artifact, not a load-bearing claim) but
+  future plans should index attribution against queryable substrate.
+```
+
+##### 6b. Did anything contradict previous assumptions?
+
+Yes — three contradictions surfaced:
+1. The b0b0b690 attribution (NEXT_SESSION_PLAN.md) is unsourced and likely hallucinated. **Surfaced** (this entry) rather than silently revised. UNK-027 logged.
+2. The iter_8 = May-5 spawn day mapping (per NEXT_SESSION_PLAN.md citing INDEX.md) cannot be verified by querying. **Surfaced**. UNK-028 logged.
+3. The Coffee Fleet "share roughly constant" prediction (NEXT_SESSION_PLAN.md) is wrong because Coffee Fleet's share is structurally zero. **Surfaced**. UNK-026 logged (and the tier-filter mechanism is the proximate cause).
+
+None of these require a numbered Correction in `reports/correction_log.md` — they're prior-session predictions that didn't survive verification, not previously-asserted claims. They become UNKs.
+
+The deeper coherence issue: **two of three predictions failed because they relied on named-entity heuristics from prior-session memory rather than from queryable evidence**. This is a methodological pattern worth tracking. Could become an invariant if it repeats: "Predictions about specific named entities must be re-verified against the queryable corpus at prediction time, not inherited from prior-session memory."
+
+#### Step 7 — Next Unknown Selection
+
+Top three for next session (impact × tractability):
+
+1. **UNK-025** — bytecode classification of `0x476b1553` and `0xc3314989`.
+   - High-impact: 6,606 contracts (~2% of total corpus) currently uncategorized; resolution either reclassifies a major chunk to benign (corpus noise correction) or surfaces a 6K+ adversarial event.
+   - Tractable: pull a sample contract, decompile, run `surveillance/bytecode_classifier.py` against it, cross-ref against known AA wallet templates.
+   - Why: blocks any clean characterization of the Apr-25 Optimism surge as benign-or-malicious.
+
+2. **UNK-026** — confirm or refute the approval_watchlist tier-filter hypothesis.
+   - High-impact: affects how to interpret EVERY regime alert on the approval_events_per_day signal. If confirmed, the signal documentation in lexicon.md needs an entry.
+   - Highly tractable: ~30 min reading `surveillance/approval_monitor.py` + verification query.
+
+3. **UNK-030** — what triggered the May-5 classifier re-classification pulse.
+   - Medium-impact: explains 53.8% of the May-5 confirmed-trap spike. Relevant to regime-monitor episode-coalescence (V2 idea) — if classifier pulses are distinguishable from deployment pulses, the alert taxonomy can mask the former.
+   - Highly tractable: git log on `surveillance/bytecode_classifier.py` for the May-4..6 window.
+
+UNK-027 (b0b0b690 identity) and UNK-028 (iter_8 INDEX.md) are lower priority — they're verification-of-prior-claims rather than new-knowledge-acquisition, and the failure mode they expose (named-entity heuristics in predictions) is already noted as a methodological lesson.
+
+UNK-029 (THORChain mechanism) is gated on external post-mortem availability, not on Layer 3 work.
+
+#### Skipped steps
+
+```
+SKIPPED: Step 4 (Invariant Check)
+Reason: information-gathering / investigation session; no invariants discovered or refined. Three candidate invariants surfaced as UNKs (UNK-026 tier filter, UNK-028 named-entity verification discipline, and the meta-lesson about predictions vs queryable substrate) — they will be promoted to INVARIANTS.md only after verification, not on speculation.
+```
+
+Skip count for Step 4: **1** (this session). Rule-of-three threshold: 3 consecutive skips would mark Step 4 malformed. Not yet a concern.
+
+#### Loop self-monitoring
+
+Reflection cost this session: ~15 minutes (above the 5-10 min steady-state target). Justification: action-mode session with three falsified predictions, six new UNKs, and one framework split (Attack 11a/11b). Action sessions naturally produce more material than resolution-only sessions. The 15 minutes was well-spent on Step 6 contradictions — the b0b0b690 / iter_8 / Coffee Fleet failures together produce the methodological lesson (predictions vs queryable substrate) which is the most valuable artifact of this loop pass.
+
+REFLECTION_LOG.csv updated with fifth row.
+
+---
+
+NEXT TARGETS (for next session):
+- UNK-025 — bytecode classification of Apr-25 OP mass-deploy templates (high-impact, tractable)
+- UNK-026 — verify approval_watchlist confirmed-tier filter (high-impact, very tractable)
+- UNK-030 — identify May-5 classifier pulse trigger (medium-impact, very tractable)
+
+---
+
 *End of file. Append new sessions above this footer.*

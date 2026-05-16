@@ -3,3 +3,4 @@ date_iso,session_id,step1_done,step2_done,step3_done,step4_done,step5_done,step6
 2026-05-13T14:00:00Z,2026-05-13-resolve-next-targets,Y,Y,skip(no-design-choices),Y,Y,Y,Y,~10,1,resolved-4-UNKNOWNs-surfaced-UNK-024
 2026-05-13T16:00:00Z,2026-05-13-3rd-pass-action-pivot,Y,Y,skip(ADR-006-2nd-defer),Y,Y,Y,Y,~8,1,resolved-3-UNKNOWNs-pivot-to-action-mode-ADR-006-skip-count-2
 2026-05-13T19:00:00Z,2026-05-13-4th-pass-maintenance-and-regime-monitor,Y,Y,Y(ADR-006-landed),Y,Y,Y,Y,~12,1,first-flux-manifold-production-consumer-live-29-real-alerts-on-corpus-INV-015-016-added
+2026-05-15T20:00:00Z,2026-05-15-sync-v2-phase-a-attacks-v3,Y,Y,Y(11a-11b-split),skip(no-new-invariants),Y,Y,Y,~15,2,sync-v2-landed-phase-a-investigation-falsified-3-predictions-attacks-v3-published-UNK-025-030-added

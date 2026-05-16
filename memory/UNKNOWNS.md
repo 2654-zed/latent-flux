@@ -303,6 +303,56 @@ Confidence calibration (from LOOP.md):
 
 ---
 
+### UNK-025 — Bytecode classification of Apr-25 Optimism mass-deploy templates `0x476b1553` and `0xc3314989`
+
+- **Surfaced:** 2026-05-15, by 2026-05-15-phase-a
+- **Category:** Subsystem
+- **Why it matters:** The Apr-25 Optimism deployer surge produced 6,606 contracts from these two bytecode hashes (87% + 12.5% of the cohort). 838 already classify as `suspected`; the rest are `unknown`. If the templates are benign (e.g., AA wallet factories), the entire cohort is corpus noise. If malicious (trap variant), this is a single-day 6K+ adversarial deployment event — an enormous spike in confirmed-bad volume.
+- **Resolution plan:** Pull a sample contract for each hash; decompile or use `surveillance/bytecode_classifier.py` PATTERN_REGISTRY to evaluate. Cross-reference against known AA wallet templates (Safe, Biconomy, ZeroDev, Alchemy AA SDK).
+- **Status:** OPEN
+
+### UNK-026 — Does `approval_watchlist` filter out confirmed-tier contracts?
+
+- **Surfaced:** 2026-05-15, by 2026-05-15-phase-a
+- **Category:** Subsystem
+- **Why it matters:** Phase A3 found Coffee Fleet (`0xc0ffeefeed`) contributes ZERO approvals across Apr-22..27 despite 416 deployed contracts and 48 new deployments in window. The likely explanation is that `approval_watchlist` filters by `contract_tier` and excludes confirmed-tier contracts. If true, the regime-monitor's `approval_events_per_day` signal is fundamentally "new-victim signal on suspected-tier", NOT "any approval anywhere". This changes how to interpret regime alerts on that signal.
+- **Resolution plan:** Read `surveillance/approval_monitor.py` and `surveillance/approval_drain_monitor.py` to find the tier filter (or its absence). Confirm by querying: do ANY confirmed-tier contracts appear in approval_watchlist? If zero, hypothesis confirmed.
+- **Status:** OPEN
+
+### UNK-027 — Identity of `0xb0b0b690` referenced in prior session memory as "Apr-25 vanity-funder mass-fund operator"
+
+- **Surfaced:** 2026-05-15, by 2026-05-15-phase-a
+- **Category:** Operational
+- **Why it matters:** NEXT_SESSION_PLAN.md attributed the Apr-25 deployer mass (8,052) to `0xb0b0b690` as a "vanity-funder mass-fund event". Phase A1 found ZERO matches for `0xb0b0b6` anywhere in `deployers.funding_sources`, `deployers.known_associated_deployers`, or any other column. The address may have been (a) a prior-session hallucination, (b) a real entity that was retracted/deleted, (c) referenced under a different prefix. If (a), every other prior-session attribution chain should be re-verified.
+- **Resolution plan:** `git log -p` search for `b0b0b690` and `b0b0b6` across all branches and history. Also grep memory/, docs/, reports/, surveillance/data/cases/. If still nothing, mark as prior-session hallucination and add to a "named-entity verification" discipline note.
+- **Status:** OPEN
+
+### UNK-028 — INDEX.md "May-5 = iter_8 spawn day" claim vs zero iter_8-traceable contracts on May-5
+
+- **Surfaced:** 2026-05-15, by 2026-05-15-phase-a
+- **Category:** Operational
+- **Why it matters:** NEXT_SESSION_PLAN.md cited INDEX.md for "May-5 = iter_8 spawn day of drainer-spawn hub 0xf7883e3f, wallet 0xa8c7ac1cdc33". Phase A2 found zero contracts deployed by either address on May-5 (or anywhere in the corpus). Either (a) the iter_8 wallet prefix is wrong, (b) the May-5 mapping is wrong, (c) the entire iter_8 claim is stale or fabricated. Worth verifying against INDEX.md's actual text.
+- **Resolution plan:** Grep INDEX.md for `iter_8`, `iter 8`, `0xf7883e3f`, `0xa8c7ac1cdc33`, and `drainer-spawn`. Verify what INDEX.md actually says vs what NEXT_SESSION_PLAN.md inferred. Update or retract.
+- **Status:** OPEN
+
+### UNK-029 — THORChain (2026-05-15) exploit mechanism for Attack 11/9/10/15 mapping
+
+- **Surfaced:** 2026-05-15, by 2026-05-15-attacks-v3
+- **Category:** Theoretical (threat-modeling)
+- **Why it matters:** Determines whether POTENTIAL_ATTACKS_V3.md's tentative Attack 15 candidacy gets promoted to a standalone category or absorbed into Attack 9/10/11. Affects detection-hook priorities (validator-set monitoring vs cross-chain proof verification vs admin compromise).
+- **Resolution plan:** Watch for THORChain post-mortem from THORChain team, Halborn, Blockaid, or Chainalysis. Map mechanism to (a) validator-attestation forgery → Attack 9; (b) cryptographic proof bypass → Attack 10; (c) validator-key compromise → Attack 11a; (d) novel native-swap economic exploit → Attack 15.
+- **Status:** OPEN
+
+### UNK-030 — What caused the May-5 confirmed-trap re-classification pulse (53.8% backfill)?
+
+- **Surfaced:** 2026-05-15, by 2026-05-15-phase-a
+- **Category:** Subsystem
+- **Why it matters:** A2 showed 113 of 210 May-5 confirmed-tier contracts had deployer.first_seen BEFORE May-5 — they were deployed earlier and only newly classified on May-5. This is either a classifier rule change or a backfill/re-scan job. Knowing which informs how to interpret similar pulses in the future and whether the regime monitor needs to mask out classifier-pulse vs deployment-pulse signal.
+- **Resolution plan:** `git log --since="2026-05-04" --until="2026-05-06" -- surveillance/bytecode_classifier.py surveillance/pattern_*.py surveillance/db.py`. Also check `surveillance/scripts/` for any re-classification job around that date.
+- **Status:** OPEN
+
+---
+
 ## Resolved (with confidence)
 
 UNKNOWNs marked RESOLVED can be browsed inline above by status field. Index of RESOLVED entries:
@@ -317,8 +367,8 @@ UNKNOWNs marked RESOLVED can be browsed inline above by status field. Index of R
 | UNK-008 | HIGH | 2026-05-13 |
 | UNK-024 | HIGH | 2026-05-13 |
 
-**RESOLVED count: 7 of 24 total (29%)**
-**OPEN count: 17**
+**RESOLVED count: 7 of 30 total (23%)**
+**OPEN count: 23**
 **revisit-LOW queue: 2 (UNK-005, UNK-006)**
 
 ---
