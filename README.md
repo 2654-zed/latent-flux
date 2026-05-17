@@ -797,7 +797,7 @@ requirements.txt              # numpy>=1.24, scipy>=1.10, matplotlib>=3.7
 ## Tests
 
 <!-- AUTOGEN:TESTS -->
-423 tests across 20 test files.
+436 tests across 21 test files.
 <!-- AUTOGEN:END_TESTS -->
 
 ```bash

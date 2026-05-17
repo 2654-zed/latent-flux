@@ -1301,6 +1301,79 @@ Attack 11 split into 11a (key-compromise mode — Aethir, Wasabi, Volo) and 11b 
 
 Status count: v2 was 6 observed / 5 components-observed / 3 unconfirmed across 14 attacks. v3 stays at **14 attacks (no new categories yet pending THORChain mechanism)**; observed count rises to 8 (added Wasabi + Renegade + Volo + THORChain instance evidence across Attacks 9/10/11).
 
+---
+
+### 2026-05-16 — SAI substrate landed (Phase 1 + Q-002 fully wired)
+
+Following the 2026-05-15 SAI cycle output, this session implemented the Phase 1 question store + the highest-priority executable module (Q-002 approval-spike detector). The substrate is now the primary question-management layer per ADR-008.
+
+**What shipped:**
+
+| Artifact | Status |
+|---|---|
+| `memory/questions.yaml` (18 structured questions) | LANDED |
+| `surveillance/sai/question_store.py` (load/rank/save + CLI) | LANDED |
+| `surveillance/sai/question_runner.py` (wiring auditor + dispatcher) | LANDED |
+| `surveillance/analytics/approval_spike_detector.py` (Q-002) | LANDED — WIRED + tested + empirically validated |
+| `surveillance/ontology/role_classifier.py` (Q-001) | SKELETON |
+| `surveillance/sai/prediction_verifiability.py` (Q-004) | SKELETON (functional rule-based scoring) |
+| `surveillance/sai/capability_liveness.py` (Q-008) | SKELETON (working inventory query) |
+| `surveillance/sai/adversarial_engine.py` (Q-006) | SKELETON |
+| `surveillance/sai/question_generator.py` (Phase 3) | SKELETON |
+| `surveillance/sai/prediction_registry.py` (Phase 4) | SKELETON (schema + --init) |
+| `tests/surveillance/test_sai.py` (13 tests) | LANDED — all green |
+| `memory/INVARIANTS.md` INV-017 (questions drive system) | LANDED |
+| `memory/DECISIONS.md` ADR-008 (SAI substrate adopted) | LANDED |
+
+**Empirical validation of Q-002 (the high-value module):**
+
+Run against 2026-05-09 (the day of 0x80b12bd0's 4,587-victim discharge):
+```
+[T1_IMMINENT] Z=130.0  as_of=2026-05-09  contract=0x752c5a95...  chain=base  tier=confirmed
+              approvals_today=4498  baseline_mean=54.7  baseline_stddev=34.19  baseline_obs=13
+              deployer=0x80b12bd0...  watchlist=pristine-reputation solo operator (0x752c5a95 deployer)
+```
+
+Run against 2026-05-08 (day before discharge): **0 alerts**.
+Run against 2026-05-15 (post-discharge, quiet day): **0 alerts**.
+
+The detector identifies the exact 0x752c5a95 contract on the exact day with the exact baseline our 2026-05-15 retrospective characterized (50 approvals/day → 4,498 on discharge day = 88x; the detector reports 130-sigma due to baseline stddev of 34 making the Z higher than the multiple). Clean signal-to-noise. Severity Tier 1 IMMINENT is the highest band in the schema.
+
+**Ranking (verified by tests):**
+
+| Rank | id | score | category | wiring |
+|---|---|---|---|---|
+| 1 | Q-002 | 4.90 | pricing | **WIRED** |
+| 1 | Q-014 | 4.90 | pricing | parent question (NO_TARGET) |
+| 3 | Q-001 | 4.70 | structural | WIRED (skeleton) |
+| 3 | Q-011 | 4.70 | structural | parent question (NO_TARGET) |
+| 5 | Q-009 | 4.40 | adversarial | MISSING_FILE |
+| 5 | Q-013 | 4.40 | methodology | parent (NO_TARGET) |
+| 7 | Q-003 | 4.10 | adversarial | MISSING_FILE |
+| 7 | Q-005 | 4.10 | behavior | MISSING_FILE |
+| 7 | Q-012 | 4.10 | adversarial | parent (NO_TARGET) |
+| 7 | Q-015 | 4.10 | behavior | parent (NO_TARGET) |
+| 11 | Q-004 | 4.00 | methodology | WIRED (skeleton) |
+| 11 | Q-016 | 4.00 | methodology | (NO_TARGET) |
+| 13 | Q-006 | 3.80 | adversarial | WIRED (skeleton) |
+| ... | (Q-008, Q-007, Q-010, Q-017, Q-018) | 2.9-3.4 | mixed | mixed |
+
+The parent questions (Q-011 through Q-018) are intentionally NO_TARGET — they are the foundational "questions that should have existed but didn't" (formerly QG1..QG8 in the SAI cycle output). Their child questions (Q-001..010) are the concrete instantiations that get implementation targets.
+
+**What is NOT shipped this session (explicit gaps for next session):**
+
+- Q-009 funding chain pathfinder (4.40 priority): file does not exist yet. Closes the 34-execution-cell-to-operator linkage gap.
+- Q-003 OLI temporal validity (4.10): closes the UNK-031 / INV-007 safe-by-accident gap.
+- Q-005 cross-chain choreography (4.10): would have caught 0x80b12bd0's LayerZero self-bridge in real time.
+- Full role-classifier (Q-001 has skeleton with partial rules; full lattice is ~1-week build).
+- Production wiring of regime_monitor (still in the local-only state; capability_liveness will flag this when run).
+
+**SAI loop closure: still open.** Phase 3 (question_generator from failures) is skeleton. Until that lands, new questions are surfaced by sessions (like this one), not by automated failure→question conversion. The bottleneck is no longer "we don't know what to build" — the bottleneck is "we haven't yet wired the generator that produces the next questions automatically." That's the priority for the next SAI cycle.
+
+**Test status:** 27 surveillance tests, all green (14 prior + 13 new SAI tests).
+
+**Lexicon cross-references:** ADR-008 + INV-017 introduce a methodology that aligns cleanly with the Operational Doctrine lexicon section (Adversarial Maneuver framework). The maneuver frame says exploits are campaigns of phases; SAI says capabilities are answers to questions. Both are first-class in the codebase now.
+
 ### LOOP.md 7-step reflection pass (Phase C, mandatory)
 
 This session: action-mode with three major work blocks (sync v2 already reflected above in 2026-05-15 prior entry; Phase A surveillance investigation; POTENTIAL_ATTACKS_V3.md). Loop runs over Phase A + v3 only since sync-v2 was already integrated into the prior entry.

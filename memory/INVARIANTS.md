@@ -129,6 +129,13 @@ A violation becomes a numbered Correction in `reports/correction_log.md`. A disc
 - **How tested:** `tests/surveillance/test_regime_monitor.py::test_regime_monitor_silent_on_stationary_series` asserts ≤ 1 alert over 60 stationary observations (would fail if raw `update()` value were used — currently 10 spurious alerts in pre-fix run).
 - **Surfaced:** 2026-05-13 (caught by smoke test on stationary series)
 
+### INV-017 — Every Layer 3 capability, data path, or pipeline must map back to a question in `memory/questions.yaml`
+
+- **Rationale:** Per ADR-008 (SAI substrate). The system's primary abstraction is the question, not the data or the model. If a capability does not answer a structured question in the store, it is orphan work — likely unnecessary or untrackable. The discipline forces every build to declare its decision_output.
+- **Enforcement:** New modules in `surveillance/` must reference a question id in their docstring (e.g., `surveillance/analytics/approval_spike_detector.py` declares it answers Q-002). `question_runner.check_wiring()` audits the inverse: every active question's `implementation_target` must exist or be a skeleton with TODO markers.
+- **How tested:** `tests/surveillance/test_sai.py::test_question_loads_18_questions` validates the store is loadable. Capability liveness check (Q-008, partial implementation in `surveillance/sai/capability_liveness.py`) audits orphan capabilities at runtime.
+- **Surfaced:** 2026-05-16 (SAI cycle session, ADR-008 landing)
+
 ### INV-016 — `extraction_events` table is NOT in `schema.sql` — known latent bug
 
 - **Rationale:** A migration in `surveillance/db.py` (line ~545-561) does `ALTER TABLE extraction_events ADD COLUMN chain TEXT` but `CREATE TABLE extraction_events` exists nowhere in code (only in binary DB files). Running `init_db()` against a truly fresh path fails on this migration. In production this never surfaces because the table has existed since unrecorded manual creation.

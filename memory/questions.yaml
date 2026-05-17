@@ -1,0 +1,494 @@
+# Layer 3 Question Store (SAI substrate)
+#
+# Each entry follows the SAI schema. Questions are the central abstraction:
+# DATA exists to answer questions; MODELS exist to answer questions;
+# PIPELINES exist to support questions. If something doesn't map to a
+# question here, it is likely unnecessary.
+#
+# Source: SAI cycle output 2026-05-16 (commit pending). The Q-001..010
+# questions are operationalizable; the Q-011..018 questions (formerly
+# QG1..QG8) are the more-fundamental "questions that should have existed
+# but didn't" — most Q-001..010 are concrete instantiations of one of
+# Q-011..018.
+#
+# Ranking formula:
+#   priority_score = (predictive_power * 0.3)
+#                  + (actionability * 0.3)
+#                  + (failure_reduction * 0.3)
+#                  + (uniqueness * 0.1)
+#
+# Status values: active | answered | deprecated
+#
+# Authoring discipline: every score is justifiable in 1 sentence. If you
+# cannot justify a score, the question is underspecified.
+
+version: 2026-05-16
+schema_version: 1
+
+questions:
+
+  # ============================================================
+  # Tier 1: directly-executable concrete questions (Q-001..010)
+  # These are the questions Phase 2 builds modules for.
+  # ============================================================
+
+  - id: Q-001
+    category: structural
+    question: >
+      For every address that has executed a token drain
+      (approval_watchlist.drain_caller IS NOT NULL) in the last 30 days,
+      what is its role-lattice classification across {operator,
+      execution_cell, funder, infrastructure, intermediary}? Build the
+      lattice as a first-class entity.
+    depends_on:
+      signals: [approval_watchlist, contracts.deployer_address, deployers.funding_sources]
+      models: [role_classifier_v1]
+    produces:
+      decision_output: >
+        Watchlist expansion to drain_executor role; coverage rises from
+        2.4% toward 80%+ of drain volume.
+    score:
+      predictive_power: 4
+      actionability: 5
+      uniqueness: 5
+      failure_reduction: 5
+    status: active
+    origin: SAI_cycle_2026_05_16
+    evolves_from: Q-011
+    implementation_target: surveillance/ontology/role_classifier.py
+    empirical_anchor: >
+      May-9..15 wave: 34 of 38 drain executors are unflagged. 4 are on
+      watchlist as known operators. 97.6% of drain volume runs through
+      addresses our schema does not have a slot for.
+
+  - id: Q-002
+    category: pricing
+    question: >
+      For each confirmed-tier bait contract on watchlist, what is the
+      per-hour approval-arrival Z-score against its own 14-day trailing
+      baseline, and at what Z does P(discharge in next 24h | Z=z) exceed
+      0.5?
+    depends_on:
+      signals: [approval_watchlist hourly aggregates]
+      models: [per-contract baseline, posterior of discharge given Z]
+    produces:
+      decision_output: >
+        Real-time "imminent discharge" alert; 0-3h pre-trigger warning.
+    score:
+      predictive_power: 5
+      actionability: 5
+      uniqueness: 4
+      failure_reduction: 5
+    status: active
+    origin: SAI_cycle_2026_05_16
+    evolves_from: Q-014
+    implementation_target: surveillance/analytics/approval_spike_detector.py
+    empirical_anchor: >
+      0x752c5a95 went from ~50 approvals/day to 4,498 on the discharge
+      day (88x baseline). The spike began ~hours 0-11 of 2026-05-09;
+      drain hit at 11:28 UTC. A 3-hour pre-trigger window was visible
+      in the approval-arrival stream but not surveilled.
+
+  - id: Q-003
+    category: adversarial
+    question: >
+      What proof exists, for each OLI-tagged address, that the tagged
+      institution still controls the key? Implement freshness scoring on
+      the tag and decay it as proof ages.
+    depends_on:
+      signals: [oli_labels schema extension, institutional signing proof corpus]
+      models: [key-control-freshness model]
+    produces:
+      decision_output: >
+        OLI guardrail (INV-007) becomes safe-by-design instead of
+        safe-by-accident.
+    score:
+      predictive_power: 3
+      actionability: 4
+      uniqueness: 5
+      failure_reduction: 5
+    status: active
+    origin: SAI_cycle_2026_05_16
+    evolves_from: Q-012
+    implementation_target: surveillance/sai/oli_temporal_validity.py
+    empirical_anchor: >
+      0x80b12bd0 is OLI-tagged "Animoca: Deployer" AND drained 4,587
+      victims on 2026-05-09. The tag is correctly attached; the
+      institution's current control of the key is unverified. The
+      guardrail survived this case by accident (LOW severity didn't
+      redirect); a HIGH-severity instance would have removed the
+      adversarial classification.
+
+  - id: Q-004
+    category: methodology
+    question: >
+      For each pre-registered prediction in any memory document,
+      automatically score each named-entity reference 0-3 where 0 =
+      no entity citation, 1 = entity in narrative only, 2 = entity
+      present in queryable corpus, 3 = entity with on-chain evidence
+      link. Refuse to load predictions with average score < 2.
+    depends_on:
+      signals: [memory/ markdown corpus, surveillance.db]
+      models: [entity-extraction, corpus-presence checker]
+    produces:
+      decision_output: >
+        NEXT_SESSION_PLAN.md and equivalents cannot embed hallucinations.
+    score:
+      predictive_power: 2
+      actionability: 5
+      uniqueness: 4
+      failure_reduction: 5
+    status: active
+    origin: SAI_cycle_2026_05_16
+    evolves_from: Q-013
+    implementation_target: surveillance/sai/prediction_verifiability.py
+    empirical_anchor: >
+      Phase A 2026-05-15: 3/3 pre-registered predictions falsified
+      because they cited entities (0xb0b0b690, iter_8 wallet
+      0xa8c7ac1cdc33, Coffee Fleet share) that were not in the
+      queryable corpus.
+
+  - id: Q-005
+    category: behavior
+    question: >
+      For every contract deploy by any address with mainnet_first_tx OR
+      cross-chain history, what is the same-address activity on ALL
+      other monitored chains in the surrounding [-6h, +6h] window?
+    depends_on:
+      signals: [contracts.detection_timestamp, transaction_events, bridge_events]
+      models: [cross-chain temporal correlation]
+    produces:
+      decision_output: >
+        Pre-trigger flag on cross-chain choreography (would have caught
+        0x80b12bd0's LayerZero self-bridge 50 min after Base trap deploy).
+    score:
+      predictive_power: 4
+      actionability: 4
+      uniqueness: 5
+      failure_reduction: 4
+    status: active
+    origin: SAI_cycle_2026_05_16
+    evolves_from: Q-015
+    implementation_target: surveillance/analytics/cross_chain_choreography.py
+    empirical_anchor: >
+      0x80b12bd0 deployed bait on Base 2026-03-26 03:12 UTC. At 04:02
+      UTC same day, the same address on Ethereum executed a LayerZero
+      send() bridging 1 OFC token to itself on Base. The cross-chain
+      coordination was a leading indicator at deploy time, discovered
+      by accident in the 2026-05-15 Animoca investigation.
+
+  - id: Q-006
+    category: adversarial
+    question: >
+      For each Layer 3 invariant INV-001 through INV-017, what is the
+      attacker maneuver that exploits the invariant's design?
+      Specifically: how would an attacker engineer a HIGH-severity OLI
+      tag on a wallet they control?
+    depends_on:
+      signals: [memory/INVARIANTS.md, public OLI submission processes]
+      models: [adversarial inversion (per Maneuver Primitives QG7)]
+    produces:
+      decision_output: >
+        Each invariant gets an "adversarial counter-spec" companion
+        document; INV failures become anticipatable.
+    score:
+      predictive_power: 3
+      actionability: 3
+      uniqueness: 5
+      failure_reduction: 5
+    status: active
+    origin: SAI_cycle_2026_05_16
+    evolves_from: Q-017
+    implementation_target: surveillance/sai/adversarial_engine.py
+    empirical_anchor: >
+      INV-007 (OLI guardrail) was survived by accident on 2026-05-15
+      because the Animoca tag was LOW severity. The HIGH-severity
+      version of the same scenario (e.g., compromise of a HIGH-tagged
+      institutional deployer) would silently remove our adversarial
+      classification.
+
+  - id: Q-007
+    category: liquidity
+    question: >
+      When multiple regime_alerts fire within window W on related
+      signals, what is the minimal partition that maps M alerts to N
+      episodes? Each episode = (onset, peak, decay, primary_signal,
+      attribution_candidates).
+    depends_on:
+      signals: [regime_alerts]
+      models: [temporal clustering on aggregated signal trajectories]
+    produces:
+      decision_output: >
+        Alert volume reduces ~5x; alerts become actionable episode-level
+        work units.
+    score:
+      predictive_power: 2
+      actionability: 5
+      uniqueness: 3
+      failure_reduction: 3
+    status: active
+    origin: SAI_cycle_2026_05_16
+    implementation_target: surveillance/sai/episode_engine.py
+    empirical_anchor: >
+      May 9-15 drain wave is 1 event physically; produces ~10 alerts
+      across approval_events_per_day, confirmed_traps_per_day, and
+      new_deployers_total signals over 7 days. Currently 31 alerts in
+      table for a corpus that has ~5-7 distinguishable episodes.
+
+  - id: Q-008
+    category: structural
+    question: >
+      For every Layer 3 capability claimed in CLAUDE.md, README.md, or
+      memory/STATE.md, what is the last verified-running timestamp?
+      Which capabilities are > 7 days stale?
+    depends_on:
+      signals: [capability inventory, production heartbeat data]
+      models: [capability-liveness scorer]
+    produces:
+      decision_output: >
+        Aspirational vs. live distinction enforced at the documentation
+        layer. UNK-002-style "is it actually running" no longer requires
+        a session to answer.
+    score:
+      predictive_power: 1
+      actionability: 4
+      uniqueness: 2
+      failure_reduction: 4
+    status: active
+    origin: SAI_cycle_2026_05_16
+    evolves_from: Q-018
+    implementation_target: surveillance/sai/capability_liveness.py
+    empirical_anchor: >
+      README documents regime_monitor as a LIVE first-class flux_manifold
+      consumer. In reality it runs manually in sessions, not in production.
+      The aspirational claim was undetected for 2+ sessions.
+
+  - id: Q-009
+    category: adversarial
+    question: >
+      For each of the 34 May-9..15 drain executors, what is the shortest
+      funding-chain to a watchlisted operator? Which operators show as
+      upstream funders of multiple execution cells?
+    depends_on:
+      signals: [deployers.funding_sources, transaction_events outbound, watchlist]
+      models: [funding-chain pathfinder, multi-cell operator detector]
+    produces:
+      decision_output: >
+        Names of operators currently running >2 execution cells that
+        the current watchlist does not surface.
+    score:
+      predictive_power: 4
+      actionability: 5
+      uniqueness: 5
+      failure_reduction: 4
+    status: active
+    origin: SAI_cycle_2026_05_16
+    implementation_target: surveillance/ontology/funding_chain_pathfinder.py
+    empirical_anchor: >
+      May-9..15 wave: 7,899 drains by 38 distinct executors. 4 on
+      watchlist (operators only). 34 unflagged. Their funding chains
+      back to known operators are not yet traced.
+
+  - id: Q-010
+    category: behavior
+    question: >
+      0x752c5a95 received 400 / 192 / 84 / 64 / 26 approvals on
+      May-10/11/12/13/14, AFTER its May-9 discharge of 4,587 victims.
+      Are these new victims (bot allowlist lag) OR re-approvals from
+      prior victims (auto-renewing approval mechanism)?
+    depends_on:
+      signals: [approval_watchlist victim_address de-duplication on bait]
+      models: [victim-recurrence classifier]
+    produces:
+      decision_output: >
+        Identifies whether the bait remains live for follow-on discharge
+        OR whether the post-discharge harvest is signal-only.
+    score:
+      predictive_power: 3
+      actionability: 4
+      uniqueness: 4
+      failure_reduction: 3
+    status: active
+    origin: SAI_cycle_2026_05_16
+    empirical_anchor: >
+      Specific to 0x752c5a95 but generalizable to every confirmed-tier
+      bait post-discharge. Closes UNK-034.
+
+  # ============================================================
+  # Tier 0: foundational "questions that should have existed but didn't"
+  # (formerly QG1..QG8 in the SAI cycle output)
+  # These are the parent questions; Q-001..010 are operationalizations.
+  # ============================================================
+
+  - id: Q-011
+    category: structural
+    question: >
+      Are operators and execution cells the same role, or are they
+      categorically distinct? If distinct, does our watchlist capture
+      both?
+    depends_on:
+      signals: [approval_watchlist.drain_caller history, watchlist.address_type]
+      models: [role-distinction model]
+    produces:
+      decision_output: >
+        Root-question that, if asked at watchlist schema design,
+        would have prevented the 97.6% drain-coverage gap.
+    score:
+      predictive_power: 5
+      actionability: 4
+      uniqueness: 5
+      failure_reduction: 5
+    status: active
+    origin: SAI_cycle_2026_05_16
+    instantiates_as: [Q-001]
+    note: This is the foundational question Q-001 instantiates.
+
+  - id: Q-012
+    category: adversarial
+    question: >
+      Does an OLI tag describe institutional control NOW, or does it
+      describe an association that may be stale?
+    depends_on:
+      signals: [oli_labels schema, institutional control proof]
+      models: [tag-temporal-semantic model]
+    produces:
+      decision_output: >
+        Closes the temporal-validity gap that the Animoca case revealed.
+    score:
+      predictive_power: 4
+      actionability: 3
+      uniqueness: 5
+      failure_reduction: 5
+    status: active
+    origin: SAI_cycle_2026_05_16
+    instantiates_as: [Q-003]
+
+  - id: Q-013
+    category: methodology
+    question: >
+      For every pre-registered prediction, is every named-entity
+      reference queryable in the current corpus? If not, the prediction
+      is unfalsifiable-by-design.
+    depends_on:
+      signals: [memory/ markdown, surveillance.db]
+      models: [entity-presence-in-corpus model]
+    produces:
+      decision_output: >
+        Prevents the named-entity-hallucination failure mode that broke
+        Phase A 3/3 predictions.
+    score:
+      predictive_power: 3
+      actionability: 5
+      uniqueness: 5
+      failure_reduction: 5
+    status: active
+    origin: SAI_cycle_2026_05_16
+    instantiates_as: [Q-004]
+
+  - id: Q-014
+    category: pricing
+    question: >
+      For each watchlisted operator's bait contracts, what is the daily
+      approval-rate Z-score, and at what Z does discharge become
+      imminent?
+    depends_on:
+      signals: [approval_watchlist per-contract trajectories]
+      models: [Z-score baseline, discharge posterior]
+    produces:
+      decision_output: >
+        Real-time imminent-discharge surveillance.
+    score:
+      predictive_power: 5
+      actionability: 5
+      uniqueness: 4
+      failure_reduction: 5
+    status: active
+    origin: SAI_cycle_2026_05_16
+    instantiates_as: [Q-002]
+
+  - id: Q-015
+    category: behavior
+    question: >
+      When an operator deploys a trap on chain A, what is the
+      same-address activity on chain B in the surrounding T hours?
+      Does cross-chain self-bridging precede trigger?
+    depends_on:
+      signals: [contracts.detection_timestamp, transaction_events, bridge_events]
+      models: [cross-chain temporal correlation]
+    produces:
+      decision_output: >
+        Cross-chain choreography as a leading indicator.
+    score:
+      predictive_power: 4
+      actionability: 4
+      uniqueness: 5
+      failure_reduction: 4
+    status: active
+    origin: SAI_cycle_2026_05_16
+    instantiates_as: [Q-005]
+
+  - id: Q-016
+    category: methodology
+    question: >
+      For every named entity in memory documents (NEXT_SESSION_PLAN.md,
+      INDEX.md, watchlist watch_reason fields), is the citation chain
+      traceable to on-chain evidence, OR is it a prior-session
+      inference?
+    depends_on:
+      signals: [memory/ markdown, surveillance.db]
+      models: [citation-chain auditor]
+    produces:
+      decision_output: >
+        Separates derived from primary; prevents prior-session-output
+        being treated as ground truth in future sessions.
+    score:
+      predictive_power: 3
+      actionability: 4
+      uniqueness: 4
+      failure_reduction: 5
+    status: active
+    origin: SAI_cycle_2026_05_16
+    note: Closely related to Q-013; covers stored memory rather than predictions.
+
+  - id: Q-017
+    category: adversarial
+    question: >
+      If an attacker knew our methodology (pre-registered predictions,
+      OLI guardrail, watchlist priorities), how would they game it?
+      What blind-spot would they engineer?
+    depends_on:
+      signals: [memory/INVARIANTS.md, memory/DECISIONS.md]
+      models: [adversarial inversion]
+    produces:
+      decision_output: >
+        Anticipates the next compromise of our methodology before it
+        happens.
+    score:
+      predictive_power: 3
+      actionability: 3
+      uniqueness: 5
+      failure_reduction: 5
+    status: active
+    origin: SAI_cycle_2026_05_16
+    instantiates_as: [Q-006]
+
+  - id: Q-018
+    category: structural
+    question: >
+      Which Layer 3 capabilities have decayed since they were last
+      verified? When did regime_monitor last run in production? When
+      was the bytecode classifier last updated against new templates?
+    depends_on:
+      signals: [capability inventory, heartbeat]
+      models: [capability-liveness scorer]
+    produces:
+      decision_output: >
+        Self-surveillance closes the "aspirational claim" failure mode.
+    score:
+      predictive_power: 2
+      actionability: 4
+      uniqueness: 3
+      failure_reduction: 4
+    status: active
+    origin: SAI_cycle_2026_05_16
+    instantiates_as: [Q-008]

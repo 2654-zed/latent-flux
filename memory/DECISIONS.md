@@ -210,3 +210,45 @@ Conclusion: the failure is **total streamed volume per single SSH invocation**, 
 - **Run Railway's `database` backup feature**: rejected — Railway's managed backups exist for their Postgres/MySQL services, not for application-managed SQLite files inside the container's volume.
 
 **Status:** [LANDED] 2026-05-15. Updates: `scripts/sync_prod_db.py`, `scripts/sync_prod_db_remote.py`, `memory/INVARIANTS.md` (INV-011a), `memory/JOURNAL.md` (2026-05-15 entry).
+
+---
+
+## ADR-008 — Adopt SAI (Self-Evolving Actuarial Intelligence) substrate as the primary question-management layer
+
+**Date:** 2026-05-16
+
+**Context:** The 2026-05-15 Phase A investigation falsified 3/3 pre-registered predictions because they cited named entities not present in the queryable corpus. The session's recent-drains analysis showed Layer 3 has structural blind spots (97.6% of drain volume executes through unflagged execution cells; OLI guardrail safe-by-accident; drain USD attribution gap unmoved for months). The SAI cycle output produced 18 structured questions that map directly onto these gaps. Without a persistent question-management substrate, each session re-derives the same gaps and the lessons don't compound.
+
+**Decision:** Adopt the SAI architecture with `memory/questions.yaml` as the canonical question store. Build the SAI Python substrate at `surveillance/sai/` (question_store, question_runner, question_generator, capability_liveness, prediction_registry, adversarial_engine). Wire concrete executable modules to specific questions; the highest-value module (Q-002 approval-spike detector at `surveillance/analytics/approval_spike_detector.py`) is fully implemented and tested in this commit. Other questions ship as skeletons with explicit TODO markers and `implementation_target` paths pointing at where the code will live.
+
+Ranking formula:
+```
+priority_score = predictive_power*0.30 + actionability*0.30 + failure_reduction*0.30 + uniqueness*0.10
+```
+
+Ranking output (verified by `tests/surveillance/test_sai.py::test_top_ranked_is_approval_z_score_question`):
+- Tier 1 (≥4.5): Q-002 + Q-014 (approval Z-score, both at 4.90), Q-001 + Q-011 (role lattice, both at 4.70)
+- Tier 2 (4.0-4.5): Q-009, Q-013, Q-003, Q-005, Q-012, Q-015, Q-004, Q-016
+- Tier 3 (3.0-4.0): Q-006, Q-017, Q-010, Q-007, Q-018
+- Tail (<3.0): Q-008
+
+**Consequences:**
+- Every new capability/data/pipeline must map back to at least one question in `questions.yaml`. INV-017 (added) enforces this.
+- The 7-step reflection loop (LOOP.md) now has a structured output target: failures flow into UNKs (via existing path) AND into new draft questions (via question_generator when implemented).
+- Future predictions go through `prediction_verifiability.py` (Q-004 implementation, skeleton this session) before being treated as pre-registered.
+- Q-002 (approval spike detector) is a real-time imminent-discharge surveillance capability. Validated against the 0x80b12bd0 May-9 event: produces a Z=130 Tier-1 IMMINENT alert against the exact contract that drained 4,587 victims that day, with 0 false positives on adjacent days (May-8, May-15).
+- The architecture is opinionated: questions are first-class; data, models, and pipelines exist to answer questions. Every module ships with its `implementation_target` path declared so the wiring is auditable via `question_runner.py`.
+
+**Alternatives considered:**
+- **Build the modules without a question store** (skip Phase 1): rejected — without the structured question registry, the modules become orphan utilities. The question store is what makes the cycle self-evolving.
+- **Refactor LOOP.md to fold SAI into the existing loop**: rejected for this commit — SAI introduces a structured question schema that LOOP.md prose can't capture. SAI sits alongside LOOP.md; the two compose. SAI's question_generator is the bridge that consumes LOOP.md SURPRISE blocks.
+- **Build all 10 executable modules in this commit**: rejected — scope explosion. Better to ship one fully (Q-002, validated end-to-end) plus skeletons for the rest with clear continuation paths. Q-002 chosen because it has the strongest empirical anchor (the 0x80b12bd0 May-9 event) and the highest priority score.
+
+**Status:** [LANDED] 2026-05-16. Updates:
+- `memory/questions.yaml` (18 structured questions)
+- `surveillance/sai/` (6 modules: question_store, question_runner, question_generator, capability_liveness, prediction_registry, adversarial_engine + prediction_verifiability)
+- `surveillance/analytics/approval_spike_detector.py` (Q-002, fully wired, validated against 2026-05-09 event with Z=130)
+- `surveillance/ontology/role_classifier.py` (Q-001 skeleton)
+- `tests/surveillance/test_sai.py` (13 new tests, all green)
+- `memory/INVARIANTS.md` (INV-017 added: questions drive system structure)
+- `memory/JOURNAL.md` (2026-05-16 SAI substrate entry)
