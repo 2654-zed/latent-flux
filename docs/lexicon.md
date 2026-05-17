@@ -1,6 +1,6 @@
 # Layer 3 Lexicon
 
-**Version:** 2026-05-15 (living document; update when new framework-level observations emerge)
+**Version:** 2026-05-17 (living document; update when new framework-level observations emerge)
 **Purpose:** Canonical definitional reference for Layer 3 methodology. Every entry specifies the term's definition, extended meaning, empirical grounding in the corpus where applicable, and cross-references. Intended for internal use and eventual external publication.
 **Discipline:** Each entry is either (a) deductive from on-chain corpus evidence, (b) inferential with explicit methodology application, or (c) framework-level observation with clear analytical basis. No entry is asserted without basis.
 
@@ -62,6 +62,7 @@
 - [Cross-Domain Compositional Harm](#cross-domain-compositional-harm)
 
 ### Operational Doctrine
+- [The Hybrid Gameboard](#the-hybrid-gameboard)
 - [Adversarial Maneuver](#adversarial-maneuver)
 - [Maneuver Primitives](#maneuver-primitives)
 - [Counter-Maneuver](#counter-maneuver)
@@ -907,6 +908,43 @@ The framework implication is that the population statistics of the L2 adversaria
 ## Operational Doctrine
 
 This section codifies the **maneuver frame** — the strategic posture that treats every exploit as a multi-phase campaign rather than a singular code defect. The entries here are not new attack categories; they are the *operational doctrine* that organizes every existing attack category in this lexicon into a single defender-facing model. The maneuver lens is where Layer 3's analytical primitives (stored potential, compositional harm, confused deputy chains, etc.) consolidate into actionable counter-intelligence.
+
+The arena precedes the activity. [The Hybrid Gameboard](#the-hybrid-gameboard) names the *environment* — the composite nature of the blockchain as a battlespace where four distinct game mechanics operate simultaneously. [Adversarial Maneuver](#adversarial-maneuver) names the *campaign* — the sequenced action an attacker takes inside that environment. [Counter-Maneuver](#counter-maneuver) names the *defense*. [Vulnerability-Centric vs Maneuver-Centric Framing](#vulnerability-centric-vs-maneuver-centric-framing) is the methodological contrast that motivates the whole frame.
+
+### The Hybrid Gameboard
+
+**Definition.** The blockchain as an adversarial environment that layers multiple game mechanics into a single battlespace: full-information strategic positioning (Go), hidden-intent deception (Poker), sequential tempo combat (Chess), and capital accumulation with elimination (Monopoly). The defining property that distinguishes this gameboard from all traditional games is that **the rules are on the board** — mutable by players with the right permissions — and new pieces can enter at any time without central authorization.
+
+**Extended description.** This composite nature means that mastery requires fluency in all four game types simultaneously. An attacker who only plays Chess (finding tactical bugs) misses the strategic patience of Go (multi-month reputation-building sacrifices). A defender who only plays Go (mapping protocol topologies) misses the bluffing tells of Poker (behavioral laundering patterns). The crypto actuary is the player who can read the full hybrid board and price the combined risk.
+
+The four game mechanics map onto specific Layer 3 primitives:
+
+| Game | What it measures | Layer 3 primitive that quantifies it |
+|---|---|---|
+| **Go** | Strategic territory: which nodes occupy privileged positions over time | [Stored Potential](#stored-potential), [Adversarial Topology](#adversarial-topology), the Position / Permissions / Trust-bindings primitives |
+| **Poker** | Hidden intent: how an actor's revealed behavior diverges from their true posture | [Camouflage Ratio](#camouflage-ratio), [Pattern A — Reputation-Building Sacrifices](#pattern-a--reputation-building-sacrifices), [Pattern B — Temporal Pattern Normalization](#pattern-b--temporal-pattern-normalization) |
+| **Chess** | Tempo: who moves when, and how fast can a position be exploited before defenders respond | [Forced Deterministic Neutrality](#forced-deterministic-neutrality), [Maneuver Primitives](#maneuver-primitives) Trigger phase |
+| **Monopoly** | Accumulation and elimination: who controls capital flows and who exits the game | [Pooled Custody Amplification](#pooled-custody-amplification), [Behavioral Laundering](#behavioral-laundering), [Victim-to-Predator Pipeline](#victim-to-predator-pipeline) |
+
+The "rules are on the board" property — encoded in proxy upgradeability, governance modules, mutable configurations, and the absence of a central authority — is what makes blockchain qualitatively different from any of the four parent games. Chess pieces don't acquire new moves mid-game. Monopoly properties don't merge mid-game. Blockchain contracts can be upgraded, governance thresholds can be lowered, and new protocols can compose into the surface of any existing one without permission. The defender is therefore always playing a game whose rules are simultaneously being rewritten by the players with the highest permission tier — which is why the [Stored Potential](#stored-potential) of mutable-admin nodes is the load-bearing risk indicator rather than realized harm.
+
+**Empirical grounding.** Every major DeFi exploit in the corpus demonstrates this hybrid nature. The exploits cannot be fully analyzed within a single game frame; the campaign requires fluency across all four.
+
+- **Kelp (EXTRACTION_008, 2026-04-18, ~$292M).** Go: the attacker identified the 1-of-1 DVN configuration **≥56.7 days** before exploitation (Tier A lead time per `getConfig(configType=2)` historical reads). Chess: the forged message was executed with perfect tempo — a single signed attestation that the LayerZero endpoint accepted without challenge. Monopoly: $292M extracted from pooled custody, freely composing into Aave as collateral. Poker was minimal — the attacker did not need to bluff because the configuration itself was the vulnerability.
+- **Grok/Bankr (2026-05-04, ~$175K AI agent drain).** Poker: the attacker bluffed the AI with a masked command — the prompt-injection payload presented as a routine "helpful reply" while encoding an autonomous transfer authorization. Chess: the transaction was executed in a single block, and the attacker's X account was deleted within minutes. Go and Monopoly were minimal — the attacker did not need long-term positioning because the AI agent's permission scope was the entire pool.
+- **THORChain (2026-05-15, $7.4–10.8M cross-chain consensus forgery).** Go: the attacker (or colluding proposer) mapped Bifrost's gossip protocol and identified that validator signatures cover content but not the inbound/outbound bit. Chess: the bit-flip and re-propose was a single-tempo move that no human could interpose on. Monopoly: pooled custody on BTC + ETH + BNB drained simultaneously across three chains.
+- **Animoca-tagged operator `0x80b12bd0` (Layer 3 corpus, 2026-05-09).** Go: a 7-year-vintage institutional cover identity (mainnet since 2019-05-23) was used as the positional asset — Layer 3's Q-005 detector picks this up via the 2499-day mainnet-to-L2 gap (Pattern D — Cross-Chain Reputation Import). Poker: the address holds REVV / OFC / ANIMOCA tokens — three different Animoca-portfolio assets — that present as institutional rather than adversarial. Chess: the 30-minute discharge (May-9 11:28–11:58 UTC) at ~150 victims/min = ~0.4s per tx was an automated tempo that defenders could not interpose on at any human-scalable response rate. Monopoly: 4,587 victims accumulated 8,007 approvals over six weeks, then 4,587 of those got drained in 30 minutes — capital concentration via Pooled Custody Amplification at the bait-contract level.
+
+**Why this framing matters for the actuary.** A risk-pricing model that operates inside a single game frame systematically mis-prices the others:
+- A *Chess-only* model (audit-time bug finding) gives a Tier 1 score to a contract with verified source code, missing that the same contract is a Go position waiting six months for an upgrade window.
+- A *Go-only* model (topology mapping) gives a Tier 1 score to a contract with no privileged position, missing the Chess-tempo exploit that doesn't require positional dominance (e.g., a single-block oracle-manipulation extraction).
+- A *Poker-only* model (behavioral fingerprinting) gives a Tier 1 score to a contract whose deployer behaves consistently with legitimate operators, missing the Monopoly-scale accumulation that's already underway in pooled custody.
+
+The actuarial product is the *composite* — a risk score that aggregates positional, behavioral, tempo, and accumulation signals into a single number that can be priced. This is the load-bearing claim for Layer 3 as a category: the corpus's value is not in any single game's mastery but in the cross-game synthesis.
+
+**Cross-references.** [Adversarial Maneuver](#adversarial-maneuver) (the campaign-level activity inside the gameboard), [Maneuver Primitives](#maneuver-primitives) (the six-phase taxonomy of how a maneuver traverses the board), [Compositional Harm](#compositional-harm) (the mechanical substrate that links the four games), [Neutrality Trap](#neutrality-trap) (the "rules-on-the-board" property's defensive consequence), [Adversarial Topology](#adversarial-topology) (the terrain map for the Go layer), [Stored Potential](#stored-potential) (the Go-layer score), [Camouflage Ratio](#camouflage-ratio) (the Poker-layer score), [Forced Deterministic Neutrality](#forced-deterministic-neutrality) (the Chess-layer tempo property), [Pooled Custody Amplification](#pooled-custody-amplification) (the Monopoly-layer multiplier).
+
+---
 
 ### Adversarial Maneuver
 
