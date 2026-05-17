@@ -219,8 +219,11 @@ def fmt_verdict_row(v: OLIValidity) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--address", default=None)
+    ap.add_argument("--persist", action="store_true",
+                    help="write STALE/NEEDS_VERIFICATION verdicts to sai_alerts")
     args = ap.parse_args()
-    conn = sqlite3.connect(f"file:{DB_PATH.as_posix()}?mode=ro", uri=True)
+    conn_mode = "rw" if args.persist else "ro"
+    conn = sqlite3.connect(f"file:{DB_PATH.as_posix()}?mode={conn_mode}", uri=True)
     try:
         if args.address:
             v = assess_address(conn, args.address.lower())
@@ -241,6 +244,31 @@ def main() -> int:
         for v in results:
             print(fmt_verdict_row(v))
             print()
+
+        if args.persist:
+            from surveillance.sai.sai_alerts import AlertRow, write_alerts
+            rows = [
+                AlertRow(
+                    detector="Q-003",
+                    severity=v.verdict(),
+                    subject_address=v.address,
+                    subject_kind="oli_tagged_address",
+                    payload={
+                        "oli_severity": v.oli_severity,
+                        "aggregate_score": v.aggregate_score(),
+                        "signals": [
+                            {"name": s.name, "weight": s.weight, "detail": s.detail}
+                            for s in v.signals
+                        ],
+                        "recommended_action": v.recommended_action(),
+                    },
+                )
+                for v in results
+                if v.verdict() in ("STALE", "NEEDS_VERIFICATION")  # only flagged
+            ]
+            n = write_alerts(conn, rows)
+            print(f"  persisted {n} of {len(rows)} non-FRESH verdicts to sai_alerts")
+        # Return code: 0 if all FRESH; 2 if any STALE
         return 0 if n_stale == 0 else 2
     finally:
         conn.close()

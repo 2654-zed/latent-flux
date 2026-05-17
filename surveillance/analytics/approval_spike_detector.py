@@ -239,6 +239,8 @@ def main() -> int:
     ap.add_argument("--min-value", type=int, default=10,
                     help="minimum same-day approvals to alert (default 10)")
     ap.add_argument("--db", type=str, default=str(DB_PATH))
+    ap.add_argument("--persist", action="store_true",
+                    help="write alerts to sai_alerts table (for scheduled production use)")
     args = ap.parse_args()
 
     as_of = parse_iso_date(args.as_of) if args.as_of else None
@@ -248,6 +250,7 @@ def main() -> int:
     print(f"  baseline window: {args.window} days")
     print(f"  Z threshold: {args.z}")
     print(f"  min value: {args.min_value}")
+    print(f"  persist: {args.persist}")
     print()
 
     alerts = detect_spikes(
@@ -262,6 +265,34 @@ def main() -> int:
     for a in alerts:
         print(a.fmt())
         print()
+
+    if args.persist and alerts:
+        from surveillance.sai.sai_alerts import AlertRow, write_alerts
+        import sqlite3
+        rows = [AlertRow(
+            detector="Q-002",
+            severity=a.severity(),
+            subject_address=a.contract_address,
+            subject_kind="contract",
+            payload={
+                "chain": a.chain,
+                "deployer_address": a.deployer_address,
+                "deployer_watchlist_label": a.deployer_watchlist_label,
+                "confidence_tier": a.confidence_tier,
+                "as_of_date": a.as_of_date,
+                "same_day_approvals": a.same_day_approvals,
+                "baseline_mean": a.baseline_mean,
+                "baseline_stddev": a.baseline_stddev,
+                "z_score": a.z_score,
+                "baseline_days_observed": a.baseline_days_observed,
+            },
+        ) for a in alerts]
+        conn = sqlite3.connect(args.db)
+        try:
+            n = write_alerts(conn, rows)
+            print(f"  persisted {n} of {len(rows)} alerts to sai_alerts")
+        finally:
+            conn.close()
     return 0
 
 

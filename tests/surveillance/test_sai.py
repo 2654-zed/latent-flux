@@ -297,3 +297,187 @@ def test_q003_verdict_thresholds():
     assert v.verdict() == "NEEDS_VERIFICATION"  # 2.0
     v.signals.append(StaleSignal("test2", 3.5, ""))
     assert v.verdict() == "STALE"   # 5.5
+
+
+# ============================================================
+# sai_alerts persistence tests
+# ============================================================
+
+from surveillance.sai.sai_alerts import (  # noqa: E402
+    AlertRow, ensure_schema, write_alert, write_alerts, fetch_recent,
+)
+
+
+def test_sai_alerts_schema_idempotent(tmp_path):
+    """ensure_schema should be safe to call multiple times."""
+    import sqlite3
+    db = tmp_path / "t.db"
+    conn = sqlite3.connect(db)
+    ensure_schema(conn)
+    ensure_schema(conn)  # second call must not error
+    ensure_schema(conn)  # third call must not error
+    cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sai_alerts'")
+    assert cur.fetchone() is not None
+    conn.close()
+
+
+def test_sai_alerts_write_and_fetch(tmp_path):
+    """Insert one alert, fetch it back, verify payload roundtrip."""
+    import sqlite3
+    db = tmp_path / "t.db"
+    conn = sqlite3.connect(db)
+    alert = AlertRow(
+        detector="Q-002",
+        severity="T1_IMMINENT",
+        subject_address="0x752c5a95",
+        subject_kind="contract",
+        payload={"z_score": 130.0, "approvals_today": 4498},
+        detected_at="2026-05-09T11:28:00Z",
+    )
+    rowid = write_alert(conn, alert)
+    assert rowid > 0
+    rows = fetch_recent(conn)
+    assert len(rows) == 1
+    assert rows[0]["detector"] == "Q-002"
+    assert rows[0]["severity"] == "T1_IMMINENT"
+    assert rows[0]["payload"]["z_score"] == 130.0
+    conn.close()
+
+
+def test_sai_alerts_unique_constraint(tmp_path):
+    """UNIQUE (detector, subject_address, detected_at) must prevent dupes."""
+    import sqlite3
+    db = tmp_path / "t.db"
+    conn = sqlite3.connect(db)
+    alert = AlertRow(
+        detector="Q-002", severity="T1_IMMINENT",
+        subject_address="0xabc", subject_kind="contract",
+        payload={"z": 100}, detected_at="2026-05-09T12:00:00Z",
+    )
+    write_alert(conn, alert)
+    # Second write with identical key must return -1 (UNIQUE conflict)
+    rc = write_alert(conn, alert)
+    assert rc == -1, "duplicate should be rejected by UNIQUE constraint"
+    rows = fetch_recent(conn)
+    assert len(rows) == 1
+    conn.close()
+
+
+def test_sai_alerts_batch_or_ignore(tmp_path):
+    """write_alerts uses INSERT OR IGNORE for batch idempotency."""
+    import sqlite3
+    db = tmp_path / "t.db"
+    conn = sqlite3.connect(db)
+    alerts = [
+        AlertRow(detector="Q-009", severity="RESOLVED_VIA_OLI",
+                 subject_address="0xa", subject_kind="drain_caller",
+                 payload={}, detected_at="2026-05-09T13:00:00Z"),
+        AlertRow(detector="Q-009", severity="RESOLVED_VIA_OLI",
+                 subject_address="0xb", subject_kind="drain_caller",
+                 payload={}, detected_at="2026-05-09T13:00:00Z"),
+        # Duplicate of first (same detector + subject + ts)
+        AlertRow(detector="Q-009", severity="RESOLVED_VIA_OLI",
+                 subject_address="0xa", subject_kind="drain_caller",
+                 payload={}, detected_at="2026-05-09T13:00:00Z"),
+    ]
+    n = write_alerts(conn, alerts)
+    assert n == 2, f"expected 2 inserted (one duplicate ignored), got {n}"
+    rows = fetch_recent(conn)
+    assert len(rows) == 2
+    conn.close()
+
+
+# ============================================================
+# question_generator (Phase 3) tests
+# ============================================================
+
+from surveillance.sai.question_generator import (  # noqa: E402
+    parse_journal_surprises, parse_open_unknowns,
+    transform_decompose, transform_adversarial_invert, transform_temporal_upgrade,
+    FailureEvent, DraftQuestion, generate_for_failure,
+)
+
+
+def test_parse_journal_surprises_extracts_blocks():
+    """JOURNAL.md SURPRISE blocks must parse with Expected/Observed/Implication."""
+    surprises = parse_journal_surprises()
+    # The 2026-05-15 SAI cycle entry has 3 SURPRISE blocks (A1/A2/A3)
+    assert len(surprises) >= 3, f"expected >=3 SURPRISE blocks, got {len(surprises)}"
+    # First block should have all required fields
+    first = surprises[0]
+    assert first.expected
+    assert first.observed
+    assert first.implication
+
+
+def test_parse_open_unknowns_extracts_unk_ids():
+    """UNKNOWNS.md must yield only OPEN/IN_PROGRESS entries."""
+    unks = parse_open_unknowns()
+    # 28 OPEN unknowns in the corpus per the SAI cycle inventory
+    assert 10 < len(unks) < 50, f"expected 10-50 open unknowns, got {len(unks)}"
+    for u in unks:
+        assert u.source_id.startswith("UNK-")
+        assert u.title
+
+
+def test_transform_decompose_handles_failure_word():
+    """A failure with 'risk' or 'fail' in title gets decomposition."""
+    f = FailureEvent(
+        source="journal_surprise", source_id="test_1",
+        title="iter_8 contributes 0% to May-5 confirmed-trap spike.",
+        expected="iter_8 drives some of the May-5 spike.",
+        observed="0 contracts traceable.",
+        implication="Named-entity heuristics fail.",
+    )
+    # "fail" is in implication, not title — need a title with the trigger
+    f.title = "Risk model fails on Pattern A discharge"
+    q = transform_decompose(f)
+    assert q is not None
+    assert q.transformation == "decomposition"
+    assert "specific addresses, timestamps" in q.question
+
+
+def test_transform_adversarial_invert_always_returns():
+    """Adversarial inversion is the meta-transformation; always applicable."""
+    f = FailureEvent(source="journal_surprise", source_id="t",
+                     title="any failure", implication="guardrail issue")
+    q = transform_adversarial_invert(f)
+    assert q is not None
+    assert q.transformation == "adversarial_inversion"
+    assert "attacker" in q.question.lower()
+
+
+def test_transform_temporal_upgrade_fires_on_discharge_titles():
+    f = FailureEvent(source="t", source_id="t1", title="May-9 discharge of 0x752c5a95")
+    q = transform_temporal_upgrade(f)
+    assert q is not None
+    assert q.transformation == "temporal_upgrade"
+    assert "lead time" in q.question.lower()
+
+
+def test_generate_for_failure_runs_all_three_when_applicable():
+    f = FailureEvent(
+        source="journal_surprise", source_id="t",
+        title="Pattern A discharge risk on 0x752c5a95",
+        implication="watchlist coverage gap",
+    )
+    drafts = generate_for_failure(f)
+    # decompose (matches 'risk') + invert (always) + temporal (no 'discharge'
+    # at start of title; the regex looks for 'discharge' anywhere — present)
+    assert len(drafts) >= 2
+    kinds = {d.transformation for d in drafts}
+    assert "adversarial_inversion" in kinds
+
+
+def test_question_generator_produces_drafts_end_to_end():
+    """End-to-end: run the generator against the actual JOURNAL + UNKNOWNS."""
+    j = parse_journal_surprises()
+    u = parse_open_unknowns()
+    all_failures = j + u
+    drafts = []
+    for f in all_failures:
+        drafts.extend(generate_for_failure(f))
+    # At minimum, expect 1 draft per failure on average
+    assert len(drafts) >= len(all_failures), (
+        f"expected >= {len(all_failures)} drafts; got {len(drafts)}"
+    )

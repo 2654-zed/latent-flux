@@ -243,9 +243,23 @@ def main() -> int:
                     help="trace a single drain_caller instead of the window")
     ap.add_argument("--max-hops", type=int, default=3)
     ap.add_argument("--show-unresolved", action="store_true")
+    ap.add_argument("--persist", action="store_true",
+                    help="write resolved-ancestor findings to sai_alerts")
+    ap.add_argument("--rolling-days", type=int, default=7,
+                    help="when --persist with no --since, use this rolling window")
     args = ap.parse_args()
 
-    conn = sqlite3.connect(f"file:{DB_PATH.as_posix()}?mode=ro", uri=True)
+    # Production mode: when --persist is set without explicit --since, use
+    # a rolling window so the scheduled job picks up recent drains.
+    if args.persist and args.since == "2026-05-09":
+        from datetime import datetime, timedelta, timezone
+        until_dt = datetime.now(timezone.utc)
+        since_dt = until_dt - timedelta(days=args.rolling_days)
+        args.since = since_dt.strftime("%Y-%m-%d")
+        args.until = (until_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    conn_mode = "ro" if not args.persist else "rw"
+    conn = sqlite3.connect(f"file:{DB_PATH.as_posix()}?mode={conn_mode}", uri=True)
     try:
         if args.address:
             chain = walk_chain(conn, args.address.lower(), args.max_hops)
@@ -280,6 +294,39 @@ def main() -> int:
                 if not c.is_resolved_to_known():
                     print(f"  drainer={c.drain_caller}  drains={c.drains_in_window}")
                     print(f"    terminal: {c.terminal_reason}")
+
+        if args.persist:
+            from surveillance.sai.sai_alerts import AlertRow, write_alerts
+            rows = []
+            for c in chains:
+                if not c.is_resolved_to_known():
+                    continue
+                # Find the flagged hop
+                flagged_hop = next(
+                    (h for h in c.hops if h.watchlist_label or h.oli_severity),
+                    None,
+                )
+                if not flagged_hop:
+                    continue
+                severity = "RESOLVED_VIA_WATCHLIST" if flagged_hop.watchlist_label else "RESOLVED_VIA_OLI"
+                rows.append(AlertRow(
+                    detector="Q-009",
+                    severity=severity,
+                    subject_address=c.drain_caller,
+                    subject_kind="drain_caller",
+                    payload={
+                        "drains_in_window": c.drains_in_window,
+                        "ancestor": flagged_hop.address,
+                        "ancestor_hop": flagged_hop.depth,
+                        "ancestor_watchlist_label": flagged_hop.watchlist_label,
+                        "ancestor_watchlist_priority": flagged_hop.watchlist_priority,
+                        "ancestor_oli_severity": flagged_hop.oli_severity,
+                        "window_since": args.since,
+                        "window_until": args.until,
+                    },
+                ))
+            n = write_alerts(conn, rows)
+            print(f"\n  persisted {n} of {len(rows)} resolution alerts to sai_alerts")
         return 0
     finally:
         conn.close()

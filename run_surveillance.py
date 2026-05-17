@@ -1880,6 +1880,60 @@ ANALYSIS_JOBS = [
      [sys.executable, "-m", "surveillance.pristine_solo_detector", "--apply"]),
     (6, 0,  "daily",  "infrastructure_operator_detector",
      [sys.executable, "-m", "surveillance.infrastructure_operator_detector", "--apply"]),
+
+    # SAI detectors (Q-009/Q-005/Q-003/Q-002 from memory/questions.yaml). Each
+    # writes to sai_alerts table via --persist. Schedules are tuned so
+    # dependencies (deployer_profiles at 02:00) complete first.
+    #
+    # Q-002 approval-spike runs FOUR times daily for real-time imminent-discharge
+    # surveillance. The May-9 0x80b12bd0 discharge (4,587 victims at 11:28 UTC)
+    # would have been caught at the 12:00 tick with Z=130. Empirical validation:
+    # tests/surveillance/test_sai.py::test_z_score_high_value_vs_baseline_50.
+    (6, 30, "daily",  "sai_q002_approval_spike_morning",
+     [sys.executable, "-m", "surveillance.analytics.approval_spike_detector",
+      "--persist"]),
+    (12, 30, "daily", "sai_q002_approval_spike_midday",
+     [sys.executable, "-m", "surveillance.analytics.approval_spike_detector",
+      "--persist"]),
+    (18, 30, "daily", "sai_q002_approval_spike_evening",
+     [sys.executable, "-m", "surveillance.analytics.approval_spike_detector",
+      "--persist"]),
+    (23, 30, "daily", "sai_q002_approval_spike_endofday",
+     [sys.executable, "-m", "surveillance.analytics.approval_spike_detector",
+      "--persist"]),
+
+    # Q-009 funding-chain pathfinder: rolling 7-day window via the --persist
+    # default rolling-days behavior. Resolves drain executors to known
+    # operators via funding_trail traversal.
+    (7, 0,  "daily",  "sai_q009_funding_chain",
+     [sys.executable, "-m", "surveillance.ontology.funding_chain_pathfinder",
+      "--persist"]),
+
+    # Q-005 cross-chain choreography: scans watchlisted/OLI deployers for
+    # multi-chain deploy correlation, bridge_events, and Pattern D gap.
+    (7, 15, "daily", "sai_q005_cross_chain_choreography",
+     [sys.executable, "-m", "surveillance.analytics.cross_chain_choreography",
+      "--since", "2026-03-01", "--min-score", "3.0", "--persist"]),
+
+    # Q-003 OLI temporal validity: scans all oli_labels rows for staleness
+    # signals. Outputs STALE / NEEDS_VERIFICATION verdicts that should gate
+    # the INV-007 guardrail at classify_address.
+    (7, 30, "daily", "sai_q003_oli_temporal_validity",
+     [sys.executable, "-m", "surveillance.sai.oli_temporal_validity",
+      "--persist"]),
+
+    # Q-008 capability liveness: self-audit; ensures detectors are actually
+    # running (catches the regime_monitor "aspirational LIVE" failure mode
+    # from 2026-05-15).
+    (7, 45, "daily", "sai_q008_capability_liveness",
+     [sys.executable, "-m", "surveillance.sai.capability_liveness"]),
+
+    # regime_monitor (the original flux_manifold consumer): produces the
+    # 6-signal daily aggregates. NOT a SAI detector strictly, but co-located
+    # so it runs in production rather than session-only (closing the gap
+    # documented in JOURNAL 2026-05-15 supplement).
+    (4, 15, "daily", "regime_monitor",
+     [sys.executable, "-m", "surveillance.regime_monitor"]),
 ]
 _JOB_TIMEOUT_SEC = 3600  # 1 h per producer; deployer_profiler is the slowest
 _analysis_last_fired: dict[str, str] = {}

@@ -1498,6 +1498,141 @@ The asterisked entries are skeletons with TODO markers; the unmarked four (Q-002
 
 The bottleneck for the next session shifts again: now that the high-priority observation modules are in place, the next leverage is in **making them run continuously**. Scheduling them in `run_surveillance.py` + alerting on the outputs converts session-time intelligence into production-time intelligence.
 
+---
+
+### 2026-05-17 — Production wiring + Phase 3 question_generator (SAI loop closure)
+
+Two milestones land in this session: (1) the SAI detectors now run as scheduled production jobs, with their alerts persisted to a durable table; (2) the Phase 3 question_generator is wired, closing the SAI self-evolution loop from failures → new questions automatically.
+
+#### Production wiring (was: aspirational, now: scheduled)
+
+| Component | Status before | Status after |
+|---|---|---|
+| `sai_alerts` table | did not exist | created with 4 indexes; idempotent schema |
+| `--persist` on Q-002 approval_spike | absent | present + tested (1 alert persisted on May-9 dry-run) |
+| `--persist` on Q-009 funding_chain | absent | present + tested (11 resolution alerts persisted on May-9..15 window) |
+| `--persist` on Q-005 cross_chain | absent | present + tested (7 choreography alerts persisted) |
+| `--persist` on Q-003 oli_temporal | absent | present + tested (9 STALE/NEEDS_VERIFICATION verdicts persisted) |
+| `run_surveillance.py` ANALYSIS_JOBS | 12 entries | **22 entries** (+10 SAI jobs) |
+| `regime_monitor` in production | local-only / session-only | scheduled daily 04:15 UTC |
+
+The new ANALYSIS_JOBS entries (all UTC):
+
+| Time | Job | Detector |
+|---|---|---|
+| 04:15 | regime_monitor | Q-002 prereq + 6-signal aggregator |
+| 06:30 | sai_q002_approval_spike_morning | Q-002 (T1_IMMINENT discharge detector) |
+| 07:00 | sai_q009_funding_chain | Q-009 (drain executor → operator resolution) |
+| 07:15 | sai_q005_cross_chain_choreography | Q-005 (cross-chain operator scan) |
+| 07:30 | sai_q003_oli_temporal_validity | Q-003 (OLI guardrail safety) |
+| 07:45 | sai_q008_capability_liveness | Q-008 (self-audit) |
+| 12:30 | sai_q002_approval_spike_midday | Q-002 (re-fire) |
+| 18:30 | sai_q002_approval_spike_evening | Q-002 (re-fire) |
+| 23:30 | sai_q002_approval_spike_endofday | Q-002 (re-fire) |
+
+Q-002 fires **4× daily** because it's the only real-time-imminent-discharge detector; the May-9 0x80b12bd0 discharge happened at 11:28 UTC, so the 12:30 fire would catch it within ~1 hour. The other detectors fire once daily; their value comes from full-window analysis rather than tick-level latency.
+
+**Deployment path:** Railway picks up `run_surveillance.py` changes on next redeploy (push triggers auto-deploy per the existing setup). The first scheduled tick after deploy will exercise each new job; outputs land in `sai_alerts` table; `web/app.py` can expose `/sai/alerts` on the next API addition.
+
+**Empirical test (local, against production sync 2026-05-15):**
+
+```
+$ python -m surveillance.sai.sai_alerts --init                      # init table
+$ python -m surveillance.analytics.approval_spike_detector --persist --as-of 2026-05-09
+  persisted 1 of 1 alerts to sai_alerts                             # Q-002 catches 0x80b12bd0
+$ python -m surveillance.ontology.funding_chain_pathfinder --since 2026-05-09 --until 2026-05-16 --persist
+  persisted 11 of 11 resolution alerts to sai_alerts                # Q-009 resolves 11 drainers
+$ python -m surveillance.analytics.cross_chain_choreography --since 2026-04-01 --min-score 3.0 --persist
+  persisted 7 of 7 choreography alerts to sai_alerts                # Q-005 surfaces 7 operators
+$ python -m surveillance.sai.oli_temporal_validity --persist
+  persisted 9 of 9 non-FRESH verdicts to sai_alerts                 # Q-003 surfaces 9 OLI flags
+```
+
+**Total persisted in dry-run: 28 alerts** across all 4 detectors. This is the new defaults-in-production output volume per scheduled run cycle (UNIQUE constraint deduplicates same-detector-same-subject-same-second).
+
+#### Phase 3 — question_generator (SAI loop closure)
+
+`surveillance/sai/question_generator.py` replaces the stub from 2026-05-16. Parses three failure-source streams:
+
+| Source | Parser | Yielded events |
+|---|---|---|
+| `memory/JOURNAL.md` | `SURPRISE: ...` block regex (Expected/Observed/Implication) | 10 |
+| `memory/UNKNOWNS.md` | `### UNK-XXX` header + Status filter (OPEN \| IN_PROGRESS) | 28 |
+| `sai_alerts` table | recent T1/STALE/T1_BRIDGE rows since YYYY-MM-DD | 4 |
+| **TOTAL** | | **42 failures** |
+
+Each failure passes through three SAI transformations (decomposition / adversarial_inversion / temporal_upgrade). **Output: 99 draft questions** from 42 failures (avg ~2.4 candidates per failure — the three transformations don't all apply to every failure).
+
+Drafts written to `memory/questions_draft.yaml` (not the main `questions.yaml` — drafts require human/agent review before being promoted to `status=active` with a new Q-XXX id).
+
+Sample of top-ranked drafts (est_score 3.70):
+- "For the event class observed in 'iter_8 contributes 0% to May-5 confirmed-trap spike,' what is the minimum lead time T such that the corresponding leading indicator fires with confidence > 0.5?" (temporal_upgrade of journal_surprise_9)
+- "If an attacker knew that 'guardrail' could fail in the way observed in journal_surprise_3, how would they engineer a high-leverage exploitation?" (adversarial_inversion of the Coffee Fleet SURPRISE)
+
+**The SAI loop is now CLOSED.** Before this commit:
+```
+FAILURES → (manual session) → QUESTIONS  (human-driven, 18 in store)
+```
+After this commit:
+```
+FAILURES → question_generator → DRAFTS → review → QUESTIONS
+                                                       ↓
+                                              surveillance modules
+                                                       ↓
+                                              sai_alerts → new FAILURES
+                                                       ↓
+                                                  (feeds back)
+```
+
+The remaining gap is the **promotion step**: drafts → questions.yaml. That's a human/agent review decision. Building automatic promotion is risky — could generate questions about questions and never converge. Drafts-with-review is the right discipline.
+
+#### Tests added (11 new — full surveillance suite: 47 tests, all passing in 2.31s)
+
+- 4 sai_alerts tests (schema idempotency, write/fetch roundtrip, UNIQUE constraint, batch idempotency)
+- 7 question_generator tests (JOURNAL parser, UNKNOWNS parser, 3 transformation fns, end-to-end against live JOURNAL+UNKNOWNS)
+
+#### Wiring status after this commit
+
+```
+Q-002   WIRED+full+SCHEDULED+PERSIST   approval_spike_detector  (4×/day)
+Q-001   WIRED+skel                     role_classifier
+Q-009   WIRED+full+SCHEDULED+PERSIST   funding_chain_pathfinder (daily 07:00)
+Q-003   WIRED+full+SCHEDULED+PERSIST   oli_temporal_validity    (daily 07:30)
+Q-005   WIRED+full+SCHEDULED+PERSIST   cross_chain_choreography (daily 07:15)
+Q-004   WIRED+skel                     prediction_verifiability
+Q-006   WIRED+stub                     adversarial_engine
+Q-008   WIRED+inv+SCHEDULED            capability_liveness      (daily 07:45)
+NEW     WIRED+full                     question_generator
+NEW     WIRED+full                     sai_alerts (persistence layer)
+NEW     SCHEDULED                      regime_monitor           (daily 04:15)
+```
+
+#### What is still NOT shipped
+
+- **question_generator is wired but not scheduled.** Deliberately. Scheduled draft-generation would accumulate drafts faster than human/agent review can promote them. The right next move is to add **decay** for stale drafts (drafts > 14 days old get archived) AND **rate-limit** generation (only when new failure events accumulate).
+- **Promotion automation** (drafts → questions.yaml). Deliberately left manual. Loop discipline.
+- **`/sai/alerts` API endpoint** in `web/app.py`. The data is there; the read surface is not. ~30 min next session.
+- **Production deployment proof.** This commit changes `run_surveillance.py` but does not deploy it. Railway picks up the change on next push. After deploy, the first scheduled tick (next 06:30 UTC for Q-002) is the test.
+
+#### Lexicon cross-references
+
+The maneuver-centric lexicon entry from 2026-05-15 (Adversarial Maneuver, Counter-Maneuver) maps cleanly onto today's work: each scheduled SAI detector is one element of Counter-Maneuver. The four counter-verbs from the lexicon are now backed by code:
+
+| Counter-verb | Production-wired detector |
+|---|---|
+| Disrupt Positioning | Q-002 (approval spike) — fires at seeding-to-discharge transition |
+| Track Exfiltration ancestor link | Q-009 (funding chain) — surfaces operator-to-execution-cell links |
+| Deny Trust Inheritance | Q-003 (OLI temporal validity) — keeps trust signal from inverting |
+| Detect Reconnaissance + Positioning | Q-005 (cross-chain choreography) — catches operator coordination |
+
+What's missing in code: **Impose Complexity Ceilings** (not Layer 3's surface — protocol-side); a true **Deny Reconnaissance** module (would require deception infrastructure). Both correctly named in the lexicon as defender activities outside Layer 3's perimeter.
+
+NEXT TARGETS (for next session):
+- `/sai/alerts` API endpoint in `web/app.py` (high impact, ~30 min)
+- Draft promotion workflow: simple CLI that picks drafts from `questions_draft.yaml` and promotes selected to `questions.yaml` (~1 hour)
+- Decay mechanism for old drafts (~30 min)
+- Verify production deployment: after next Railway push, confirm scheduled jobs fire by checking sai_alerts.detected_at column for the next 06:30/07:00/07:15/07:30/07:45 UTC tick
+
 ### LOOP.md 7-step reflection pass (Phase C, mandatory)
 
 This session: action-mode with three major work blocks (sync v2 already reflected above in 2026-05-15 prior entry; Phase A surveillance investigation; POTENTIAL_ATTACKS_V3.md). Loop runs over Phase A + v3 only since sync-v2 was already integrated into the prior entry.

@@ -257,9 +257,12 @@ def main() -> int:
                     help="check a single address rather than scan")
     ap.add_argument("--min-score", type=float, default=2.0)
     ap.add_argument("--window-hours", type=int, default=6)
+    ap.add_argument("--persist", action="store_true",
+                    help="write findings to sai_alerts table")
     args = ap.parse_args()
 
-    conn = sqlite3.connect(f"file:{DB_PATH.as_posix()}?mode=ro", uri=True)
+    conn_mode = "rw" if args.persist else "ro"
+    conn = sqlite3.connect(f"file:{DB_PATH.as_posix()}?mode={conn_mode}", uri=True)
     try:
         if args.address:
             c = detect_for_address(conn, args.address.lower())
@@ -293,6 +296,37 @@ def main() -> int:
             print(f"    chains: {dict(c.deploys_by_chain)}  mainnet_first_tx={c.mainnet_first_tx}")
             for s in c.signals[:3]:
                 print(f"      [{s.kind}] {s.rationale}")
+
+        if args.persist:
+            from surveillance.sai.sai_alerts import AlertRow, write_alerts
+            rows = []
+            for c in chores:
+                # Severity tiers for cross-chain: T1 if any bridge_event signal,
+                # T2 if multi-chain deploys with >=2 chains, T3 if Pattern D only
+                kinds = {s.kind for s in c.signals}
+                if "bridge_event_same_address" in kinds:
+                    sev = "T1_BRIDGE_CORRELATION"
+                elif "multi_chain_deploys" in kinds:
+                    sev = "T2_MULTI_CHAIN_DEPLOY"
+                else:
+                    sev = "T3_PATTERN_D"
+                rows.append(AlertRow(
+                    detector="Q-005",
+                    severity=sev,
+                    subject_address=c.address,
+                    subject_kind="deployer",
+                    payload={
+                        "aggregate_score": c.aggregate_score(),
+                        "watchlist_label": c.watchlist_label,
+                        "oli_severity": c.oli_severity,
+                        "mainnet_first_tx": c.mainnet_first_tx,
+                        "deploys_by_chain": dict(c.deploys_by_chain),
+                        "signal_count": len(c.signals),
+                        "signal_kinds": list(kinds),
+                    },
+                ))
+            n = write_alerts(conn, rows)
+            print(f"\n  persisted {n} of {len(rows)} choreography alerts to sai_alerts")
         return 0
     finally:
         conn.close()
