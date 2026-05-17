@@ -818,6 +818,131 @@ class StatsHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self._json(500, {"error": str(e)})
 
+        elif self.path == "/api/sai/alerts" or self.path.startswith("/api/sai/alerts?"):
+            # SAI alert surface — production read endpoint for sai_alerts table.
+            # Mirror of the FastAPI handler in web/app.py since web/app.py is
+            # not deployed; this is the prod-side read path.
+            parsed = urllib.parse.urlparse(self.path)
+            params = urllib.parse.parse_qs(parsed.query)
+            detector = params.get("detector", [""])[0]
+            severity = params.get("severity", [""])[0]
+            since = params.get("since", [""])[0]
+            subject = params.get("subject", [""])[0]
+            try:
+                limit = int(params.get("limit", ["100"])[0])
+            except ValueError:
+                limit = 100
+            limit = max(1, min(limit, 500))
+            try:
+                con = _ro_connect()
+                cur = con.cursor()
+                where = []
+                qparams = []
+                if detector:
+                    where.append("detector = ?")
+                    qparams.append(detector)
+                if severity:
+                    where.append("severity = ?")
+                    qparams.append(severity)
+                if since:
+                    where.append("detected_at >= ?")
+                    qparams.append(since)
+                if subject:
+                    if len(subject) >= 42:
+                        where.append("subject_address = ?")
+                        qparams.append(subject.lower())
+                    else:
+                        where.append("subject_address LIKE ?")
+                        qparams.append(subject.lower() + "%")
+                sql = ("SELECT detected_at, detector, severity, subject_address, "
+                       "subject_kind, payload FROM sai_alerts")
+                if where:
+                    sql += " WHERE " + " AND ".join(where)
+                sql += " ORDER BY detected_at DESC LIMIT ?"
+                qparams.append(limit)
+                rows = cur.execute(sql, qparams).fetchall()
+                con.close()
+                alerts = []
+                for r in rows:
+                    try:
+                        payload = json.loads(r[5]) if r[5] else None
+                    except (json.JSONDecodeError, TypeError):
+                        payload = None
+                    alerts.append({
+                        "detected_at": r[0], "detector": r[1], "severity": r[2],
+                        "subject_address": r[3], "subject_kind": r[4],
+                        "payload": payload,
+                    })
+                self._json(200, {"alerts": alerts, "count": len(alerts)})
+            except sqlite3.OperationalError as e:
+                self._json(200, {
+                    "alerts": [], "count": 0,
+                    "note": f"sai_alerts table not yet populated: {e}",
+                })
+
+        elif self.path == "/api/sai/alerts/summary":
+            try:
+                con = _ro_connect()
+                cur = con.cursor()
+                by_det_sev = cur.execute(
+                    "SELECT detector, severity, COUNT(*) FROM sai_alerts "
+                    "GROUP BY detector, severity ORDER BY detector, severity"
+                ).fetchall()
+                latest = cur.execute(
+                    "SELECT detector, MAX(detected_at) FROM sai_alerts GROUP BY detector"
+                ).fetchall()
+                total = cur.execute("SELECT COUNT(*) FROM sai_alerts").fetchone()[0]
+                con.close()
+                self._json(200, {
+                    "total": total,
+                    "by_detector_severity": [
+                        {"detector": d, "severity": s, "count": n}
+                        for d, s, n in by_det_sev
+                    ],
+                    "latest_per_detector": [
+                        {"detector": d, "latest_detected_at": ts}
+                        for d, ts in latest
+                    ],
+                })
+            except sqlite3.OperationalError as e:
+                self._json(200, {
+                    "total": 0, "by_detector_severity": [],
+                    "latest_per_detector": [],
+                    "note": f"sai_alerts table not yet populated: {e}",
+                })
+
+        elif self.path == "/api/sai/questions":
+            # Load the question store from memory/questions.yaml and return ranked.
+            try:
+                from surveillance.sai.question_store import load_questions, rank
+                qs = rank(load_questions(), status_filter="active")
+                self._json(200, {
+                    "questions": [
+                        {
+                            "id": q.id,
+                            "category": q.category,
+                            "question": " ".join(q.question.split()),
+                            "priority_score": round(q.priority_score(), 4),
+                            "score": {
+                                "predictive_power": q.predictive_power,
+                                "actionability": q.actionability,
+                                "uniqueness": q.uniqueness,
+                                "failure_reduction": q.failure_reduction,
+                            },
+                            "implementation_target": q.implementation_target,
+                            "status": q.status,
+                            "evolves_from": q.evolves_from,
+                        }
+                        for q in qs
+                    ],
+                    "count": len(qs),
+                })
+            except Exception as e:
+                self._json(200, {
+                    "questions": [], "count": 0,
+                    "note": f"question store not loadable: {e}",
+                })
+
         else:
             self._json(404, {
                 "error": "not found",
@@ -826,7 +951,10 @@ class StatsHandler(BaseHTTPRequestHandler):
                               "/clusters", "/cluster-events", "/bot-deployers",
                               "/bot-selectors", "/funding", "/funding-hops",
                               "/verification", "/traces", "/alerts", "/dump",
-                              "/old-dump"],
+                              "/old-dump",
+                              # SAI substrate (added 2026-05-17):
+                              "/api/sai/alerts", "/api/sai/alerts/summary",
+                              "/api/sai/questions"],
             })
 
     def do_POST(self):

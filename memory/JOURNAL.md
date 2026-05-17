@@ -1633,6 +1633,75 @@ NEXT TARGETS (for next session):
 - Decay mechanism for old drafts (~30 min)
 - Verify production deployment: after next Railway push, confirm scheduled jobs fire by checking sai_alerts.detected_at column for the next 06:30/07:00/07:15/07:30/07:45 UTC tick
 
+---
+
+### 2026-05-17 (supplement) — Sync failure + architecture correction + prod-side SAI routes
+
+Three connected events in this slice. A health-check + analysis pass triggered a production sync (commit `e8fcfd8` had landed `/api/sai/*` endpoints in `web/app.py`); the sync failed; investigation revealed that **web/app.py is not deployed to production at all** (only `run_surveillance.py` per the Procfile, INV-013). The endpoints I'd built were in the wrong file.
+
+#### Sync failure (Phase 1 prepare, ~5.8 min in)
+
+```
+[sync] phase 1: preparing snapshot (backup + gzip on container)...
+[sync] phase 1: done in 349.3s
+[sync] phase 1 failed (rc=1). stderr (tail):
+[sync] stdout (tail): b'backup: 11844550656 bytes\r\n'
+```
+
+The remote SQLite backup completed (11.84 GB → /tmp/snapshot.db). The remote script then started gzipping. The SSH connection died sometime during gzip. The `railway ssh` process returned rc=1 with empty stderr. No "READY:<size>:<sha256>" success marker.
+
+```
+SURPRISE: Sync v2's Phase 1 prepare still fails at the 12 GB DB-size threshold despite the chunked retrieval architecture.
+- Expected: ADR-007's chunked architecture (per the 2026-05-15 commit) handles >10 GB cleanly — Phase 1 was supposed to be NO streaming, just compute + write to /tmp. The tungstenite WebSocket cliff was for streaming volume.
+- Observed: The SSH session died at the ~5.8-min mark while the remote was gzipping a 11.84 GB backup. The remote script's stderr output volume during backup + gzip apparently crossed an unmeasured threshold for `railway ssh`'s WebSocket tunnel.
+- Implication: Phase 1's "stderr-only progress logging" is not actually low-volume. The backup operation calls `src.backup(dst, pages=N, progress=cb)` which (if the SQLite progress callback is set) emits stderr per page. At 11.84 GB / ~4 KB/page = ~3M progress updates, even tiny stderr lines accumulate.
+- Resolution: Open. Hypothesis: throttle the remote's progress callback to one message per N seconds, or suppress stderr entirely during the long Phase 1. Tracked as UNK candidate; the September fix was supposed to handle this but didn't.
+```
+
+A check confirmed: no `/tmp/l3sync_snapshot*` files survived on the container, so resume isn't possible. Either Python's `try/finally` cleanup ran, or the gz never wrote at all.
+
+#### Architecture correction (the bigger finding)
+
+I had landed `/api/sai/alerts`, `/api/sai/alerts/summary`, `/api/sai/questions` in `web/app.py` in commit `e8fcfd8`. Per Procfile (INV-013): **production deploys ONLY `python run_surveillance.py`**. The FastAPI app in `web/app.py` is the local dashboard surface; nothing on Railway serves it.
+
+Confirmed by querying production directly:
+
+```
+$ curl https://stellar-embrace-production-2020.up.railway.app/api/sai/alerts/summary
+{
+  "error": "not found",
+  "endpoints": ["/stats", "/suspected", "/priority", ..., "/alerts", "/dump", "/old-dump"]
+}
+```
+
+The production HTTP handler is `StatsHandler` in `run_surveillance.py` (a vanilla `BaseHTTPRequestHandler`, not FastAPI). The 404 enumerates the production endpoints and `/api/sai/*` is not among them.
+
+**Fix landed in this commit:** ported the 3 SAI endpoints into `StatsHandler.do_GET`. Now production exposes:
+- `/api/sai/alerts` (with detector, severity, since, subject, limit query params)
+- `/api/sai/alerts/summary`
+- `/api/sai/questions`
+
+The `web/app.py` versions remain (they back local development and the test suite); they're now duplicates by design. The dashboard surface and the prod surface have different routing layers — both need the endpoint code until/unless the architecture is reunified (separate UNK candidate).
+
+#### Why this matters operationally
+
+The scheduled SAI jobs that landed in commit `7d27192` ARE running in production (Railway picked up `run_surveillance.py` changes). They're writing to `sai_alerts` on `/app/surveillance/data/surveillance.db`. But until this commit, there was no read surface — production was accumulating SAI alerts no one could read. The route addition closes that gap.
+
+#### Health-check finding (informational, from earlier in this session)
+
+- Production `/health` and `/stats` both responsive (heartbeat `deployment_monitor_base` at 2026-05-17T22:25:01Z = current).
+- Local DB is 46h behind prod due to the failed sync. Normal-baseline activity in the gap: +1,201 deployers, +5,240 contracts, +197,928 tx_events. No surge.
+- Q-008 capability_liveness had a column-name bug (`scanned_at` → `detected_at`); fixed in commit `e8fcfd8`. STALE/UNVERIFIED count: was 4 (1 bug + 3 stale-data), now 3 (just stale-data which a sync would resolve).
+
+#### What this means for the SAI loop's self-evolution
+
+The question_generator caught the sync-failure SURPRISE as a new failure event source. The next run of `--from-journal` will see this SURPRISE block and generate adversarial_inversion + decomposition + temporal_upgrade candidates for it. The loop is closing on its own failure mode.
+
+NEXT TARGETS (revised):
+- Verify prod deployment of this commit by re-querying `/api/sai/alerts/summary` after Railway picks up the change
+- Fix the Phase 1 sync prepare failure (separate effort; probably needs to suppress sqlite3 progress callbacks during backup)
+- Reunify web/app.py and run_surveillance.py HTTP surfaces (separate session)
+
 ### LOOP.md 7-step reflection pass (Phase C, mandatory)
 
 This session: action-mode with three major work blocks (sync v2 already reflected above in 2026-05-15 prior entry; Phase A surveillance investigation; POTENTIAL_ATTACKS_V3.md). Loop runs over Phase A + v3 only since sync-v2 was already integrated into the prior entry.
