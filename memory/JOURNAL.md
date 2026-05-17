@@ -1374,6 +1374,130 @@ The parent questions (Q-011 through Q-018) are intentionally NO_TARGET — they 
 
 **Lexicon cross-references:** ADR-008 + INV-017 introduce a methodology that aligns cleanly with the Operational Doctrine lexicon section (Adversarial Maneuver framework). The maneuver frame says exploits are campaigns of phases; SAI says capabilities are answers to questions. Both are first-class in the codebase now.
 
+---
+
+### 2026-05-16 (supplement) — Three more SAI modules wired (Q-009, Q-005, Q-003) — major structural findings
+
+Following the initial SAI substrate landing earlier today, this supplement builds the next three highest-priority modules from the priority-ranked roadmap. Each ships fully wired with empirical validation and tests. The findings are not incremental — Q-009 alone exposes a network of OLI-tagged funders that collectively account for 74.2% of the May 9-15 drain volume.
+
+#### Q-009 — Funding chain pathfinder (BUILT)
+
+`surveillance/ontology/funding_chain_pathfinder.py`. Parses `deployers.funding_trail` JSON (which IS populated — `funding_sources` is empty for all 73,818 deployers, a corpus-wide data-shape discovery), walks the funding chain upstream up to 3 hops, flags each hop for watchlist + oli_labels + known-drainer signals.
+
+**Result against May 9-15 drain wave:**
+
+| Metric | Value |
+|---|---|
+| Drain-callers traced | 38 |
+| Total drain volume in window | 8,187 |
+| Drainers with watchlist/OLI ancestor | 14 (36.8%) |
+| Drain volume resolved to known operators | **6,074 (74.2%)** |
+| Resolutions via OLI labels | 9 (mostly hop 1) |
+| Resolutions via watchlist | 5 |
+| Resolutions via other-known-drainer | 3 |
+
+**Structural finding:** 6 OLI-tagged HIGH-severity addresses act as funders for execution cells in the May 9-15 wave. The top 4 drainers (0x1d81aff2, 0xa9f65861, 0x9c74f3498, 0xacc79e7b — totaling 5,435 drains) all trace to a flagged ancestor at hop 1. The "97.6% off-watchlist" framing from the 2026-05-15 SAI cycle was correct at the drainer-side surface — but the funding chains were already in the corpus. Layer 3's coverage problem was not "we don't have the data" — it was "we weren't traversing it."
+
+The OLI-tagged funder network:
+- `0xf70da97812cb96acdf810712aa562db8dfa3dbef` (HIGH OLI) → funded 0x1d81aff2 (3,228 drains on May-9)
+- `0x4e3ae00e8323558fa5cac04b152238924aa31b60` (HIGH OLI) → funded 0xa9f65861 (1,618 drains)
+- `0x3304e22ddaa22bcdc5fca2269b418046ae7b566a` (HIGH OLI) → funded 4 drainers (542 drains)
+- `0xbaed383ede0e5d9d72430661f3285daa77e9439f` (HIGH OLI) → funded 3 drainers (93 drains)
+- Plus already-watchlisted `single_purpose_funder_*` entries.
+
+#### Q-005 — Cross-chain choreography detector (BUILT)
+
+`surveillance/analytics/cross_chain_choreography.py`. Three signals:
+- `multi_chain_deploys` (score 3.0): same address deploys contracts on ≥2 chains within window
+- `bridge_event_same_address` (score 4.0): deploy on one chain + bridge_events row on another within window
+- `pattern_d_gap` (score 1.0-3.0): mainnet_first_tx predates L2 first_seen by ≥60 days
+
+**Top operators by aggregate score:**
+
+| Score | Address | Label | Chains |
+|---|---|---|---|
+| 54.0 | `0xc5d133296e...` | architect_associated (OLI:LOW) | arb=214, base=2, op=10 |
+| 48.0 | `0xc118d14516...` | etherscan_phishing_c118d145 | arb=7, base=7, op=6 |
+| 29.8 | `0x43b2f01186...` | etherscan_phishing_43b2f011 | arb=7, base=4, op=8 |
+| 7.7 | `0x4676d66b0d...` | etherscan_phishing_4676d66b | arb=5, op=1, base=1 |
+| 6.0 | `0x4cfe37d21a...` | architect_associated | arb=18, base=1 |
+| 3.0 | `0x9209c9f7dc...` | architect (main) | arb=46 only — pattern_d_gap |
+| **3.0** | **`0x80b12bd0...`** | **Animoca/REVV (this session)** | **base=2 — pattern_d_gap 2499 days** |
+
+The Animoca address scores at the floor of the detector — caught only via Pattern D because the LayerZero send from Ethereum→Base isn't in our `bridge_events` table (51 rows total, sparse). The validation is correct but minimal; full real-time detection of the Animoca-class signal requires ingesting LayerZero send events into bridge_events (separate work).
+
+#### Q-003 — OLI temporal validity scorer (BUILT)
+
+`surveillance/sai/oli_temporal_validity.py`. Produces verdict ∈ {FRESH, NEEDS_VERIFICATION, STALE} per OLI-tagged address. Staleness signals + weights:
+
+| Signal | Weight | Fires when |
+|---|---|---|
+| `adversarial_watchlist_high` | 5.0 | watchlist entry priority HIGH/CRITICAL with adversarial keyword in entity_name or watch_reason |
+| `is_drain_caller_itself` | 4.0 | address appears in approval_watchlist.drain_caller with drain_detected=1 |
+| `funded_known_drainer` | 3.0 | funding_trail of any known drainer contains this address |
+| `deployed_confirmed_trap` | 3.0 | deployer_address of any confirmed-tier contract |
+| `adversarial_watchlist_med` | 3.0 | watchlist priority MEDIUM with adversarial markers |
+| `in_entity_classification_criminal` | 2.5 | entity_classification.category='CRIMINAL' |
+| `deployed_suspected_trap` | 1.5 | deployer of suspected-tier contracts |
+
+Thresholds: score ≥ 5 → STALE; ≥ 2 → NEEDS_VERIFICATION; < 2 → FRESH.
+
+**Result across all 13 oli_labels rows:**
+
+| Verdict | Count | Examples |
+|---|---|---|
+| STALE | 3 | 0x80b12bd0 (Animoca, our case study, score 8.0), 0x147b8869, 0xa2a01b4a |
+| NEEDS_VERIFICATION | 6 | Includes 5 HIGH-OLI addresses funding drainers (0xf70da978, 0x4e3ae00e, 0x3304e22d, 0xbaed383e, 0x39591e7c) plus 0xc5d133 (architect_associated) |
+| FRESH | 4 | 0x80c67432 (Orbiter Bridge, validated control case), 0xd37bbe57, 0xe4edb277, 0xfa7093cd |
+
+**Headline implication:** of 13 OLI-tagged addresses, only 4 (31%) should currently be safe for INV-007 to redirect via the OLI guardrail. The remaining 9 carry sufficient adversarial signal that the OLI tag's temporal validity is in question. The original safe-by-accident scenario for 0x80b12bd0 is now safe-by-design — the guardrail can consult Q-003 before redirecting and refuse to redirect on STALE addresses.
+
+#### UNK-031 partial resolution upgraded
+
+The Animoca investigation (UNK-031) is now mechanically resolvable:
+- The OLI tag is **most likely correct** at the historical-attribution level (Q-005 confirms 2499-day mainnet vintage; portfolio token holdings discussed in `reports/animoca_deployer_investigation_2026-05-15.md`).
+- The address is **mechanically STALE** at the current-control level (Q-003 score 8.0).
+- Therefore: regardless of which scenario explains the gap (key compromise / former employee / OLI-tag false positive), the operational treatment is the same — the OLI guardrail should not redirect this address.
+
+The external verification (action item #1 from the investigation report) is still needed to determine WHICH scenario is true, but Layer 3's defensive posture no longer depends on the answer. UNK-031 moves from IN_PROGRESS-MEDIUM toward IN_PROGRESS-HIGH on the methodological-resolution axis (the validation framework is now operational); the external-attribution axis remains MEDIUM pending Animoca contact.
+
+#### Tests added (9 new — full surveillance suite: 36 tests, all passing)
+
+- `test_parse_funding_trail_*` (3 tests): JSON parsing edge cases
+- `test_funding_chain_resolution_summary`: dataclass behavior
+- `test_q009_against_live_corpus`: end-to-end Q-009 must resolve ≥50% of May-9..15 drain volume
+- `test_q005_catches_pattern_d_for_0x80b12bd0`: end-to-end Q-005 must fire pattern_d_gap on the case study
+- `test_q003_marks_0x80b12bd0_stale`: end-to-end Q-003 must produce STALE verdict
+- `test_q003_marks_orbiter_bridge_fresh`: end-to-end Q-003 must produce FRESH on Orbiter Bridge
+- `test_q003_verdict_thresholds`: score → verdict mapping
+
+#### Wiring status update
+
+After this commit, the question_runner shows **8 WIRED modules** out of 18 questions (the other 10 are parent questions or further-tier items). Specifically:
+
+```
+Q-002  WIRED   surveillance/analytics/approval_spike_detector.py
+Q-001  WIRED*  surveillance/ontology/role_classifier.py  [skeleton — partial rules]
+Q-009  WIRED   surveillance/ontology/funding_chain_pathfinder.py
+Q-003  WIRED   surveillance/sai/oli_temporal_validity.py
+Q-005  WIRED   surveillance/analytics/cross_chain_choreography.py
+Q-004  WIRED*  surveillance/sai/prediction_verifiability.py  [skeleton — rule-based]
+Q-006  WIRED*  surveillance/sai/adversarial_engine.py  [stub]
+Q-008  WIRED*  surveillance/sai/capability_liveness.py  [working but inventory only]
+```
+
+The asterisked entries are skeletons with TODO markers; the unmarked four (Q-002, Q-009, Q-003, Q-005) are full implementations with end-to-end empirical validation.
+
+#### What's NOT shipped after this supplement
+
+- Q-007 episode coalescence (3.30 priority)
+- Q-010 post-discharge approval continuation (3.40)
+- Phase 3 question_generator (still the SAI loop-closure bottleneck)
+- Full role_classifier (Q-001) with all 5 axes
+- Production wiring (regime_monitor + the new detectors run only in sessions; Q-008's capability_liveness will flag this when scheduled)
+
+The bottleneck for the next session shifts again: now that the high-priority observation modules are in place, the next leverage is in **making them run continuously**. Scheduling them in `run_surveillance.py` + alerting on the outputs converts session-time intelligence into production-time intelligence.
+
 ### LOOP.md 7-step reflection pass (Phase C, mandatory)
 
 This session: action-mode with three major work blocks (sync v2 already reflected above in 2026-05-15 prior entry; Phase A surveillance investigation; POTENTIAL_ATTACKS_V3.md). Loop runs over Phase A + v3 only since sync-v2 was already integrated into the prior entry.

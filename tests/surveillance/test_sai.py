@@ -157,3 +157,143 @@ def test_spike_alert_severity_tiers():
     assert a.severity() == "T2_ELEVATED"
     a.z_score = 3.5
     assert a.severity() == "T3_NOTEWORTHY"
+
+
+# ============================================================
+# Q-009 funding_chain_pathfinder tests
+# ============================================================
+
+from surveillance.ontology.funding_chain_pathfinder import (  # noqa: E402
+    parse_funding_trail, FundingChain, FundingHop,
+)
+
+
+def test_parse_funding_trail_dict():
+    """funding_trail is a JSON dict — most common case."""
+    raw = '{"funder":"0xabc","value_eth":0.05,"timestamp":"2026-04-03T12:57:31Z"}'
+    parsed = parse_funding_trail(raw)
+    assert parsed is not None
+    assert parsed["funder"] == "0xabc"
+    assert parsed["value_eth"] == 0.05
+
+
+def test_parse_funding_trail_handles_empty_and_malformed():
+    assert parse_funding_trail(None) is None
+    assert parse_funding_trail("") is None
+    assert parse_funding_trail("not-json") is None
+    assert parse_funding_trail("[]") is None  # empty list returns None
+
+
+def test_parse_funding_trail_list_returns_first():
+    raw = '[{"funder":"0xabc"},{"funder":"0xdef"}]'
+    parsed = parse_funding_trail(raw)
+    assert parsed is not None
+    assert parsed["funder"] == "0xabc"
+
+
+def test_funding_chain_resolution_summary():
+    chain = FundingChain(drain_caller="0x1d81", drains_in_window=3228)
+    chain.hops.append(FundingHop(
+        address="0xf70da978", depth=1, value_eth=0.004,
+        timestamp="2025-02-14", tx_hash="0xabc",
+        oli_severity="HIGH",
+    ))
+    chain.terminal_reason = "flagged ancestor at hop 1"
+    assert chain.is_resolved_to_known()
+    assert "OLI_HIT@hop1" in chain.resolution_summary()
+
+
+def test_q009_against_live_corpus():
+    """Q-009 must resolve >=50% of May-9..15 drain volume to known operators."""
+    import sqlite3
+    from pathlib import Path
+    db = Path(__file__).resolve().parent.parent.parent / "surveillance" / "data" / "surveillance.db"
+    if not db.exists():
+        pytest.skip("surveillance.db not present in this environment")
+    from surveillance.ontology.funding_chain_pathfinder import trace_drainers_in_window
+    conn = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+    try:
+        chains = trace_drainers_in_window(conn, "2026-05-09", "2026-05-16", max_hops=3)
+    finally:
+        conn.close()
+    total_volume = sum(c.drains_in_window for c in chains)
+    resolved_volume = sum(c.drains_in_window for c in chains if c.is_resolved_to_known())
+    # Expectation per the 2026-05-16 SAI cycle: 6,074 / 8,187 = 74.2%
+    assert total_volume >= 7000, f"unexpected total drain volume: {total_volume}"
+    pct = 100 * resolved_volume / total_volume
+    assert pct >= 50.0, f"Q-009 resolved only {pct:.1f}% of drain volume; expected >=50%"
+
+
+# ============================================================
+# Q-005 cross_chain_choreography tests
+# ============================================================
+
+def test_q005_catches_pattern_d_for_0x80b12bd0():
+    """0x80b12bd0 (Animoca-tagged) must produce a pattern_d_gap signal."""
+    import sqlite3
+    from pathlib import Path
+    db = Path(__file__).resolve().parent.parent.parent / "surveillance" / "data" / "surveillance.db"
+    if not db.exists():
+        pytest.skip("surveillance.db not present in this environment")
+    from surveillance.analytics.cross_chain_choreography import detect_for_address
+    conn = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+    try:
+        c = detect_for_address(conn, "0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8")
+    finally:
+        conn.close()
+    assert c.has_choreography(), "0x80b12bd0 must produce at least one signal"
+    kinds = {s.kind for s in c.signals}
+    assert "pattern_d_gap" in kinds, f"expected pattern_d_gap; got {kinds}"
+    # Mainnet first tx 2019-05-23 + L2 first-seen 2026-03-26 = ~2499 days
+    assert c.mainnet_first_tx is not None
+
+
+# ============================================================
+# Q-003 oli_temporal_validity tests
+# ============================================================
+
+def test_q003_marks_0x80b12bd0_stale():
+    """Animoca-tagged 0x80b12bd0 must be marked STALE."""
+    import sqlite3
+    from pathlib import Path
+    db = Path(__file__).resolve().parent.parent.parent / "surveillance" / "data" / "surveillance.db"
+    if not db.exists():
+        pytest.skip("surveillance.db not present in this environment")
+    from surveillance.sai.oli_temporal_validity import assess_address
+    conn = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+    try:
+        v = assess_address(conn, "0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8", "LOW")
+    finally:
+        conn.close()
+    assert v.verdict() == "STALE", f"expected STALE for Animoca-flagged-adversarial; got {v.verdict()} (score={v.aggregate_score()})"
+    # Specific signal that must fire: adversarial watchlist HIGH
+    signal_names = {s.name for s in v.signals}
+    assert "adversarial_watchlist_high" in signal_names
+    assert "deployed_confirmed_trap" in signal_names
+
+
+def test_q003_marks_orbiter_bridge_fresh():
+    """0x80c67432 (Orbiter Finance Bridge per Blockscout audit) must be FRESH."""
+    import sqlite3
+    from pathlib import Path
+    db = Path(__file__).resolve().parent.parent.parent / "surveillance" / "data" / "surveillance.db"
+    if not db.exists():
+        pytest.skip("surveillance.db not present in this environment")
+    from surveillance.sai.oli_temporal_validity import assess_address
+    conn = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+    try:
+        v = assess_address(conn, "0x80c67432656d59144ceff962e8faf8926599bcf8", "HIGH")
+    finally:
+        conn.close()
+    assert v.verdict() == "FRESH", f"expected FRESH for Orbiter Bridge; got {v.verdict()}"
+
+
+def test_q003_verdict_thresholds():
+    """Verify the score → verdict mapping."""
+    from surveillance.sai.oli_temporal_validity import OLIValidity, StaleSignal
+    v = OLIValidity(address="0xtest", oli_severity="HIGH")
+    assert v.verdict() == "FRESH"   # 0.0
+    v.signals.append(StaleSignal("test", 2.0, ""))
+    assert v.verdict() == "NEEDS_VERIFICATION"  # 2.0
+    v.signals.append(StaleSignal("test2", 3.5, ""))
+    assert v.verdict() == "STALE"   # 5.5
