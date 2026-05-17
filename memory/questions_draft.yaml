@@ -3,1908 +3,284 @@
 # promoted to memory/questions.yaml with status=active and
 # a new Q-XXX id.
 
-generated_at: '2026-05-17T02:15:59Z'
+generated_at: '2026-05-17T22:34:05Z'
 generator: surveillance.sai.question_generator
-n_drafts: 99
+n_drafts: 28
 drafts:
 - id: DRAFT-001
   category: adversarial
-  question: If an attacker knew that 'the repo contains a major dsl subsystem (latent
-    fl' could fail in the way observed in journal_surprise_1, how would they engineer
-    a high-leverage exploitation of that failure mode? What downstream systems become
-    vulnerable?
+  question: 'If an attacker knew that ''q-003 alert: stale on 0xa2a01b4a68575280a2de45178e''
+    could fail in the way observed in Q-003_2026-05-17T22:26:26Z_0xa2a01b4a68575280a2de45178e289da717bedb6f,
+    how would they engineer a high-leverage exploitation of that failure mode? What
+    downstream systems become vulnerable?'
   depends_on:
     signals: []
     models: []
   produces:
-    decision_output: 'Adversarial inversion of journal_surprise_1: convert defender''s
-      surprise into attacker''s playbook.'
+    decision_output: 'Adversarial inversion of Q-003_2026-05-17T22:26:26Z_0xa2a01b4a68575280a2de45178e289da717bedb6f:
+      convert defender''s surprise into attacker''s playbook.'
   score:
     predictive_power: 3
     actionability: 2
     uniqueness: 5
     failure_reduction: 5
   status: draft
-  origin: question_generator/invert/journal_surprise
-  derived_from: journal_surprise_1
+  origin: question_generator/invert/sai_alert
+  derived_from: Q-003_2026-05-17T22:26:26Z_0xa2a01b4a68575280a2de45178e289da717bedb6f
   transformation: adversarial_inversion
 - id: DRAFT-002
-  category: adversarial
-  question: If an attacker knew that 'readme.md is 40 kb and has never been opened.'
-    could fail in the way observed in journal_surprise_2, how would they engineer
-    a high-leverage exploitation of that failure mode? What downstream systems become
-    vulnerable?
+  category: pricing
+  question: "For alert Q-003_2026-05-17T22:26:26Z_0xa2a01b4a68575280a2de45178e289da717bedb6f:\
+    \ what additional signal \u2014 independent of OLI temporal-validity verdict \u2014\
+    \ would have fired BEFORE this detector did? Specifically: at what hour mark of\
+    \ the trailing 72h could a complementary detector have surfaced the same subject\
+    \ with confidence > 0.5?"
   depends_on:
     signals: []
     models: []
   produces:
-    decision_output: 'Adversarial inversion of journal_surprise_2: convert defender''s
-      surprise into attacker''s playbook.'
+    decision_output: "Earlier-detection upgrade: turns a fired Q-003 alert into the\
+      \ research question 'what would have caught this even sooner?' \u2014 each successful\
+      \ detection should produce its own next-generation complementary detector candidate."
   score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
+    predictive_power: 4
+    actionability: 4
+    uniqueness: 4
+    failure_reduction: 4
   status: draft
-  origin: question_generator/invert/journal_surprise
-  derived_from: journal_surprise_2
-  transformation: adversarial_inversion
+  origin: question_generator/alert_earlier/Q-003
+  derived_from: Q-003_2026-05-17T22:26:26Z_0xa2a01b4a68575280a2de45178e289da717bedb6f
+  transformation: alert_earlier_detection
 - id: DRAFT-003
-  category: adversarial
-  question: If an attacker knew that 'readme claims flux_manifold integrates with
-    survei' could fail in the way observed in journal_surprise_3, how would they engineer
-    a high-leverage exploitation of that failure mode? What downstream systems become
-    vulnerable?
+  category: structural
+  question: Alert Q-003_2026-05-17T22:26:26Z_0xa2a01b4a68575280a2de45178e289da717bedb6f
+    fired. How many other OLI-tagged addresses share the staleness signal pattern
+    but have not been alerted because they're missing one or more of the 7 staleness
+    signals? Treat the fired alert as evidence of a larger latent cohort that the
+    detector's current threshold has not yet surfaced.
   depends_on:
     signals: []
     models: []
   produces:
-    decision_output: 'Adversarial inversion of journal_surprise_3: convert defender''s
-      surprise into attacker''s playbook.'
+    decision_output: 'Structural-gap framing: a fired alert is one positive in a distribution.
+      The next question is how the cohort containing the alert is distributed in the
+      corpus, and where its left tail sits under our current threshold.'
   score:
     predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
+    actionability: 5
+    uniqueness: 4
+    failure_reduction: 4
   status: draft
-  origin: question_generator/invert/journal_surprise
-  derived_from: journal_surprise_3
-  transformation: adversarial_inversion
+  origin: question_generator/alert_gap/Q-003
+  derived_from: Q-003_2026-05-17T22:26:26Z_0xa2a01b4a68575280a2de45178e289da717bedb6f
+  transformation: alert_structural_gap
 - id: DRAFT-004
-  category: adversarial
-  question: If an attacker knew that 'the readme is auto-updated by a local git hook.'
-    could fail in the way observed in journal_surprise_4, how would they engineer
-    a high-leverage exploitation of that failure mode? What downstream systems become
-    vulnerable?
+  category: methodology
+  question: Alert Q-003_2026-05-17T22:26:26Z_0xa2a01b4a68575280a2de45178e289da717bedb6f
+    produced a flag. What additional payload fields (external attestation method (which
+    OLI submitter can confirm current control proof), expected institution-side disclosure
+    timeline) would transform the alert from a notification into a complete action
+    ticket?
   depends_on:
     signals: []
     models: []
   produces:
-    decision_output: 'Adversarial inversion of journal_surprise_4: convert defender''s
-      surprise into attacker''s playbook.'
+    decision_output: 'Actionable-resolution upgrade: turns ''something is wrong''
+      alerts into ''here is what to do'' alerts. Each detector''s payload should carry
+      enough structured context to drive a downstream decision without re-querying
+      the corpus.'
   score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
+    predictive_power: 2
+    actionability: 5
+    uniqueness: 3
+    failure_reduction: 3
   status: draft
-  origin: question_generator/invert/journal_surprise
-  derived_from: journal_surprise_4
-  transformation: adversarial_inversion
+  origin: question_generator/alert_actionable/Q-003
+  derived_from: Q-003_2026-05-17T22:26:26Z_0xa2a01b4a68575280a2de45178e289da717bedb6f
+  transformation: alert_actionable_resolution
 - id: DRAFT-005
   category: adversarial
-  question: If an attacker knew that '7 independent verification paths for unk-024
-    all r' could fail in the way observed in journal_surprise_5, how would they engineer
-    a high-leverage exploitation of that failure mode? What downstream systems become
-    vulnerable?
+  question: 'If an attacker knew that ''q-003 alert: stale on 0x80b12bd0f1793bf6cea767fa83''
+    could fail in the way observed in Q-003_2026-05-17T22:26:26Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8,
+    how would they engineer a high-leverage exploitation of that failure mode? What
+    downstream systems become vulnerable?'
   depends_on:
     signals: []
     models: []
   produces:
-    decision_output: 'Adversarial inversion of journal_surprise_5: convert defender''s
-      surprise into attacker''s playbook.'
+    decision_output: 'Adversarial inversion of Q-003_2026-05-17T22:26:26Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8:
+      convert defender''s surprise into attacker''s playbook.'
   score:
     predictive_power: 3
     actionability: 2
     uniqueness: 5
     failure_reduction: 5
   status: draft
-  origin: question_generator/invert/journal_surprise
-  derived_from: journal_surprise_5
+  origin: question_generator/invert/sai_alert
+  derived_from: Q-003_2026-05-17T22:26:26Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8
   transformation: adversarial_inversion
 - id: DRAFT-006
-  category: adversarial
-  question: If an attacker knew that 'smoke test on a fresh in-memory db found a real
-    la' could fail in the way observed in journal_surprise_6, how would they engineer
-    a high-leverage exploitation of that failure mode? What downstream systems become
-    vulnerable?
+  category: pricing
+  question: "For alert Q-003_2026-05-17T22:26:26Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8:\
+    \ what additional signal \u2014 independent of OLI temporal-validity verdict \u2014\
+    \ would have fired BEFORE this detector did? Specifically: at what hour mark of\
+    \ the trailing 72h could a complementary detector have surfaced the same subject\
+    \ with confidence > 0.5?"
   depends_on:
     signals: []
     models: []
   produces:
-    decision_output: 'Adversarial inversion of journal_surprise_6: convert defender''s
-      surprise into attacker''s playbook.'
+    decision_output: "Earlier-detection upgrade: turns a fired Q-003 alert into the\
+      \ research question 'what would have caught this even sooner?' \u2014 each successful\
+      \ detection should produce its own next-generation complementary detector candidate."
   score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
+    predictive_power: 4
+    actionability: 4
+    uniqueness: 4
+    failure_reduction: 4
   status: draft
-  origin: question_generator/invert/journal_surprise
-  derived_from: journal_surprise_6
-  transformation: adversarial_inversion
+  origin: question_generator/alert_earlier/Q-003
+  derived_from: Q-003_2026-05-17T22:26:26Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8
+  transformation: alert_earlier_detection
 - id: DRAFT-007
-  category: adversarial
-  question: If an attacker knew that 'v1 regime monitor produced an immediately actionab'
-    could fail in the way observed in journal_surprise_7, how would they engineer
-    a high-leverage exploitation of that failure mode? What downstream systems become
-    vulnerable?
+  category: structural
+  question: Alert Q-003_2026-05-17T22:26:26Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8
+    fired. How many other OLI-tagged addresses share the staleness signal pattern
+    but have not been alerted because they're missing one or more of the 7 staleness
+    signals? Treat the fired alert as evidence of a larger latent cohort that the
+    detector's current threshold has not yet surfaced.
   depends_on:
     signals: []
     models: []
   produces:
-    decision_output: 'Adversarial inversion of journal_surprise_7: convert defender''s
-      surprise into attacker''s playbook.'
+    decision_output: 'Structural-gap framing: a fired alert is one positive in a distribution.
+      The next question is how the cohort containing the alert is distributed in the
+      corpus, and where its left tail sits under our current threshold.'
   score:
     predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
+    actionability: 5
+    uniqueness: 4
+    failure_reduction: 4
   status: draft
-  origin: question_generator/invert/journal_surprise
-  derived_from: journal_surprise_7
-  transformation: adversarial_inversion
+  origin: question_generator/alert_gap/Q-003
+  derived_from: Q-003_2026-05-17T22:26:26Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8
+  transformation: alert_structural_gap
 - id: DRAFT-008
-  category: adversarial
-  question: If an attacker knew that 'apr-23/apr-25 staging hypothesis is wrong about
-    ch' could fail in the way observed in journal_surprise_8, how would they engineer
-    a high-leverage exploitation of that failure mode? What downstream systems become
-    vulnerable?
+  category: methodology
+  question: Alert Q-003_2026-05-17T22:26:26Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8
+    produced a flag. What additional payload fields (external attestation method (which
+    OLI submitter can confirm current control proof), expected institution-side disclosure
+    timeline) would transform the alert from a notification into a complete action
+    ticket?
   depends_on:
     signals: []
     models: []
   produces:
-    decision_output: 'Adversarial inversion of journal_surprise_8: convert defender''s
-      surprise into attacker''s playbook.'
+    decision_output: 'Actionable-resolution upgrade: turns ''something is wrong''
+      alerts into ''here is what to do'' alerts. Each detector''s payload should carry
+      enough structured context to drive a downstream decision without re-querying
+      the corpus.'
   score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
+    predictive_power: 2
+    actionability: 5
+    uniqueness: 3
+    failure_reduction: 3
   status: draft
-  origin: question_generator/invert/journal_surprise
-  derived_from: journal_surprise_8
-  transformation: adversarial_inversion
+  origin: question_generator/alert_actionable/Q-003
+  derived_from: Q-003_2026-05-17T22:26:26Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8
+  transformation: alert_actionable_resolution
 - id: DRAFT-009
   category: adversarial
-  question: If an attacker knew that 'iter_8 contributes 0% to may-5 confirmed-trap
-    spik' could fail in the way observed in journal_surprise_9, how would they engineer
-    a high-leverage exploitation of that failure mode? What downstream systems become
-    vulnerable?
+  question: 'If an attacker knew that ''q-003 alert: stale on 0x147b8869655bc09f226955cc67''
+    could fail in the way observed in Q-003_2026-05-17T22:26:26Z_0x147b8869655bc09f226955cc676ff78efe240ca8,
+    how would they engineer a high-leverage exploitation of that failure mode? What
+    downstream systems become vulnerable?'
   depends_on:
     signals: []
     models: []
   produces:
-    decision_output: 'Adversarial inversion of journal_surprise_9: convert defender''s
-      surprise into attacker''s playbook.'
+    decision_output: 'Adversarial inversion of Q-003_2026-05-17T22:26:26Z_0x147b8869655bc09f226955cc676ff78efe240ca8:
+      convert defender''s surprise into attacker''s playbook.'
   score:
     predictive_power: 3
     actionability: 2
     uniqueness: 5
     failure_reduction: 5
   status: draft
-  origin: question_generator/invert/journal_surprise
-  derived_from: journal_surprise_9
+  origin: question_generator/invert/sai_alert
+  derived_from: Q-003_2026-05-17T22:26:26Z_0x147b8869655bc09f226955cc676ff78efe240ca8
   transformation: adversarial_inversion
 - id: DRAFT-010
-  category: behavior
-  question: For the event class observed in 'iter_8 contributes 0% to May-5 confirmed-trap
-    spike.', what is the minimum lead time T such that the corresponding leading indicator
-    fires with confidence > 0.5? Construct the time-to-trigger distribution across
-    all corpus instances.
+  category: pricing
+  question: "For alert Q-003_2026-05-17T22:26:26Z_0x147b8869655bc09f226955cc676ff78efe240ca8:\
+    \ what additional signal \u2014 independent of OLI temporal-validity verdict \u2014\
+    \ would have fired BEFORE this detector did? Specifically: at what hour mark of\
+    \ the trailing 72h could a complementary detector have surfaced the same subject\
+    \ with confidence > 0.5?"
   depends_on:
     signals: []
     models: []
   produces:
-    decision_output: 'Temporal upgrade: from ''will it fail'' to ''how many minutes
-      / hours before the event is it detectable.'''
+    decision_output: "Earlier-detection upgrade: turns a fired Q-003 alert into the\
+      \ research question 'what would have caught this even sooner?' \u2014 each successful\
+      \ detection should produce its own next-generation complementary detector candidate."
   score:
     predictive_power: 4
     actionability: 4
     uniqueness: 4
-    failure_reduction: 3
+    failure_reduction: 4
   status: draft
-  origin: question_generator/temporal/journal_surprise
-  derived_from: journal_surprise_9
-  transformation: temporal_upgrade
+  origin: question_generator/alert_earlier/Q-003
+  derived_from: Q-003_2026-05-17T22:26:26Z_0x147b8869655bc09f226955cc676ff78efe240ca8
+  transformation: alert_earlier_detection
 - id: DRAFT-011
-  category: adversarial
-  question: If an attacker knew that 'coffee fleet contributes zero approvals across
-    apr' could fail in the way observed in journal_surprise_10, how would they engineer
-    a high-leverage exploitation of that failure mode? What downstream systems become
-    vulnerable?
+  category: structural
+  question: Alert Q-003_2026-05-17T22:26:26Z_0x147b8869655bc09f226955cc676ff78efe240ca8
+    fired. How many other OLI-tagged addresses share the staleness signal pattern
+    but have not been alerted because they're missing one or more of the 7 staleness
+    signals? Treat the fired alert as evidence of a larger latent cohort that the
+    detector's current threshold has not yet surfaced.
   depends_on:
     signals: []
     models: []
   produces:
-    decision_output: 'Adversarial inversion of journal_surprise_10: convert defender''s
-      surprise into attacker''s playbook.'
+    decision_output: 'Structural-gap framing: a fired alert is one positive in a distribution.
+      The next question is how the cohort containing the alert is distributed in the
+      corpus, and where its left tail sits under our current threshold.'
   score:
     predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
+    actionability: 5
+    uniqueness: 4
+    failure_reduction: 4
   status: draft
-  origin: question_generator/invert/journal_surprise
-  derived_from: journal_surprise_10
-  transformation: adversarial_inversion
+  origin: question_generator/alert_gap/Q-003
+  derived_from: Q-003_2026-05-17T22:26:26Z_0x147b8869655bc09f226955cc676ff78efe240ca8
+  transformation: alert_structural_gap
 - id: DRAFT-012
   category: methodology
-  question: "What concrete query against surveillance.db answers 'The \"ontology \xA7\
-    2/\xA73/\xA74\" theoretical specification document' with verifiable address-level\
-    \ evidence (score >= 2 on the Q-004 verifiability scale)?"
+  question: Alert Q-003_2026-05-17T22:26:26Z_0x147b8869655bc09f226955cc676ff78efe240ca8
+    produced a flag. What additional payload fields (external attestation method (which
+    OLI submitter can confirm current control proof), expected institution-side disclosure
+    timeline) would transform the alert from a notification into a complete action
+    ticket?
   depends_on:
     signals: []
     models: []
   produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
+    decision_output: 'Actionable-resolution upgrade: turns ''something is wrong''
+      alerts into ''here is what to do'' alerts. Each detector''s payload should carry
+      enough structured context to drive a downstream decision without re-querying
+      the corpus.'
   score:
     predictive_power: 2
-    actionability: 4
+    actionability: 5
     uniqueness: 3
-    failure_reduction: 4
+    failure_reduction: 3
   status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-003
-  transformation: decomposition
+  origin: question_generator/alert_actionable/Q-003
+  derived_from: Q-003_2026-05-17T22:26:26Z_0x147b8869655bc09f226955cc676ff78efe240ca8
+  transformation: alert_actionable_resolution
 - id: DRAFT-013
-  category: adversarial
-  question: "If an attacker knew that 'the \"ontology \xA72/\xA73/\xA74\" theoretical\
-    \ specification ' could fail in the way observed in UNK-003, how would they engineer\
-    \ a high-leverage exploitation of that failure mode? What downstream systems become\
-    \ vulnerable?"
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-003: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-003
-  transformation: adversarial_inversion
-- id: DRAFT-014
-  category: behavior
-  question: "For 'The \"ontology \xA72/\xA73/\xA74\" theoretical specification document',\
-    \ what is the time window after which leaving the question unresolved produces\
-    \ material risk? Set a decay clock on the OPEN status."
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-003
-  transformation: temporal_upgrade
-- id: DRAFT-015
-  category: methodology
-  question: What concrete query against surveillance.db answers 'Which of the 110+
-    root-level scripts are active vs archive' with verifiable address-level evidence
-    (score >= 2 on the Q-004 verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-004
-  transformation: decomposition
-- id: DRAFT-016
-  category: adversarial
-  question: If an attacker knew that 'which of the 110+ root-level scripts are active
-    vs' could fail in the way observed in UNK-004, how would they engineer a high-leverage
-    exploitation of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-004: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-004
-  transformation: adversarial_inversion
-- id: DRAFT-017
-  category: behavior
-  question: For 'Which of the 110+ root-level scripts are active vs archive', what
-    is the time window after which leaving the question unresolved produces material
-    risk? Set a decay clock on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-004
-  transformation: temporal_upgrade
-- id: DRAFT-018
-  category: methodology
-  question: What concrete query against surveillance.db answers '`flux_manifold/cex_feed.py`,
-    `kalman_reservoir.py`, `multi_scale_reservoir.py`, `changepoint.py`, `pheno_log.py`,
-    `monitor.py` roles' with verifiable address-level evidence (score >= 2 on the
-    Q-004 verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-009
-  transformation: decomposition
-- id: DRAFT-019
-  category: adversarial
-  question: If an attacker knew that '`flux_manifold/cex_feed.py`, `kalman_reservoir.py`'
-    could fail in the way observed in UNK-009, how would they engineer a high-leverage
-    exploitation of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-009: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-009
-  transformation: adversarial_inversion
-- id: DRAFT-020
-  category: behavior
-  question: For '`flux_manifold/cex_feed.py`, `kalman_reservoir.py`, `multi_scale_reservoir.py`,
-    `changepoint.py`, `pheno_log.py`, `monitor.py` roles', what is the time window
-    after which leaving the question unresolved produces material risk? Set a decay
-    clock on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-009
-  transformation: temporal_upgrade
-- id: DRAFT-021
-  category: methodology
-  question: What concrete query against surveillance.db answers '`rib_dataset/` usage'
-    with verifiable address-level evidence (score >= 2 on the Q-004 verifiability
-    scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-010
-  transformation: decomposition
-- id: DRAFT-022
-  category: adversarial
-  question: If an attacker knew that '`rib_dataset/` usage' could fail in the way
-    observed in UNK-010, how would they engineer a high-leverage exploitation of that
-    failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-010: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-010
-  transformation: adversarial_inversion
-- id: DRAFT-023
-  category: behavior
-  question: For '`rib_dataset/` usage', what is the time window after which leaving
-    the question unresolved produces material risk? Set a decay clock on the OPEN
-    status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-010
-  transformation: temporal_upgrade
-- id: DRAFT-024
-  category: methodology
-  question: What concrete query against surveillance.db answers 'Convergence Contract
-    Tier 1's Lipschitz bound verification' with verifiable address-level evidence
-    (score >= 2 on the Q-004 verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-011
-  transformation: decomposition
-- id: DRAFT-025
-  category: adversarial
-  question: If an attacker knew that 'convergence contract tier 1's lipschitz bound
-    veri' could fail in the way observed in UNK-011, how would they engineer a high-leverage
-    exploitation of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-011: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-011
-  transformation: adversarial_inversion
-- id: DRAFT-026
-  category: behavior
-  question: For 'Convergence Contract Tier 1's Lipschitz bound verification', what
-    is the time window after which leaving the question unresolved produces material
-    risk? Set a decay clock on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-011
-  transformation: temporal_upgrade
-- id: DRAFT-027
-  category: methodology
-  question: What concrete query against surveillance.db answers 'Tier 3 NON_CONVERGENT
-    runtime behavior' with verifiable address-level evidence (score >= 2 on the Q-004
-    verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-012
-  transformation: decomposition
-- id: DRAFT-028
-  category: adversarial
-  question: If an attacker knew that 'tier 3 non_convergent runtime behavior' could
-    fail in the way observed in UNK-012, how would they engineer a high-leverage exploitation
-    of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-012: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-012
-  transformation: adversarial_inversion
-- id: DRAFT-029
-  category: behavior
-  question: For 'Tier 3 NON_CONVERGENT runtime behavior', what is the time window
-    after which leaving the question unresolved produces material risk? Set a decay
-    clock on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-012
-  transformation: temporal_upgrade
-- id: DRAFT-030
-  category: methodology
-  question: "What concrete query against surveillance.db answers '`\u21BA recurse`\
-    \ and `\u2297 compete` operator semantics' with verifiable address-level evidence\
-    \ (score >= 2 on the Q-004 verifiability scale)?"
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-013
-  transformation: decomposition
-- id: DRAFT-031
-  category: adversarial
-  question: "If an attacker knew that '`\u21BA recurse` and `\u2297 compete` operator\
-    \ semantics' could fail in the way observed in UNK-013, how would they engineer\
-    \ a high-leverage exploitation of that failure mode? What downstream systems become\
-    \ vulnerable?"
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-013: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-013
-  transformation: adversarial_inversion
-- id: DRAFT-032
-  category: behavior
-  question: "For '`\u21BA recurse` and `\u2297 compete` operator semantics', what\
-    \ is the time window after which leaving the question unresolved produces material\
-    \ risk? Set a decay clock on the OPEN status."
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-013
-  transformation: temporal_upgrade
-- id: DRAFT-033
-  category: methodology
-  question: What concrete query against surveillance.db answers '`emit(value)` built-in
-    semantics' with verifiable address-level evidence (score >= 2 on the Q-004 verifiability
-    scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-014
-  transformation: decomposition
-- id: DRAFT-034
-  category: adversarial
-  question: If an attacker knew that '`emit(value)` built-in semantics' could fail
-    in the way observed in UNK-014, how would they engineer a high-leverage exploitation
-    of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-014: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-014
-  transformation: adversarial_inversion
-- id: DRAFT-035
-  category: behavior
-  question: For '`emit(value)` built-in semantics', what is the time window after
-    which leaving the question unresolved produces material risk? Set a decay clock
-    on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-014
-  transformation: temporal_upgrade
-- id: DRAFT-036
-  category: methodology
-  question: What concrete query against surveillance.db answers 'Convergence-contract
-    propagation through `.lf` pipelines' with verifiable address-level evidence (score
-    >= 2 on the Q-004 verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-015
-  transformation: decomposition
-- id: DRAFT-037
-  category: adversarial
-  question: If an attacker knew that 'convergence-contract propagation through `.lf`
-    pip' could fail in the way observed in UNK-015, how would they engineer a high-leverage
-    exploitation of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-015: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-015
-  transformation: adversarial_inversion
-- id: DRAFT-038
-  category: behavior
-  question: For 'Convergence-contract propagation through `.lf` pipelines', what is
-    the time window after which leaving the question unresolved produces material
-    risk? Set a decay clock on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-015
-  transformation: temporal_upgrade
-- id: DRAFT-039
-  category: methodology
-  question: What concrete query against surveillance.db answers 'FlowTrace memory
-    bound' with verifiable address-level evidence (score >= 2 on the Q-004 verifiability
-    scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-016
-  transformation: decomposition
-- id: DRAFT-040
-  category: adversarial
-  question: If an attacker knew that 'flowtrace memory bound' could fail in the way
-    observed in UNK-016, how would they engineer a high-leverage exploitation of that
-    failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-016: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-016
-  transformation: adversarial_inversion
-- id: DRAFT-041
-  category: behavior
-  question: For 'FlowTrace memory bound', what is the time window after which leaving
-    the question unresolved produces material risk? Set a decay clock on the OPEN
-    status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-016
-  transformation: temporal_upgrade
-- id: DRAFT-042
-  category: methodology
-  question: What concrete query against surveillance.db answers 'Import binding-collision
-    behavior' with verifiable address-level evidence (score >= 2 on the Q-004 verifiability
-    scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-017
-  transformation: decomposition
-- id: DRAFT-043
-  category: adversarial
-  question: If an attacker knew that 'import binding-collision behavior' could fail
-    in the way observed in UNK-017, how would they engineer a high-leverage exploitation
-    of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-017: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-017
-  transformation: adversarial_inversion
-- id: DRAFT-044
-  category: behavior
-  question: For 'Import binding-collision behavior', what is the time window after
-    which leaving the question unresolved produces material risk? Set a decay clock
-    on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-017
-  transformation: temporal_upgrade
-- id: DRAFT-045
-  category: methodology
-  question: For the failure 'Critique function failure semantics', what specific addresses,
-    timestamps, and signal trajectories would have made the failure visible before
-    it manifested? Build a checkable measurement plan.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition turns a vague-title failure into a measurable precondition
-      set.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-018
-  transformation: decomposition
-- id: DRAFT-046
-  category: adversarial
-  question: If an attacker knew that 'critique function failure semantics' could fail
-    in the way observed in UNK-018, how would they engineer a high-leverage exploitation
-    of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-018: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-018
-  transformation: adversarial_inversion
-- id: DRAFT-047
-  category: behavior
-  question: For 'Critique function failure semantics', what is the time window after
-    which leaving the question unresolved produces material risk? Set a decay clock
-    on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-018
-  transformation: temporal_upgrade
-- id: DRAFT-048
-  category: methodology
-  question: What concrete query against surveillance.db answers 'Pipeline branching
-    support' with verifiable address-level evidence (score >= 2 on the Q-004 verifiability
-    scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-019
-  transformation: decomposition
-- id: DRAFT-049
-  category: adversarial
-  question: If an attacker knew that 'pipeline branching support' could fail in the
-    way observed in UNK-019, how would they engineer a high-leverage exploitation
-    of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-019: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-019
-  transformation: adversarial_inversion
-- id: DRAFT-050
-  category: behavior
-  question: For 'Pipeline branching support', what is the time window after which
-    leaving the question unresolved produces material risk? Set a decay clock on the
-    OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-019
-  transformation: temporal_upgrade
-- id: DRAFT-051
-  category: methodology
-  question: What concrete query against surveillance.db answers 'Reservoir state isolation
-    between consecutive pipelines' with verifiable address-level evidence (score >=
-    2 on the Q-004 verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-020
-  transformation: decomposition
-- id: DRAFT-052
-  category: adversarial
-  question: If an attacker knew that 'reservoir state isolation between consecutive
-    pipe' could fail in the way observed in UNK-020, how would they engineer a high-leverage
-    exploitation of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-020: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-020
-  transformation: adversarial_inversion
-- id: DRAFT-053
-  category: behavior
-  question: For 'Reservoir state isolation between consecutive pipelines', what is
-    the time window after which leaving the question unresolved produces material
-    risk? Set a decay clock on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-020
-  transformation: temporal_upgrade
-- id: DRAFT-054
-  category: methodology
-  question: What concrete query against surveillance.db answers 'EvalContext initialization
-    API for testing' with verifiable address-level evidence (score >= 2 on the Q-004
-    verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-021
-  transformation: decomposition
-- id: DRAFT-055
-  category: adversarial
-  question: If an attacker knew that 'evalcontext initialization api for testing'
-    could fail in the way observed in UNK-021, how would they engineer a high-leverage
-    exploitation of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-021: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-021
-  transformation: adversarial_inversion
-- id: DRAFT-056
-  category: behavior
-  question: For 'EvalContext initialization API for testing', what is the time window
-    after which leaving the question unresolved produces material risk? Set a decay
-    clock on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-021
-  transformation: temporal_upgrade
-- id: DRAFT-057
-  category: methodology
-  question: What concrete query against surveillance.db answers 'OLI cache behavior
-    on Blockscout outage' with verifiable address-level evidence (score >= 2 on the
-    Q-004 verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-022
-  transformation: decomposition
-- id: DRAFT-058
-  category: adversarial
-  question: If an attacker knew that 'guardrail' could fail in the way observed in
-    UNK-022, how would they engineer a high-leverage exploitation of that failure
-    mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-022: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-022
-  transformation: adversarial_inversion
-- id: DRAFT-059
-  category: behavior
-  question: For 'OLI cache behavior on Blockscout outage', what is the time window
-    after which leaving the question unresolved produces material risk? Set a decay
-    clock on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-022
-  transformation: temporal_upgrade
-- id: DRAFT-060
-  category: methodology
-  question: What concrete query against surveillance.db answers 'Should LOW-severity
-    OLI tags also gate certain typologies?' with verifiable address-level evidence
-    (score >= 2 on the Q-004 verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-023
-  transformation: decomposition
-- id: DRAFT-061
-  category: adversarial
-  question: If an attacker knew that 'guardrail' could fail in the way observed in
-    UNK-023, how would they engineer a high-leverage exploitation of that failure
-    mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-023: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-023
-  transformation: adversarial_inversion
-- id: DRAFT-062
-  category: behavior
-  question: For 'Should LOW-severity OLI tags also gate certain typologies?', what
-    is the time window after which leaving the question unresolved produces material
-    risk? Set a decay clock on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-023
-  transformation: temporal_upgrade
-- id: DRAFT-063
-  category: methodology
-  question: What concrete query against surveillance.db answers 'Bytecode classification
-    of Apr-25 Optimism mass-deploy templates `0x476b1553` and `0xc3314989`' with verifiable
-    address-level evidence (score >= 2 on the Q-004 verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-025
-  transformation: decomposition
-- id: DRAFT-064
-  category: adversarial
-  question: If an attacker knew that 'bytecode classification of apr-25 optimism mass-de'
-    could fail in the way observed in UNK-025, how would they engineer a high-leverage
-    exploitation of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-025: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-025
-  transformation: adversarial_inversion
-- id: DRAFT-065
-  category: behavior
-  question: For 'Bytecode classification of Apr-25 Optimism mass-deploy templates
-    `0x476b1553` and `0xc3314989`', what is the time window after which leaving the
-    question unresolved produces material risk? Set a decay clock on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-025
-  transformation: temporal_upgrade
-- id: DRAFT-066
-  category: methodology
-  question: What concrete query against surveillance.db answers 'Does `approval_watchlist`
-    filter out confirmed-tier contracts?' with verifiable address-level evidence (score
-    >= 2 on the Q-004 verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-026
-  transformation: decomposition
-- id: DRAFT-067
-  category: adversarial
-  question: If an attacker knew that 'watchlist coverage gap' could fail in the way
-    observed in UNK-026, how would they engineer a high-leverage exploitation of that
-    failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-026: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-026
-  transformation: adversarial_inversion
-- id: DRAFT-068
-  category: behavior
-  question: For 'Does `approval_watchlist` filter out confirmed-tier contracts?',
-    what is the time window after which leaving the question unresolved produces material
-    risk? Set a decay clock on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-026
-  transformation: temporal_upgrade
-- id: DRAFT-069
-  category: methodology
-  question: What concrete query against surveillance.db answers 'Identity of `0xb0b0b690`
-    referenced in prior session memory as "Apr-25 vanity-funder mass-fund operator"'
-    with verifiable address-level evidence (score >= 2 on the Q-004 verifiability
-    scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-027
-  transformation: decomposition
-- id: DRAFT-070
-  category: adversarial
-  question: If an attacker knew that 'identity of `0xb0b0b690` referenced in prior
-    sessi' could fail in the way observed in UNK-027, how would they engineer a high-leverage
-    exploitation of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-027: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-027
-  transformation: adversarial_inversion
-- id: DRAFT-071
-  category: behavior
-  question: For 'Identity of `0xb0b0b690` referenced in prior session memory as "Apr-25
-    vanity-funder mass-fund operator"', what is the time window after which leaving
-    the question unresolved produces material risk? Set a decay clock on the OPEN
-    status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-027
-  transformation: temporal_upgrade
-- id: DRAFT-072
-  category: methodology
-  question: What concrete query against surveillance.db answers 'INDEX.md "May-5 =
-    iter_8 spawn day" claim vs zero iter_8-traceable contracts on May-5' with verifiable
-    address-level evidence (score >= 2 on the Q-004 verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-028
-  transformation: decomposition
-- id: DRAFT-073
-  category: adversarial
-  question: If an attacker knew that 'index.md "may-5 = iter_8 spawn day" claim vs
-    zero ' could fail in the way observed in UNK-028, how would they engineer a high-leverage
-    exploitation of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-028: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-028
-  transformation: adversarial_inversion
-- id: DRAFT-074
-  category: behavior
-  question: For 'INDEX.md "May-5 = iter_8 spawn day" claim vs zero iter_8-traceable
-    contracts on May-5', what is the time window after which leaving the question
-    unresolved produces material risk? Set a decay clock on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-028
-  transformation: temporal_upgrade
-- id: DRAFT-075
-  category: methodology
-  question: What concrete query against surveillance.db answers 'THORChain (2026-05-15)
-    exploit mechanism for Attack 11/9/10/15 mapping' with verifiable address-level
-    evidence (score >= 2 on the Q-004 verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-029
-  transformation: decomposition
-- id: DRAFT-076
-  category: adversarial
-  question: If an attacker knew that 'thorchain (2026-05-15) exploit mechanism for
-    attac' could fail in the way observed in UNK-029, how would they engineer a high-leverage
-    exploitation of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-029: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-029
-  transformation: adversarial_inversion
-- id: DRAFT-077
-  category: behavior
-  question: For 'THORChain (2026-05-15) exploit mechanism for Attack 11/9/10/15 mapping',
-    what is the time window after which leaving the question unresolved produces material
-    risk? Set a decay clock on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-029
-  transformation: temporal_upgrade
-- id: DRAFT-078
-  category: methodology
-  question: What concrete query against surveillance.db answers 'What caused the May-5
-    confirmed-trap re-classification pulse (53.8% backfill)?' with verifiable address-level
-    evidence (score >= 2 on the Q-004 verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-030
-  transformation: decomposition
-- id: DRAFT-079
-  category: adversarial
-  question: If an attacker knew that 'what caused the may-5 confirmed-trap re-classifica'
-    could fail in the way observed in UNK-030, how would they engineer a high-leverage
-    exploitation of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-030: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-030
-  transformation: adversarial_inversion
-- id: DRAFT-080
-  category: behavior
-  question: For 'What caused the May-5 confirmed-trap re-classification pulse (53.8%
-    backfill)?', what is the time window after which leaving the question unresolved
-    produces material risk? Set a decay clock on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-030
-  transformation: temporal_upgrade
-- id: DRAFT-081
-  category: methodology
-  question: What concrete query against surveillance.db answers 'Is `0x80b12bd0` actually
-    Animoca, or is the OLI tag a false-positive?' with verifiable address-level evidence
-    (score >= 2 on the Q-004 verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-031
-  transformation: decomposition
-- id: DRAFT-082
-  category: adversarial
-  question: If an attacker knew that 'guardrail' could fail in the way observed in
-    UNK-031, how would they engineer a high-leverage exploitation of that failure
-    mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-031: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-031
-  transformation: adversarial_inversion
-- id: DRAFT-083
-  category: behavior
-  question: For 'Is `0x80b12bd0` actually Animoca, or is the OLI tag a false-positive?',
-    what is the time window after which leaving the question unresolved produces material
-    risk? Set a decay clock on the OPEN status.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-031
-  transformation: temporal_upgrade
-- id: DRAFT-084
-  category: methodology
-  question: What concrete query against surveillance.db answers 'Should 34 May-9..15
-    drain-caller addresses be added to watchlist en masse?' with verifiable address-level
-    evidence (score >= 2 on the Q-004 verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-032
-  transformation: decomposition
-- id: DRAFT-085
-  category: adversarial
-  question: If an attacker knew that 'watchlist coverage gap' could fail in the way
-    observed in UNK-032, how would they engineer a high-leverage exploitation of that
-    failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-032: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-032
-  transformation: adversarial_inversion
-- id: DRAFT-086
-  category: behavior
-  question: For the event class observed in 'Should 34 May-9..15 drain-caller addresses
-    be added to watchlist en masse?', what is the minimum lead time T such that the
-    corresponding leading indicator fires with confidence > 0.5? Construct the time-to-trigger
-    distribution across all corpus instances.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade: from ''will it fail'' to ''how many minutes
-      / hours before the event is it detectable.'''
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-032
-  transformation: temporal_upgrade
-- id: DRAFT-087
-  category: methodology
-  question: What concrete query against surveillance.db answers 'Does EXTRACTION_010
-    (mass dormant-wallet drain hub) fit v3 Attack 11 or warrant a new sub-category?'
-    with verifiable address-level evidence (score >= 2 on the Q-004 verifiability
-    scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-033
-  transformation: decomposition
-- id: DRAFT-088
-  category: adversarial
-  question: If an attacker knew that 'does extraction_010 (mass dormant-wallet drain
-    hub' could fail in the way observed in UNK-033, how would they engineer a high-leverage
-    exploitation of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-033: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-033
-  transformation: adversarial_inversion
-- id: DRAFT-089
-  category: behavior
-  question: For the event class observed in 'Does EXTRACTION_010 (mass dormant-wallet
-    drain hub) fit v3 Attack 11 or warrant a new sub-category?', what is the minimum
-    lead time T such that the corresponding leading indicator fires with confidence
-    > 0.5? Construct the time-to-trigger distribution across all corpus instances.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade: from ''will it fail'' to ''how many minutes
-      / hours before the event is it detectable.'''
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-033
-  transformation: temporal_upgrade
-- id: DRAFT-090
-  category: methodology
-  question: What concrete query against surveillance.db answers 'Why does `0x752c5a95`
-    continue receiving approvals after its May-9 drain discharge?' with verifiable
-    address-level evidence (score >= 2 on the Q-004 verifiability scale)?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-034
-  transformation: decomposition
-- id: DRAFT-091
-  category: adversarial
-  question: If an attacker knew that 'why does `0x752c5a95` continue receiving approvals'
-    could fail in the way observed in UNK-034, how would they engineer a high-leverage
-    exploitation of that failure mode? What downstream systems become vulnerable?
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-034: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-034
-  transformation: adversarial_inversion
-- id: DRAFT-092
-  category: behavior
-  question: For the event class observed in 'Why does `0x752c5a95` continue receiving
-    approvals after its May-9 drain discharge?', what is the minimum lead time T such
-    that the corresponding leading indicator fires with confidence > 0.5? Construct
-    the time-to-trigger distribution across all corpus instances.
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade: from ''will it fail'' to ''how many minutes
-      / hours before the event is it detectable.'''
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-034
-  transformation: temporal_upgrade
-- id: DRAFT-093
-  category: methodology
-  question: 'What concrete query against surveillance.db answers ''Chain-distribution
-    skew: Attack 1 on Base vs Attack 11 multi-chain'' with verifiable address-level
-    evidence (score >= 2 on the Q-004 verifiability scale)?'
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: Decomposition of an OPEN unknown into a corpus-verifiable query
-      plan.
-  score:
-    predictive_power: 2
-    actionability: 4
-    uniqueness: 3
-    failure_reduction: 4
-  status: draft
-  origin: question_generator/decompose/unknown_open
-  derived_from: UNK-035
-  transformation: decomposition
-- id: DRAFT-094
-  category: adversarial
-  question: 'If an attacker knew that ''chain-distribution skew: attack 1 on base
-    vs attac'' could fail in the way observed in UNK-035, how would they engineer
-    a high-leverage exploitation of that failure mode? What downstream systems become
-    vulnerable?'
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Adversarial inversion of UNK-035: convert defender''s surprise
-      into attacker''s playbook.'
-  score:
-    predictive_power: 3
-    actionability: 2
-    uniqueness: 5
-    failure_reduction: 5
-  status: draft
-  origin: question_generator/invert/unknown_open
-  derived_from: UNK-035
-  transformation: adversarial_inversion
-- id: DRAFT-095
-  category: behavior
-  question: 'For ''Chain-distribution skew: Attack 1 on Base vs Attack 11 multi-chain'',
-    what is the time window after which leaving the question unresolved produces material
-    risk? Set a decay clock on the OPEN status.'
-  depends_on:
-    signals: []
-    models: []
-  produces:
-    decision_output: 'Temporal upgrade of an open unknown: forces a deadline.'
-  score:
-    predictive_power: 4
-    actionability: 4
-    uniqueness: 4
-    failure_reduction: 3
-  status: draft
-  origin: question_generator/temporal/unknown_open
-  derived_from: UNK-035
-  transformation: temporal_upgrade
-- id: DRAFT-096
   category: adversarial
   question: 'If an attacker knew that ''q-003 alert: stale on 0xa2a01b4a68575280a2de45178e''
     could fail in the way observed in Q-003_2026-05-17T02:08:24Z_0xa2a01b4a68575280a2de45178e289da717bedb6f,
@@ -1925,7 +301,77 @@ drafts:
   origin: question_generator/invert/sai_alert
   derived_from: Q-003_2026-05-17T02:08:24Z_0xa2a01b4a68575280a2de45178e289da717bedb6f
   transformation: adversarial_inversion
-- id: DRAFT-097
+- id: DRAFT-014
+  category: pricing
+  question: "For alert Q-003_2026-05-17T02:08:24Z_0xa2a01b4a68575280a2de45178e289da717bedb6f:\
+    \ what additional signal \u2014 independent of OLI temporal-validity verdict \u2014\
+    \ would have fired BEFORE this detector did? Specifically: at what hour mark of\
+    \ the trailing 72h could a complementary detector have surfaced the same subject\
+    \ with confidence > 0.5?"
+  depends_on:
+    signals: []
+    models: []
+  produces:
+    decision_output: "Earlier-detection upgrade: turns a fired Q-003 alert into the\
+      \ research question 'what would have caught this even sooner?' \u2014 each successful\
+      \ detection should produce its own next-generation complementary detector candidate."
+  score:
+    predictive_power: 4
+    actionability: 4
+    uniqueness: 4
+    failure_reduction: 4
+  status: draft
+  origin: question_generator/alert_earlier/Q-003
+  derived_from: Q-003_2026-05-17T02:08:24Z_0xa2a01b4a68575280a2de45178e289da717bedb6f
+  transformation: alert_earlier_detection
+- id: DRAFT-015
+  category: structural
+  question: Alert Q-003_2026-05-17T02:08:24Z_0xa2a01b4a68575280a2de45178e289da717bedb6f
+    fired. How many other OLI-tagged addresses share the staleness signal pattern
+    but have not been alerted because they're missing one or more of the 7 staleness
+    signals? Treat the fired alert as evidence of a larger latent cohort that the
+    detector's current threshold has not yet surfaced.
+  depends_on:
+    signals: []
+    models: []
+  produces:
+    decision_output: 'Structural-gap framing: a fired alert is one positive in a distribution.
+      The next question is how the cohort containing the alert is distributed in the
+      corpus, and where its left tail sits under our current threshold.'
+  score:
+    predictive_power: 3
+    actionability: 5
+    uniqueness: 4
+    failure_reduction: 4
+  status: draft
+  origin: question_generator/alert_gap/Q-003
+  derived_from: Q-003_2026-05-17T02:08:24Z_0xa2a01b4a68575280a2de45178e289da717bedb6f
+  transformation: alert_structural_gap
+- id: DRAFT-016
+  category: methodology
+  question: Alert Q-003_2026-05-17T02:08:24Z_0xa2a01b4a68575280a2de45178e289da717bedb6f
+    produced a flag. What additional payload fields (external attestation method (which
+    OLI submitter can confirm current control proof), expected institution-side disclosure
+    timeline) would transform the alert from a notification into a complete action
+    ticket?
+  depends_on:
+    signals: []
+    models: []
+  produces:
+    decision_output: 'Actionable-resolution upgrade: turns ''something is wrong''
+      alerts into ''here is what to do'' alerts. Each detector''s payload should carry
+      enough structured context to drive a downstream decision without re-querying
+      the corpus.'
+  score:
+    predictive_power: 2
+    actionability: 5
+    uniqueness: 3
+    failure_reduction: 3
+  status: draft
+  origin: question_generator/alert_actionable/Q-003
+  derived_from: Q-003_2026-05-17T02:08:24Z_0xa2a01b4a68575280a2de45178e289da717bedb6f
+  transformation: alert_actionable_resolution
+- id: DRAFT-017
   category: adversarial
   question: 'If an attacker knew that ''q-003 alert: stale on 0x80b12bd0f1793bf6cea767fa83''
     could fail in the way observed in Q-003_2026-05-17T02:08:24Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8,
@@ -1946,7 +392,77 @@ drafts:
   origin: question_generator/invert/sai_alert
   derived_from: Q-003_2026-05-17T02:08:24Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8
   transformation: adversarial_inversion
-- id: DRAFT-098
+- id: DRAFT-018
+  category: pricing
+  question: "For alert Q-003_2026-05-17T02:08:24Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8:\
+    \ what additional signal \u2014 independent of OLI temporal-validity verdict \u2014\
+    \ would have fired BEFORE this detector did? Specifically: at what hour mark of\
+    \ the trailing 72h could a complementary detector have surfaced the same subject\
+    \ with confidence > 0.5?"
+  depends_on:
+    signals: []
+    models: []
+  produces:
+    decision_output: "Earlier-detection upgrade: turns a fired Q-003 alert into the\
+      \ research question 'what would have caught this even sooner?' \u2014 each successful\
+      \ detection should produce its own next-generation complementary detector candidate."
+  score:
+    predictive_power: 4
+    actionability: 4
+    uniqueness: 4
+    failure_reduction: 4
+  status: draft
+  origin: question_generator/alert_earlier/Q-003
+  derived_from: Q-003_2026-05-17T02:08:24Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8
+  transformation: alert_earlier_detection
+- id: DRAFT-019
+  category: structural
+  question: Alert Q-003_2026-05-17T02:08:24Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8
+    fired. How many other OLI-tagged addresses share the staleness signal pattern
+    but have not been alerted because they're missing one or more of the 7 staleness
+    signals? Treat the fired alert as evidence of a larger latent cohort that the
+    detector's current threshold has not yet surfaced.
+  depends_on:
+    signals: []
+    models: []
+  produces:
+    decision_output: 'Structural-gap framing: a fired alert is one positive in a distribution.
+      The next question is how the cohort containing the alert is distributed in the
+      corpus, and where its left tail sits under our current threshold.'
+  score:
+    predictive_power: 3
+    actionability: 5
+    uniqueness: 4
+    failure_reduction: 4
+  status: draft
+  origin: question_generator/alert_gap/Q-003
+  derived_from: Q-003_2026-05-17T02:08:24Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8
+  transformation: alert_structural_gap
+- id: DRAFT-020
+  category: methodology
+  question: Alert Q-003_2026-05-17T02:08:24Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8
+    produced a flag. What additional payload fields (external attestation method (which
+    OLI submitter can confirm current control proof), expected institution-side disclosure
+    timeline) would transform the alert from a notification into a complete action
+    ticket?
+  depends_on:
+    signals: []
+    models: []
+  produces:
+    decision_output: 'Actionable-resolution upgrade: turns ''something is wrong''
+      alerts into ''here is what to do'' alerts. Each detector''s payload should carry
+      enough structured context to drive a downstream decision without re-querying
+      the corpus.'
+  score:
+    predictive_power: 2
+    actionability: 5
+    uniqueness: 3
+    failure_reduction: 3
+  status: draft
+  origin: question_generator/alert_actionable/Q-003
+  derived_from: Q-003_2026-05-17T02:08:24Z_0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8
+  transformation: alert_actionable_resolution
+- id: DRAFT-021
   category: adversarial
   question: 'If an attacker knew that ''q-003 alert: stale on 0x147b8869655bc09f226955cc67''
     could fail in the way observed in Q-003_2026-05-17T02:08:24Z_0x147b8869655bc09f226955cc676ff78efe240ca8,
@@ -1967,7 +483,77 @@ drafts:
   origin: question_generator/invert/sai_alert
   derived_from: Q-003_2026-05-17T02:08:24Z_0x147b8869655bc09f226955cc676ff78efe240ca8
   transformation: adversarial_inversion
-- id: DRAFT-099
+- id: DRAFT-022
+  category: pricing
+  question: "For alert Q-003_2026-05-17T02:08:24Z_0x147b8869655bc09f226955cc676ff78efe240ca8:\
+    \ what additional signal \u2014 independent of OLI temporal-validity verdict \u2014\
+    \ would have fired BEFORE this detector did? Specifically: at what hour mark of\
+    \ the trailing 72h could a complementary detector have surfaced the same subject\
+    \ with confidence > 0.5?"
+  depends_on:
+    signals: []
+    models: []
+  produces:
+    decision_output: "Earlier-detection upgrade: turns a fired Q-003 alert into the\
+      \ research question 'what would have caught this even sooner?' \u2014 each successful\
+      \ detection should produce its own next-generation complementary detector candidate."
+  score:
+    predictive_power: 4
+    actionability: 4
+    uniqueness: 4
+    failure_reduction: 4
+  status: draft
+  origin: question_generator/alert_earlier/Q-003
+  derived_from: Q-003_2026-05-17T02:08:24Z_0x147b8869655bc09f226955cc676ff78efe240ca8
+  transformation: alert_earlier_detection
+- id: DRAFT-023
+  category: structural
+  question: Alert Q-003_2026-05-17T02:08:24Z_0x147b8869655bc09f226955cc676ff78efe240ca8
+    fired. How many other OLI-tagged addresses share the staleness signal pattern
+    but have not been alerted because they're missing one or more of the 7 staleness
+    signals? Treat the fired alert as evidence of a larger latent cohort that the
+    detector's current threshold has not yet surfaced.
+  depends_on:
+    signals: []
+    models: []
+  produces:
+    decision_output: 'Structural-gap framing: a fired alert is one positive in a distribution.
+      The next question is how the cohort containing the alert is distributed in the
+      corpus, and where its left tail sits under our current threshold.'
+  score:
+    predictive_power: 3
+    actionability: 5
+    uniqueness: 4
+    failure_reduction: 4
+  status: draft
+  origin: question_generator/alert_gap/Q-003
+  derived_from: Q-003_2026-05-17T02:08:24Z_0x147b8869655bc09f226955cc676ff78efe240ca8
+  transformation: alert_structural_gap
+- id: DRAFT-024
+  category: methodology
+  question: Alert Q-003_2026-05-17T02:08:24Z_0x147b8869655bc09f226955cc676ff78efe240ca8
+    produced a flag. What additional payload fields (external attestation method (which
+    OLI submitter can confirm current control proof), expected institution-side disclosure
+    timeline) would transform the alert from a notification into a complete action
+    ticket?
+  depends_on:
+    signals: []
+    models: []
+  produces:
+    decision_output: 'Actionable-resolution upgrade: turns ''something is wrong''
+      alerts into ''here is what to do'' alerts. Each detector''s payload should carry
+      enough structured context to drive a downstream decision without re-querying
+      the corpus.'
+  score:
+    predictive_power: 2
+    actionability: 5
+    uniqueness: 3
+    failure_reduction: 3
+  status: draft
+  origin: question_generator/alert_actionable/Q-003
+  derived_from: Q-003_2026-05-17T02:08:24Z_0x147b8869655bc09f226955cc676ff78efe240ca8
+  transformation: alert_actionable_resolution
+- id: DRAFT-025
   category: adversarial
   question: 'If an attacker knew that ''q-002 alert: t1_imminent on 0x752c5a95d202972e1243''
     could fail in the way observed in Q-002_2026-05-17T02:08:13Z_0x752c5a95d202972e124390f30a50154409d3c858,
@@ -1988,3 +574,72 @@ drafts:
   origin: question_generator/invert/sai_alert
   derived_from: Q-002_2026-05-17T02:08:13Z_0x752c5a95d202972e124390f30a50154409d3c858
   transformation: adversarial_inversion
+- id: DRAFT-026
+  category: pricing
+  question: "For alert Q-002_2026-05-17T02:08:13Z_0x752c5a95d202972e124390f30a50154409d3c858:\
+    \ what additional signal \u2014 independent of approval-rate Z-score on the bait\
+    \ contract \u2014 would have fired BEFORE this detector did? Specifically: at\
+    \ what hour mark of the trailing 72h could a complementary detector have surfaced\
+    \ the same subject with confidence > 0.5?"
+  depends_on:
+    signals: []
+    models: []
+  produces:
+    decision_output: "Earlier-detection upgrade: turns a fired Q-002 alert into the\
+      \ research question 'what would have caught this even sooner?' \u2014 each successful\
+      \ detection should produce its own next-generation complementary detector candidate."
+  score:
+    predictive_power: 4
+    actionability: 4
+    uniqueness: 4
+    failure_reduction: 4
+  status: draft
+  origin: question_generator/alert_earlier/Q-002
+  derived_from: Q-002_2026-05-17T02:08:13Z_0x752c5a95d202972e124390f30a50154409d3c858
+  transformation: alert_earlier_detection
+- id: DRAFT-027
+  category: structural
+  question: Alert Q-002_2026-05-17T02:08:13Z_0x752c5a95d202972e124390f30a50154409d3c858
+    fired. How many other watchlisted bait contracts are in their accumulation phase
+    with > 1,000 lifetime approvals but no recent Z-spike? Treat the fired alert as
+    evidence of a larger latent cohort that the detector's current threshold has not
+    yet surfaced.
+  depends_on:
+    signals: []
+    models: []
+  produces:
+    decision_output: 'Structural-gap framing: a fired alert is one positive in a distribution.
+      The next question is how the cohort containing the alert is distributed in the
+      corpus, and where its left tail sits under our current threshold.'
+  score:
+    predictive_power: 3
+    actionability: 5
+    uniqueness: 4
+    failure_reduction: 4
+  status: draft
+  origin: question_generator/alert_gap/Q-002
+  derived_from: Q-002_2026-05-17T02:08:13Z_0x752c5a95d202972e124390f30a50154409d3c858
+  transformation: alert_structural_gap
+- id: DRAFT-028
+  category: methodology
+  question: Alert Q-002_2026-05-17T02:08:13Z_0x752c5a95d202972e124390f30a50154409d3c858
+    produced a flag. What additional payload fields (estimated time-to-discharge,
+    USD-at-stake estimate, count of victim addresses approved-but-not-yet-drained)
+    would transform the alert from a notification into a complete action ticket?
+  depends_on:
+    signals: []
+    models: []
+  produces:
+    decision_output: 'Actionable-resolution upgrade: turns ''something is wrong''
+      alerts into ''here is what to do'' alerts. Each detector''s payload should carry
+      enough structured context to drive a downstream decision without re-querying
+      the corpus.'
+  score:
+    predictive_power: 2
+    actionability: 5
+    uniqueness: 3
+    failure_reduction: 3
+  status: draft
+  origin: question_generator/alert_actionable/Q-002
+  derived_from: Q-002_2026-05-17T02:08:13Z_0x752c5a95d202972e124390f30a50154409d3c858
+  transformation: alert_actionable_resolution

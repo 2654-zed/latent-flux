@@ -481,3 +481,97 @@ def test_question_generator_produces_drafts_end_to_end():
     assert len(drafts) >= len(all_failures), (
         f"expected >= {len(all_failures)} drafts; got {len(drafts)}"
     )
+
+
+# ============================================================
+# Alert-aware transformation tests (added 2026-05-17)
+# Closes the meta-SURPRISE where sai_alerts produced only 1 draft each.
+# ============================================================
+
+from surveillance.sai.question_generator import (  # noqa: E402
+    transform_alert_earlier_detection,
+    transform_alert_structural_gap,
+    transform_alert_actionable_resolution,
+    _detector_id_from_alert,
+)
+
+
+def _sai_alert_failure(detector_id: str = "Q-003") -> FailureEvent:
+    return FailureEvent(
+        source="sai_alert",
+        source_id=f"{detector_id}_2026-05-17T22:26:26Z_0xabc",
+        title=f"{detector_id} alert: STALE on 0xabc",
+    )
+
+
+def test_detector_id_extraction():
+    """_detector_id_from_alert extracts 'Q-003' from the source_id."""
+    f = _sai_alert_failure("Q-003")
+    assert _detector_id_from_alert(f) == "Q-003"
+    # Non-sai-alert failure returns None
+    f_journal = FailureEvent(source="journal_surprise", source_id="j1", title="x")
+    assert _detector_id_from_alert(f_journal) is None
+
+
+def test_alert_earlier_detection_fires_only_on_sai_alert():
+    f_journal = FailureEvent(source="journal_surprise", source_id="j1", title="x")
+    assert transform_alert_earlier_detection(f_journal) is None
+    f_alert = _sai_alert_failure()
+    q = transform_alert_earlier_detection(f_alert)
+    assert q is not None
+    assert q.transformation == "alert_earlier_detection"
+    assert "additional signal" in q.question
+
+
+def test_alert_structural_gap_fires_only_on_sai_alert():
+    f_journal = FailureEvent(source="unknown_open", source_id="u1", title="x")
+    assert transform_alert_structural_gap(f_journal) is None
+    f_alert = _sai_alert_failure("Q-002")
+    q = transform_alert_structural_gap(f_alert)
+    assert q is not None
+    assert "accumulation phase" in q.question  # Q-002-specific framing
+
+
+def test_alert_actionable_resolution_per_detector_specific():
+    """Each detector gets a different actionable-resolution framing."""
+    qs = {}
+    for det in ("Q-002", "Q-003", "Q-005", "Q-009"):
+        f = _sai_alert_failure(det)
+        q = transform_alert_actionable_resolution(f)
+        assert q is not None
+        qs[det] = q.question
+    # Specificity check: at least three of the questions differ in detail
+    distinct_phrases = {
+        "Q-002": "USD-at-stake",
+        "Q-003": "external attestation",
+        "Q-005": "cross-chain coordination event",
+        "Q-009": "second-hop",
+    }
+    for det, phrase in distinct_phrases.items():
+        assert phrase in qs[det], (
+            f"Q-{det}'s actionable_resolution missing the detector-specific "
+            f"phrase '{phrase}'; got: {qs[det]}"
+        )
+
+
+def test_sai_alert_produces_four_drafts_after_patch():
+    """The meta-SURPRISE closure: each sai_alert now produces 4 candidates,
+    not 1.
+
+    Before 2026-05-17 patch: only adversarial_inversion fired (the prose
+    transformations did not match machine-generated alert titles).
+    After patch: adversarial_inversion + 3 alert-aware transformations.
+    """
+    f = _sai_alert_failure()
+    drafts = generate_for_failure(f)
+    assert len(drafts) == 4, (
+        f"expected 4 candidates per sai_alert (1 prose + 3 alert-aware); "
+        f"got {len(drafts)}"
+    )
+    transformations = {d.transformation for d in drafts}
+    assert transformations == {
+        "adversarial_inversion",
+        "alert_earlier_detection",
+        "alert_structural_gap",
+        "alert_actionable_resolution",
+    }

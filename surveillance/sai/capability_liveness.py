@@ -58,7 +58,7 @@ CAPABILITIES: list[tuple[str, str, int, str]] = [
         "regime_monitor",
         "Bayesian changepoint detection on 6 daily signals; writes regime_alerts",
         24 * 7,  # 1 week
-        "SELECT MAX(scanned_at) FROM regime_alerts",
+        "SELECT MAX(detected_at) FROM regime_alerts",
     ),
     (
         "deployment_monitor",
@@ -84,7 +84,7 @@ CAPABILITIES: list[tuple[str, str, int, str]] = [
         24,  # 1 day
         # If regime_alerts table is empty, the prod worker isn't running it.
         # When wired, this should always have a recent row.
-        "SELECT MAX(scanned_at) FROM regime_alerts WHERE scanned_at >= datetime('now', '-1 day')",
+        "SELECT MAX(detected_at) FROM regime_alerts WHERE detected_at >= datetime('now', '-1 day')",
     ),
 ]
 

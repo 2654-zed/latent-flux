@@ -329,10 +329,200 @@ def transform_temporal_upgrade(failure: FailureEvent) -> DraftQuestion | None:
     )
 
 
+def _detector_id_from_alert(failure: FailureEvent) -> str | None:
+    """Extract the detector id (e.g., 'Q-002') from an sai_alert source_id."""
+    if failure.source != "sai_alert":
+        return None
+    # source_id format: f"{detector}_{ts}_{subject}", e.g. "Q-003_2026-05-17T...."
+    parts = failure.source_id.split("_", 1)
+    return parts[0] if parts and parts[0].startswith("Q-") else None
+
+
+# ============================================================
+# Alert-specific transformations (added 2026-05-17)
+# ============================================================
+#
+# The prose-tuned transformations (decompose / adversarial_invert /
+# temporal_upgrade) over-fit JOURNAL.md SURPRISE blocks and OPEN
+# UNKnowns: they look for keywords ("risk", "fail", "discharge", "drain",
+# "spike") in the title. Machine-generated alert titles like
+# "Q-003 alert: STALE on 0x..." don't contain those keywords, so the
+# pre-existing transformations produce only adversarial_inversion on
+# every sai_alert. Documented as the 2026-05-17 SURPRISE block in
+# JOURNAL.md.
+#
+# These three alert-specific transformations close that gap. Each
+# converts a fired-alert into a forward-looking research question that
+# would either (a) make the detector fire earlier next time, (b) reveal
+# the structural gap exposed by the alert, or (c) make resolution
+# actionable per-alert.
+
+
+def transform_alert_earlier_detection(failure: FailureEvent) -> DraftQuestion | None:
+    """For each alert, what new signal would have fired earlier than the
+    current detector?"""
+    detector = _detector_id_from_alert(failure)
+    if detector is None:
+        return None
+    # Per-detector framing (each has a different "earlier" question)
+    detector_specific = {
+        "Q-002": "approval-rate Z-score on the bait contract",
+        "Q-003": "OLI temporal-validity verdict",
+        "Q-005": "cross-chain choreography signal",
+        "Q-009": "funding-chain ancestor resolution",
+    }.get(detector, "this detector")
+    question = (
+        f"For alert {failure.source_id}: what additional signal — independent "
+        f"of {detector_specific} — would have fired BEFORE this detector did? "
+        f"Specifically: at what hour mark of the trailing 72h could a "
+        f"complementary detector have surfaced the same subject with confidence "
+        f"> 0.5?"
+    )
+    rationale = (
+        f"Earlier-detection upgrade: turns a fired {detector} alert into the "
+        f"research question 'what would have caught this even sooner?' — "
+        f"each successful detection should produce its own next-generation "
+        f"complementary detector candidate."
+    )
+    return DraftQuestion(
+        derived_from=failure.source_id,
+        transformation="alert_earlier_detection",
+        category="pricing",
+        question=question,
+        rationale=rationale,
+        estimated_score={
+            "predictive_power": 4,
+            "actionability": 4,
+            "uniqueness": 4,
+            "failure_reduction": 4,
+        },
+        origin=f"question_generator/alert_earlier/{detector}",
+    )
+
+
+def transform_alert_structural_gap(failure: FailureEvent) -> DraftQuestion | None:
+    """For each alert, what surveillance structural gap does this expose?"""
+    detector = _detector_id_from_alert(failure)
+    if detector is None:
+        return None
+    # The structural gap question reframes the alert as a downstream-coverage
+    # question instead of a per-subject question.
+    gap_specific = {
+        "Q-002": (
+            "How many other watchlisted bait contracts are in their accumulation "
+            "phase with > 1,000 lifetime approvals but no recent Z-spike?"
+        ),
+        "Q-003": (
+            "How many other OLI-tagged addresses share the staleness signal "
+            "pattern but have not been alerted because they're missing one "
+            "or more of the 7 staleness signals?"
+        ),
+        "Q-005": (
+            "How many other deployers have multi-chain bytecode-family "
+            "presence without yet showing the Pattern D temporal-gap signal?"
+        ),
+        "Q-009": (
+            "How many other recent drain_callers fail to resolve to a known "
+            "ancestor in the same window, and what funding pattern do they "
+            "share that this alert's drainer did not have?"
+        ),
+    }.get(detector, "what coverage gap is downstream of this alert?")
+    question = (
+        f"Alert {failure.source_id} fired. {gap_specific} Treat the fired "
+        f"alert as evidence of a larger latent cohort that the detector's "
+        f"current threshold has not yet surfaced."
+    )
+    rationale = (
+        "Structural-gap framing: a fired alert is one positive in a "
+        "distribution. The next question is how the cohort containing the "
+        "alert is distributed in the corpus, and where its left tail sits "
+        "under our current threshold."
+    )
+    return DraftQuestion(
+        derived_from=failure.source_id,
+        transformation="alert_structural_gap",
+        category="structural",
+        question=question,
+        rationale=rationale,
+        estimated_score={
+            "predictive_power": 3,
+            "actionability": 5,
+            "uniqueness": 4,
+            "failure_reduction": 4,
+        },
+        origin=f"question_generator/alert_gap/{detector}",
+    )
+
+
+def transform_alert_actionable_resolution(failure: FailureEvent) -> DraftQuestion | None:
+    """For each alert, what specific data per alert would make the
+    resolution actionable (rather than just a flag)?"""
+    detector = _detector_id_from_alert(failure)
+    if detector is None:
+        return None
+    resolution_specific = {
+        "Q-002": (
+            "estimated time-to-discharge, USD-at-stake estimate, count of "
+            "victim addresses approved-but-not-yet-drained"
+        ),
+        "Q-003": (
+            "external attestation method (which OLI submitter can confirm "
+            "current control proof), expected institution-side disclosure timeline"
+        ),
+        "Q-005": (
+            "concrete cross-chain coordination event (specific tx hashes "
+            "evidencing same-EOA activity on other chains in the window)"
+        ),
+        "Q-009": (
+            "second-hop and third-hop funder identities, cluster membership "
+            "of the resolved ancestor"
+        ),
+    }.get(detector, "structured fields that close the alert")
+    question = (
+        f"Alert {failure.source_id} produced a flag. What additional "
+        f"payload fields ({resolution_specific}) would transform the alert "
+        f"from a notification into a complete action ticket?"
+    )
+    rationale = (
+        "Actionable-resolution upgrade: turns 'something is wrong' alerts "
+        "into 'here is what to do' alerts. Each detector's payload should "
+        "carry enough structured context to drive a downstream decision "
+        "without re-querying the corpus."
+    )
+    return DraftQuestion(
+        derived_from=failure.source_id,
+        transformation="alert_actionable_resolution",
+        category="methodology",
+        question=question,
+        rationale=rationale,
+        estimated_score={
+            "predictive_power": 2,
+            "actionability": 5,
+            "uniqueness": 3,
+            "failure_reduction": 3,
+        },
+        origin=f"question_generator/alert_actionable/{detector}",
+    )
+
+
 def generate_for_failure(failure: FailureEvent) -> list[DraftQuestion]:
-    """Apply all three transformations. Returns 0-3 candidate questions."""
+    """Apply all transformations. Returns 0-6 candidate questions.
+
+    Three "prose" transformations apply to JOURNAL surprises and UNK
+    entries. Three "alert-aware" transformations apply to sai_alert
+    failures. The split is necessary because alert titles are
+    machine-generated and don't trigger the prose keyword matches.
+    """
     out = []
-    for fn in (transform_decompose, transform_adversarial_invert, transform_temporal_upgrade):
+    for fn in (
+        transform_decompose,
+        transform_adversarial_invert,
+        transform_temporal_upgrade,
+        # Alert-aware transformations
+        transform_alert_earlier_detection,
+        transform_alert_structural_gap,
+        transform_alert_actionable_resolution,
+    ):
         q = fn(failure)
         if q is not None:
             out.append(q)
