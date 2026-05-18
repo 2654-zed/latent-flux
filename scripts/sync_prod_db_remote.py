@@ -7,31 +7,60 @@ the file. sha256 re-emits READY without re-running prepare.
 Compact form (kept under ~6 KB so its base64 fits the Windows cmd.exe 8191
 char arg limit when wrapped by `python3 -c "exec(base64.b64decode('...'))"`).
 
-2026-05-17: prepare() now emits periodic stderr heartbeats during the long
-backup() + gzip phases. Without them, Railway's WebSocket idle-timeout
-kills the SSH session after ~5 min — diagnosed when a 12 GB DB sync failed
-at the 5.8-min mark with rc=1.
+2026-05-17 (v2): prepare() emits heartbeats from a daemon thread so the
+WebSocket stays alive. v1 of the fix used sqlite3 progress callback in
+pages=10000 batched mode — but each batch is a separate transaction, and
+contention with the live deployment_monitor's WAL writer killed the
+session at 76s. v2 reverts to single-transaction `backup()` (which
+worked in ~3 min historically) and runs heartbeats from a background
+thread that emits regardless of what the main thread is doing.
 """
-import base64, gzip, hashlib, os, sqlite3, sys, tempfile, time
+import base64, gzip, hashlib, os, sqlite3, sys, tempfile, threading, time
 
 P = "/app/surveillance/data/surveillance.db"
 G = "/tmp/l3sync_snapshot.db.gz"
 MS = "===L3SYNC_PAYLOAD_START==="
 ME = "===L3SYNC_PAYLOAD_END==="
 B = 48 * 1024
-# Heartbeat cadence: emit stderr line every N seconds during long ops to
-# defeat Railway's WebSocket idle-timeout (~5 min observed empirically).
-HB_SEC = 30
+HB_SEC = 30  # Heartbeat cadence — under Railway's idle timeout.
+
+
+class Heartbeat:
+    """Background thread that emits a stderr line every HB_SEC seconds.
+
+    Used to keep the SSH WebSocket alive during long operations that
+    don't naturally emit stderr (sqlite3 backup, hashlib digest).
+    """
+    def __init__(self, label):
+        self.label = label
+        self.stop_ev = threading.Event()
+        self.t = threading.Thread(target=self._run, daemon=True)
+
+    def __enter__(self):
+        self.t.start()
+        return self
+
+    def __exit__(self, *a):
+        self.stop_ev.set()
+        self.t.join(timeout=2)
+
+    def _run(self):
+        t0 = time.time()
+        while not self.stop_ev.wait(HB_SEC):
+            sys.stderr.write(f"hb {self.label}: {int(time.time() - t0)}s\n")
+            sys.stderr.flush()
 
 
 def _sha(path):
+    """SHA256 of file with bounded memory + periodic stderr heartbeat."""
     h = hashlib.sha256()
-    with open(path, "rb") as f:
-        while True:
-            c = f.read(1024 * 1024)
-            if not c:
-                break
-            h.update(c)
+    with Heartbeat("sha"):
+        with open(path, "rb") as f:
+            while True:
+                c = f.read(1024 * 1024)
+                if not c:
+                    break
+                h.update(c)
     return h.hexdigest()
 
 
@@ -46,63 +75,30 @@ def prepare():
     fd.close()
     s = sqlite3.connect(P)
     d = sqlite3.connect(bp)
-
-    # Backup with progress callback throttled to HB_SEC for keepalive.
-    # pages=10000 makes the callback fire every 10K-page batch; the
-    # callback further throttles to time-based intervals.
-    _last_hb = [time.time()]
-    def _backup_hb(status, remaining, total):
-        now = time.time()
-        if now - _last_hb[0] >= HB_SEC:
-            done = total - remaining
-            sys.stderr.write(f"backup_hb: {done}/{total} pages "
-                             f"({100 * done // max(total, 1)}%)\n")
-            sys.stderr.flush()
-            _last_hb[0] = now
-    s.backup(d, pages=10000, progress=_backup_hb)
+    # Single-transaction backup — fastest path, no WAL contention with the
+    # production deployment_monitor's writer. Background heartbeat thread
+    # keeps the SSH alive.
+    with Heartbeat("backup"):
+        s.backup(d)
     d.close()
     s.close()
     bs = os.path.getsize(bp)
     sys.stderr.write(f"backup: {bs} bytes\n")
     sys.stderr.flush()
 
-    # Gzip with heartbeat every HB_SEC of wall-clock time.
-    _hb = time.time()
-    written = 0
-    with open(bp, "rb") as fi, gzip.open(G, "wb", compresslevel=6) as fo:
-        while True:
-            c = fi.read(1024 * 1024)
-            if not c:
-                break
-            fo.write(c)
-            written += len(c)
-            if time.time() - _hb >= HB_SEC:
-                sys.stderr.write(f"gzip_hb: {written}/{bs} bytes "
-                                 f"({100 * written // max(bs, 1)}%)\n")
-                sys.stderr.flush()
-                _hb = time.time()
+    with Heartbeat("gzip"):
+        with open(bp, "rb") as fi, gzip.open(G, "wb", compresslevel=6) as fo:
+            while True:
+                c = fi.read(1024 * 1024)
+                if not c:
+                    break
+                fo.write(c)
     os.unlink(bp)
     gs = os.path.getsize(G)
     sys.stderr.write(f"gzip: {gs} bytes ({gs * 100 // bs}% of raw)\n")
     sys.stderr.flush()
 
-    # sha256 with heartbeat per HB_SEC for large gz files.
-    _hb = time.time()
-    read = 0
-    h = hashlib.sha256()
-    with open(G, "rb") as f:
-        while True:
-            c = f.read(1024 * 1024)
-            if not c:
-                break
-            h.update(c)
-            read += len(c)
-            if time.time() - _hb >= HB_SEC:
-                sys.stderr.write(f"sha_hb: {read}/{gs} bytes "
-                                 f"({100 * read // max(gs, 1)}%)\n")
-                sys.stderr.flush()
-                _hb = time.time()
-    digest = h.hexdigest()
+    digest = _sha(G)
     sys.stderr.write(f"sha256: {digest}\n")
     sys.stderr.flush()
     sys.stdout.write(f"READY:{gs}:{digest}\n")
