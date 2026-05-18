@@ -1702,6 +1702,110 @@ NEXT TARGETS (revised):
 - Fix the Phase 1 sync prepare failure (separate effort; probably needs to suppress sqlite3 progress callbacks during backup)
 - Reunify web/app.py and run_surveillance.py HTTP surfaces (separate session)
 
+---
+
+### 2026-05-18 — Sync v4.1 lands after 5-version diagnostic chain + production analysis fresh
+
+After four failed sync attempts in the same session, v4.1 landed cleanly end-to-end. Fresh corpus pulled through 2026-05-18T03:42Z (hours ago). The May 9-15 drain wave is over — drains dropped from ~530/day at peak to 1-4/day in the last 3 days.
+
+#### The 5-version diagnostic chain (a methodology case study)
+
+| Version | Architecture | Failed at | What it ruled out |
+|---|---|---|---|
+| v1 (pre-2026-05-15) | Single SSH call: backup + gzip + sha256 + READY | 348s mid-gzip | Initial assumption: idle timeout (wrong) |
+| v2 (commit 2e77599) | sqlite3 progress callback in pages=10000 batched mode | **76s** | Batched backup = multiple transactions; WAL contention with prod writer made it WORSE |
+| v3 (commit 493e8db) | Single-transaction backup + thread heartbeats (every 30s) | 240s mid-gzip | Heartbeats fired throughout → eliminated idle-timeout hypothesis. Wall-clock cap is real. |
+| v4.0 (commit a7af54b) | Detached prepare via double-fork + setsid + poll status | 95s — daemon got wiped | Pushing code commits to deployed branch triggered Railway redeploy mid-sync; /tmp wiped |
+| **v4.1 (commit bb5dbf6)** | + STATUS-line parsing (railway ssh's rc doesn't propagate remote's) + deploy-wipe detection | **succeeded** | The session-duration cap is on SSH sessions, not on the work. Detach the work, return SSH immediately. |
+
+**Total time across all attempts**: ~6 sessions of work spread across ~3 hours of test cycles. The final architecture has individual SSH calls capped at <60 seconds and a daemon process on the container that runs decoupled.
+
+**The non-obvious lessons (each lesson came from a different version's failure):**
+
+1. **v1 → v2 reframe:** "Add heartbeats" sounds correct but the wrong implementation (`pages=10000`) introduces a NEW failure mode (WAL contention) that masks the original (wall-clock cap).
+2. **v2 → v3 reframe:** Heartbeats DO work (Railway delivers them through the WebSocket). Idle isn't the bottleneck.
+3. **v3 → v4 reframe:** If keepalive doesn't help, the cap is on session duration, not session activity. Detach the work.
+4. **v4.0 → v4.1 reframe:** Detaching works mechanically. The failure mode shifted to *operational* (don't push code during sync — it triggers redeploys that wipe `/tmp`).
+5. **The bonus debugging cost:** `railway ssh`'s wrapper exit code is NOT the remote process's rc. Parse stdout, never trust the rc.
+
+#### The fresh-data picture
+
+Corpus state (2026-05-15 sync → 2026-05-18 sync):
+
+| Metric | 2026-05-15 | **2026-05-18** | Δ |
+|---|---|---|---|
+| Total contracts | 321,578 | **327,064** | +5,486 (+1,830/day) |
+| Total deployers | 73,818 | **75,114** | +1,296 (+432/day) |
+| Total drains (lifetime) | ~11,150 | **11,850** | +~700 |
+| Latest contract | 2026-05-15T23:47Z | **2026-05-18T03:42Z** | 2.7-day freshness |
+| Local DB size | 10.8 GB | **11.0 GB** | +200 MB |
+| gz size | 3.28 GB | **3.35 GB** | +70 MB |
+
+**The drain-wave timeline (key finding):**
+
+```
+2026-05-09  6,294 drains  ← peak (the 0x80b12bd0 / 0x752c5a95 mass-discharge)
+2026-05-10     11
+2026-05-11    548  ← secondary wave
+2026-05-12    140
+2026-05-13    362
+2026-05-14    531
+2026-05-15     13
+2026-05-16      4  ← wave essentially over
+2026-05-17      2
+2026-05-18      1  (latest data, partial day)
+```
+
+The May 9-15 drain wave had **two distinct phases**:
+- Phase 1 (May 9): single 4,587-victim discharge by `0x80b12bd0` operator, executed by two coordinated drain cells in 30 minutes
+- Phase 2 (May 11-14): smaller cyclic wave (deploy-and-drain-same-day pattern, multi-operator), ~500/day average
+
+Then collapse. May 16-18 totals 7 drains across 5 distinct drainers — back to noise-floor baseline.
+
+**Three explanations are consistent with the collapse:**
+1. **Victim pool saturation**: the new approval baits exhausted available targets in the bot pool
+2. **Operator retirement**: the 6 OLI-tagged HIGH-severity funders identified by Q-009 may have wound down operations
+3. **Coordination signal**: an off-chain event (CEX action, security firm public disclosure, blockaid alert) made operators cautious
+
+Q-002 confirms no T1_IMMINENT discharge in the fresh window — the system would have caught a 0x80b12bd0-scale discharge if one had happened on May 16/17/18. The absence is the signal.
+
+#### SAI detector output on fresh corpus (post-re-baseline)
+
+| Detector | Severity | Count | Notes |
+|---|---|---|---|
+| Q-002 | T1_IMMINENT | 1 (historical) | Still just the May-9 case; 0 fresh alerts on May-17/18 |
+| Q-003 | STALE | 6 | Doubled since last run (two timestamps × 3 addresses); same addresses incl 0x80b12bd0 |
+| Q-003 | NEEDS_VERIFICATION | 12 | Same pattern, two timestamps |
+| Q-005 | T2_MULTI_CHAIN_DEPLOY | 9 | Higher than prod-via-API showed (was 5); the fresh-corpus auto_funder_tracer caught up on new cross-chain operators |
+| Q-005 | T3_PATTERN_D | 8 | Higher than prod showed (was 7); same dynamic |
+| Q-009 | RESOLVED_VIA_OLI | 16 | Same 8 unique drainers + 2 timestamps |
+| Q-009 | RESOLVED_VIA_WATCHLIST | 6 | Same |
+| **Total** | | **57** | (was 55 / prod was 32 — fresh corpus has more for Q-005) |
+
+#### Tier-A finding: the corpus growth captured cross-chain deployers that production hasn't yet enriched
+
+Q-005 went from 12 alerts to 17 alerts (5 T2 + 7 T3 on production → 9 T2 + 8 T3 locally) — because the 2026-05-15→2026-05-18 corpus growth added new deployers whose Pattern D / multi-chain signatures haven't yet been re-evaluated on production's scheduled tick (which runs daily 07:15 UTC). Production will catch up on the next 07:15 tick (~24h from now).
+
+This means: **the analysis-quality gap between session-time and production-time has narrowed but isn't zero.** Production runs detectors against its live DB on a fixed schedule; session runs against a sync-snapshot. For Q-002 (which is sensitive to today's data) the gap is meaningful. For Q-003 (which is OLI-binary) the gap is zero. For Q-005/Q-009 the gap is N-day lag in the corpus enrichment.
+
+#### What this session delivered (4 commits)
+
+| Commit | What |
+|---|---|
+| `2e77599` | v2: sqlite3 progress callback (later proven WRONG — caused WAL contention) |
+| `493e8db` | v3: thread heartbeats (proved heartbeats work but session-duration cap exists) |
+| `a7af54b` | v4.0: detached daemon (architecture correct, mid-sync redeploy wiped it) |
+| `bb5dbf6` | v4.1: STATUS-line parsing + deploy-wipe detection (worked) |
+
+The pattern of "ship → fail → diagnose → ship next iteration" is exactly what the SAI loop is designed for. Each failed sync was a SURPRISE in the LOOP.md sense. The next session's `question_generator --from-journal` pass will pull these out and produce candidate questions like "What other operations in our codebase rely on long-running SSH sessions that we haven't yet refactored?"
+
+#### Next-session priorities
+
+1. **Run the sync v4.1 in production-scheduled mode** — currently the local script calls it; a Railway ANALYSIS_JOBS entry could run it nightly via the detached pattern, except the SSH context doesn't apply since the worker IS the container. Architectural review needed.
+2. **`web/app.py` ↔ `run_surveillance.py` HTTP-handler reunification** — the `/api/sai/*` routes now exist in both files. FastAPI vs BaseHTTPRequestHandler is two surfaces to maintain.
+3. **Drain-wave post-mortem**: investigate WHY the wave stopped on May 15. Q-005 might surface the answer if any of the 17 cross-chain operators shifted behavior.
+4. **Bytecode classification** of the May-9 0x80b12bd0 bait (UNK-025 from earlier session) — still open.
+
 ### LOOP.md 7-step reflection pass (Phase C, mandatory)
 
 This session: action-mode with three major work blocks (sync v2 already reflected above in 2026-05-15 prior entry; Phase A surveillance investigation; POTENTIAL_ATTACKS_V3.md). Loop runs over Phase A + v3 only since sync-v2 was already integrated into the prior entry.
