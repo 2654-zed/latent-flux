@@ -5,3 +5,4 @@ web3>=7.0
 aiohttp>=3.9
 websockets>=12.0
 networkx>=3.0
+pyyaml>=6.0

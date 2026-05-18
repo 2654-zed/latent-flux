@@ -822,18 +822,18 @@ class StatsHandler(BaseHTTPRequestHandler):
             # SAI alert surface — production read endpoint for sai_alerts table.
             # Mirror of the FastAPI handler in web/app.py since web/app.py is
             # not deployed; this is the prod-side read path.
-            parsed = urllib.parse.urlparse(self.path)
-            params = urllib.parse.parse_qs(parsed.query)
-            detector = params.get("detector", [""])[0]
-            severity = params.get("severity", [""])[0]
-            since = params.get("since", [""])[0]
-            subject = params.get("subject", [""])[0]
             try:
-                limit = int(params.get("limit", ["100"])[0])
-            except ValueError:
-                limit = 100
-            limit = max(1, min(limit, 500))
-            try:
+                parsed = urllib.parse.urlparse(self.path)
+                params = urllib.parse.parse_qs(parsed.query)
+                detector = params.get("detector", [""])[0]
+                severity = params.get("severity", [""])[0]
+                since = params.get("since", [""])[0]
+                subject = params.get("subject", [""])[0]
+                try:
+                    limit = int(params.get("limit", ["100"])[0])
+                except ValueError:
+                    limit = 100
+                limit = max(1, min(limit, 500))
                 con = _ro_connect()
                 cur = con.cursor()
                 where = []
@@ -866,7 +866,7 @@ class StatsHandler(BaseHTTPRequestHandler):
                 for r in rows:
                     try:
                         payload = json.loads(r[5]) if r[5] else None
-                    except (json.JSONDecodeError, TypeError):
+                    except (json.JSONDecodeError, TypeError, ValueError):
                         payload = None
                     alerts.append({
                         "detected_at": r[0], "detector": r[1], "severity": r[2],
@@ -878,6 +878,15 @@ class StatsHandler(BaseHTTPRequestHandler):
                 self._json(200, {
                     "alerts": [], "count": 0,
                     "note": f"sai_alerts table not yet populated: {e}",
+                })
+            except Exception as e:  # noqa: BLE001
+                # Loud failure — prod gateway returned 502 silently before this
+                # broad catch was added (2026-05-17). Now surfaces the actual
+                # exception type and message so the bug can be diagnosed
+                # without ssh-ing into the worker.
+                self._json(500, {
+                    "alerts": [], "count": 0,
+                    "error": f"{type(e).__name__}: {e}",
                 })
 
         elif self.path == "/api/sai/alerts/summary":
