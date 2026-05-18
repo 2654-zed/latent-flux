@@ -281,6 +281,11 @@ def run(args: argparse.Namespace) -> int:
         # ---- PHASE 1b: poll status until READY ----
         # Each poll is a short SSH call (well under Railway's session cap).
         # The actual prepare runs decoupled in the daemon process.
+        #
+        # NOTE: railway ssh's exit code is the SSH wrapper's own rc, not
+        # the remote process's. So we parse the STATUS line from stdout
+        # rather than relying on the rc. The remote emits exactly one
+        # STATUS:<verdict> line per status call.
         sys.stderr.write(
             "[sync] phase 1b: polling for READY (typical: 6-8 min for 12 GB)\n"
         )
@@ -288,6 +293,9 @@ def run(args: argparse.Namespace) -> int:
         poll_max_wait = 30 * 60  # 30 min total cap
         t0 = time.time()
         stdout_bytes = b""
+        # Track whether we've seen RUNNING; a transition to NO_PREPARE after
+        # RUNNING means the container was wiped (deploy / crash). Bail.
+        seen_running = False
         while True:
             elapsed = time.time() - t0
             if elapsed > poll_max_wait:
@@ -304,18 +312,36 @@ def run(args: argparse.Namespace) -> int:
                 time.sleep(poll_interval)
                 continue
             out_text = s_out.decode("utf-8", errors="replace")
-            # Emit progress to caller stderr (status lines + tail of log)
             for line in out_text.splitlines():
                 if line.startswith("STATUS:") or line.startswith("  LOG:"):
                     sys.stderr.write(f"[sync]   t={elapsed:>5.0f}s  {line}\n")
-            if s_rc == 0:
-                # READY:size:sha — pass through to the existing parser
-                stdout_bytes = s_out
+            # Find the canonical STATUS:<verdict> line
+            verdict = ""
+            for line in out_text.splitlines():
+                if line.startswith("STATUS:"):
+                    verdict = line[len("STATUS:"):].strip()
+                    break
+            if verdict.startswith("READY:"):
+                # Build a stdout_bytes containing the READY line for downstream parser
+                stdout_bytes = (verdict + "\n").encode()
                 break
-            if s_rc == 2:
-                sys.stderr.write(f"[sync] phase 1b: ERROR from container\n{out_text}\n")
+            if verdict.startswith("ERROR:"):
+                sys.stderr.write(f"[sync] phase 1b: prepare ERROR: {verdict}\n")
                 return 5
-            # s_rc == 3 (still running) — sleep and poll again
+            if verdict == "NO_PREPARE":
+                if seen_running:
+                    sys.stderr.write(
+                        f"[sync] phase 1b: status file vanished after RUNNING.\n"
+                        f"[sync] Likely cause: Railway redeployed the container "
+                        f"and wiped /tmp.\n"
+                        f"[sync] Retry the sync (without pushing commits during it).\n"
+                    )
+                    return 5
+                # First call before daemon wrote initial RUNNING — unusual but tolerable
+                sys.stderr.write(f"[sync] phase 1b: NO_PREPARE at t={elapsed:.0f}s (waiting for daemon to write status)\n")
+            elif verdict == "RUNNING":
+                seen_running = True
+            # else: empty / unparseable — log and continue
             time.sleep(poll_interval)
         sys.stderr.write(f"[sync] phase 1b: READY received after {time.time()-t0:.0f}s\n")
 
