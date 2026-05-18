@@ -255,21 +255,69 @@ def run(args: argparse.Namespace) -> int:
             )
             return 5
     else:
-        sys.stderr.write("[sync] phase 1: preparing snapshot (backup + gzip on container)...\n")
-        cmd = build_ssh_cmd(railway_exe, ["prepare"], script_b64)
-        t0 = time.time()
+        # ---- PHASE 1a: start prepare in detached background on container ----
+        # Decoupled from SSH session lifetime — Railway has a wall-clock cap
+        # (~4 min observed) on single SSH sessions that single-call prepare
+        # cannot satisfy for a 12 GB DB. Background fork + poll instead.
+        sys.stderr.write("[sync] phase 1a: starting detached prepare on container...\n")
+        cmd = build_ssh_cmd(railway_exe, ["start"], script_b64)
         try:
-            rc, stdout_bytes, stderr_blob = run_ssh(cmd, timeout=2400)  # 40 min cap
+            rc, stdout_bytes, stderr_blob = run_ssh(cmd, timeout=60)
         except subprocess.TimeoutExpired:
-            sys.stderr.write("[sync] phase 1: TIMED OUT (>40 min). Aborting.\n")
+            sys.stderr.write("[sync] phase 1a: start command timed out (>60s)\n")
             return 5
-        sys.stderr.write(f"[sync] phase 1: done in {time.time()-t0:.1f}s\n")
         if rc != 0:
             sys.stderr.write(
-                f"[sync] phase 1 failed (rc={rc}). stderr (tail):\n{stderr_blob[-2000:]}\n"
-                f"[sync] stdout (tail): {stdout_bytes[-500:]!r}\n"
+                f"[sync] phase 1a failed (rc={rc}). stderr:\n{stderr_blob[-1500:]}\n"
+                f"[sync] stdout: {stdout_bytes[-500:]!r}\n"
             )
             return 5
+        out = stdout_bytes.decode("utf-8", errors="replace")
+        if "STARTED" not in out and "ALREADY_READY" not in out:
+            sys.stderr.write(f"[sync] phase 1a: unexpected response: {out!r}\n")
+            return 5
+        sys.stderr.write("[sync] phase 1a: prepare started.\n")
+
+        # ---- PHASE 1b: poll status until READY ----
+        # Each poll is a short SSH call (well under Railway's session cap).
+        # The actual prepare runs decoupled in the daemon process.
+        sys.stderr.write(
+            "[sync] phase 1b: polling for READY (typical: 6-8 min for 12 GB)\n"
+        )
+        poll_interval = 30
+        poll_max_wait = 30 * 60  # 30 min total cap
+        t0 = time.time()
+        stdout_bytes = b""
+        while True:
+            elapsed = time.time() - t0
+            if elapsed > poll_max_wait:
+                sys.stderr.write(
+                    f"[sync] phase 1b: timed out after {elapsed:.0f}s "
+                    f"waiting for READY\n"
+                )
+                return 5
+            cmd_stat = build_ssh_cmd(railway_exe, ["status"], script_b64)
+            try:
+                s_rc, s_out, s_err = run_ssh(cmd_stat, timeout=60)
+            except subprocess.TimeoutExpired:
+                sys.stderr.write(f"[sync] phase 1b: status poll timed out at t={elapsed:.0f}s; retrying\n")
+                time.sleep(poll_interval)
+                continue
+            out_text = s_out.decode("utf-8", errors="replace")
+            # Emit progress to caller stderr (status lines + tail of log)
+            for line in out_text.splitlines():
+                if line.startswith("STATUS:") or line.startswith("  LOG:"):
+                    sys.stderr.write(f"[sync]   t={elapsed:>5.0f}s  {line}\n")
+            if s_rc == 0:
+                # READY:size:sha — pass through to the existing parser
+                stdout_bytes = s_out
+                break
+            if s_rc == 2:
+                sys.stderr.write(f"[sync] phase 1b: ERROR from container\n{out_text}\n")
+                return 5
+            # s_rc == 3 (still running) — sleep and poll again
+            time.sleep(poll_interval)
+        sys.stderr.write(f"[sync] phase 1b: READY received after {time.time()-t0:.0f}s\n")
 
     try:
         gz_size, expected_sha = parse_ready_line(stdout_bytes)
