@@ -2101,4 +2101,62 @@ The 2026-05-09 approval_events_per_day=6,446 alert (new in this session's re-sca
 
 ---
 
+### 2026-05-18 (supplement) — 0xa27bba42 pre-discharge added to watchlist (local + prod)
+
+Following the fresh-suspected review on the 2026-05-18 sync, surfaced and added the most actionable candidate to the watchlist on both local and production:
+
+**`0xa27bba42e0e1d3db503cf0d3be39f23db64781a3`** (Base, deployed 2026-05-17T17:17Z):
+- **264 approvals from 264 victims in the first 7 hours**
+- 122 approvals in hour 1 alone — automated bot-rush at deploy
+- **SELFDESTRUCT in bytecode** — Tier B "deferred threat ELEVATED" per classifier
+- Pristine solo operator: 1 contract total
+- L2-native (no mainnet identity) — different from 0x80b12bd0's institutional cover
+- No traceable funder (auto_funder_tracer empty or AA-sponsored)
+- Unique bytecode `f6c6aa16...`; no sibling contracts
+
+**Watchlist additions (both local and prod):**
+
+| id | address | type | entity_name | priority |
+|---|---|---|---|---|
+| 114 | `0x7bf3269c608f09bd8c1eaff34f2f210d467bd8f2` | deployer | `pristine_solo_operator_pre_discharge_a27bba42` | HIGH |
+| 115 | `0xa27bba42e0e1d3db503cf0d3be39f23db64781a3` | contract | `pre_discharge_bait_a27bba42` | HIGH |
+
+The deployer entry is the load-bearing one: Q-002 filters its candidate set by `JOIN watchlist w ON w.address = c.deployer_address AND w.active = 1`. Adding the deployer makes 0xa27bba42 surveilled automatically. Production runs Q-002 4×/day at 06:30 / 12:30 / 18:30 / 23:30 UTC.
+
+**Surveillance posture:** Q-002 will fire `T1_IMMINENT` if approval-rate Z exceeds 10 vs the 14-day trailing baseline. The contract currently has 1 day of data (264 approvals on May-17, ~0 since), so the baseline is forming. If a new wave hits, Z≥10 fires fast. If the discharge happens without a new approval burst (drain on the existing 264 victims), Q-002 won't fire — but the drain lands in approval_watchlist with drain_detected=1 and triggers downstream signals.
+
+**Why this matters operationally:** if 0xa27bba42 discharges in the next few days, this is the **first time Layer 3 surveils a pre-discharge candidate prospectively via the SAI substrate**, not retrospectively. The 15-day pre-drain warning on 0x80b12bd0 was found in retrospective analysis; this is forward-looking.
+
+**Two candidate discharge profiles to watch:**
+- Slow Pattern A (like 0x80b12bd0): another ~50/day for ~6 weeks, then 30-min mass-discharge by drain cells
+- Fast deploy-and-drain cycle (like May 11-14 wave): discharge within days of deploy, single-operator
+
+The L2-native + 7-hour bot-rush + SELFDESTRUCT signature favors the fast profile.
+
+**Other findings from the fresh-suspected review (deferred follow-ups):**
+- `0x3304e22d` (infrastructure_scale_drainer_spawn_hub, HIGH watchlist) is still actively spawning — funded 4 new deployers since May-15 producing 61 new contracts on Base. **Operator did not retire; paused discharge while continuing to build stored potential.**
+- `0xf70da978` (org_001_whale, HIGH watchlist) funded `0x7e063b84` for 23 new contracts on **Arbitrum** — cross-chain expansion of org_001 from the prior Base-only footprint.
+- `0xbaed383e` (potential_org_004, HIGH watchlist) funded `0x09145576` for 11 new contracts on Base.
+- Bytecode hash `37b1ec84...` produced **605 contracts via just 2 deployers** since May-15 — mass-deploy signature at template-level.
+- Bytecode hash `286d497d...` produced **116 contracts from 116 different deployers** — one-per-deployer pristine pattern at scale (AA wallet factory or coordinated trap fleet; bytecode classification pending).
+- Bytecode hash `11ad12e7...` produced **401 contracts from 4 deployers** — similar concentration to 37b1ec84.
+
+**The structural picture:** drain VOLUME collapsed May 16-18 (~530/day peak → 1-4/day), but deployment INFRASTRUCTURE did NOT. The 6 OLI-tagged HIGH-severity funders Q-009 identified are still operating. Operators paused discharge while continuing to build stored potential — consistent with hypothesis #2 (re-staging) from the prior session's brief.
+
+**Files:**
+- `scripts/add_a27bba42_watchlist.py` — idempotent script (local + `--prod` flag); both deployer (id=114) + bait (id=115) entries now active on local and prod
+- `scripts/fresh_suspected_review.py` — the analysis that surfaced the candidate
+
+**Verification:**
+```
+Q-002 candidate set including 0xa27bba42:
+  YES: 0xa27bba42  chain=base  watchlist="pristine_solo_operator_pre_discharge_a27bba42" (HIGH)  tier=suspected
+
+PROD watchlist verification (rc=0):
+(114, '0x7bf3269c...', 'pristine_solo_operator_pre_discharge_a27bba42', 'HIGH')
+(115, '0xa27bba42...', 'pre_discharge_bait_a27bba42', 'HIGH')
+```
+
+---
+
 *End of file. Append new sessions above this footer.*
