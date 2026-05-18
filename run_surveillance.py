@@ -822,6 +822,15 @@ class StatsHandler(BaseHTTPRequestHandler):
             # SAI alert surface — production read endpoint for sai_alerts table.
             # Mirror of the FastAPI handler in web/app.py since web/app.py is
             # not deployed; this is the prod-side read path.
+            #
+            # NOTE: import urllib.parse inside this branch matches the pattern
+            # used by other route blocks (543, 556, 671, 716, 759). Skipping
+            # it makes `urllib` a function-local name throughout do_GET (due
+            # to Python's scope rules: any assignment ANYWHERE in a function
+            # makes the name local for the entire function), which then
+            # raises UnboundLocalError on the first attempted use.
+            # This was the root cause of the 2026-05-17 502s.
+            import urllib.parse
             try:
                 parsed = urllib.parse.urlparse(self.path)
                 params = urllib.parse.parse_qs(parsed.query)
