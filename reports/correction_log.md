@@ -1019,6 +1019,176 @@ All 14+4 mismatches share the same root cause (no OLI/public-label cross-check i
 
 ---
 
+## Correction #21 — Pattern D Direction Reversal: Cross-Chain Reputation Import Has the Opposite Signature From What the Lexicon Claimed
+
+**Date:** 2026-05-19
+**Discovery method:** Three independent statistical analyses run as part of the SAI inferential layer build-out (`surveillance/analytics/` series, sessions 2026-05-18 / 2026-05-19).
+**Severity:** HIGH — Pattern D is one of six load-bearing primitives in the Behavioral Laundering framework; reversing its directional framing requires correcting external materials and re-orienting Q-005's pattern_d_gap scoring.
+
+**Claim (what was asserted in the lexicon entry):**
+
+The Pattern D — Cross-Chain Reputation Import entry stated (verbatim):
+
+> "A deployer appears on Arbitrum or Optimism for the first time with no prior activity in our corpus, but the SAME address has substantial history on Ethereum mainnet or Base. Per-chain profiling sees a fresh-to-L2 deployer; cross-chain view reveals a long-standing identity that may have pivoted from legitimate activity to trap deployment."
+
+And the quantitative anchor:
+
+> "**Result: 54 of 100 high-risk L2 deployers had mainnet first-tx predating L2 first-seen. The strongest-supported pattern of the six.**"
+
+The directional claim was that *long* mainnet vintage was the predator signature — predators were using aged cover identities. The 54% number was cited as corpus-wide.
+
+**Reality (what the data now shows):**
+
+Three analyses run against the 2026-05-18 corpus snapshot (commit `e120ddd` survival, `e6ecc7c` Cox PH, `6d2f881` KS test) produced converging findings:
+
+1. **Cox PH multi-covariate model (commit `e6ecc7c`):** `mainnet_l2_gap_days` had β = -0.005, SE = 0.023, p = 0.82. Has no hazard effect once chain + tier + funder are controlled. The gap-as-timing-predictor framing fails.
+
+2. **KS Test A (commit `6d2f881`, predator vs control by tier):** D = 0.2098, p = 6.59×10⁻⁷². Reject H₀ but in the **opposite** direction from the lexicon framing:
+   - Predator group 10th percentile gap: **12.8 days** (mass of recently-bridged deployers)
+   - Control group 10th percentile gap: 85.2 days
+   - P(gap > 60 days): predator 78.6%, control 92.4% (control is HIGHER)
+
+3. **KS Test B (commit `6d2f881`, drained vs flagged-quiet):** D = 0.3645, p = 0.0124. Reject H₀ with even sharper directional reversal:
+   - Drained-set median gap: **53.6 days**
+   - Flagged-quiet median gap: 644.3 days
+   - The drained predators are 12× MORE recently bridged than flagged-but-quiet ones.
+
+4. **"54/100" cross-check:** corpus-wide refresh shows **28.1%** of all 9,567 high-risk deployers have mainnet predating L2 (not 54%). Only 28.8% of high-risk deployers have `mainnet_first_tx` populated at all — the original 54% was measured against the top-100 manually-curated cohort, which had been intentionally selected for mainnet enrichment.
+
+**Discovery (how it was caught):**
+
+The 2026-05-18 statistical research-program design asked which lexicon primitives were inferentially testable. The Cox PH model run on 2026-05-19 surfaced the null-effect on `mainnet_l2_gap_days` as anomalous (p=0.82 was the second-highest p-value in the full covariate table, behind only `has_mainnet_history`). The follow-up KS test was run to determine whether the distributional difference at the lexicon level was real or also null; the rejection of H₀ in the *opposite* direction crystallized the correction.
+
+**Numerical effect on headline statistics:**
+
+| Claim location | Old (retired) form | Corrected form |
+|---|---|---|
+| Lexicon Pattern D Empirical grounding | "54 of 100 high-risk L2 deployers had mainnet first-tx predating L2" | **28.1% of all 9,567 corpus-wide high-risk deployers have mainnet predating L2.** The 54% figure was the top-100 curated cohort rate — not corpus-general — and conflated the two populations. |
+| Lexicon Pattern D directional framing | Long mainnet vintage = adversarial cover identity | **Reversed.** Drained-completing predators have median bridge gap 53.6 days, not the ~1,000+ days the lexicon implied. Long-vintage deployers are over-represented in the *flagged-quiet* (non-drain-completing) group. |
+| Behavioral Laundering: "Pattern D is the strongest validated" | "Pattern D is the strongest validated" | **Refines.** Pattern D is the most distributionally distinct (lowest p-value of any KS test we've run), but the distributional difference points the opposite direction from the original framing AND the hazard effect is null (Cox p=0.82). The "strongest validated" claim referred to *correlation* with high-risk status, not *prediction* of drain hazard. Those are different claims. |
+| Q-005 cross-chain choreography detector | `pattern_d_gap` signal awards points proportional to gap size | **Direction may need to invert.** Currently larger gap → higher score. KS Test B says smaller gap (recent bridging) is the drain-completion signature. Tracked as separate engineering work; the inferential finding lands here. |
+
+**Fix:**
+- This correction-log entry (#21) — 2026-05-19, commit pending
+- Lexicon `Pattern D` entry updated with a 2026-05-19 revision section pointing here
+- Lexicon `Behavioral Laundering` entry "Pattern D is the strongest validated" line annotated with same revision
+- `CORRECTIONS.md` Quick Retirement Index entry added for the 54% number
+- Q-005 detector status: flagged for future re-engineering; the current `pattern_d_gap` score remains in place pending the directional inversion build
+
+**Open work:**
+- Re-engineer Q-005's `pattern_d_gap` signal: either invert direction (short-gap = high score) or replace with a "bridge recency" primitive based on the Test B finding.
+- Improve `auto_funder_tracer` mainnet-enrichment coverage: only 28.8% of high-risk deployers currently have `mainnet_first_tx` populated. This data-completeness gap means many predator deployers can't be evaluated against Pattern D at all.
+- Update external materials (decks, briefs) that cite the 54% number to disambiguate cohort vs corpus-wide. The propagation watchlist below should include any deck/report that still references the original phrasing.
+
+**Why this matters epistemically (the meta-finding):**
+
+This is the first correction in the log where the methodology that surfaced the error was statistical inference, not source verification. Corrections #1–#20 were caught by re-querying primary sources, finding stale caches, or discovering missing labels. Correction #21 was caught by running a hypothesis test against a claim that *was* sourced correctly at the time but did not hold up under multivariate control + distributional testing.
+
+This is exactly the failure mode the SAI / inferential-layer build-out was designed to surface. Quantitative claims about population-level adversarial behavior require distributional and hazard-level tests, not point-estimates from curated cohorts. The lexicon should now expect every Pattern entry to carry a 95%-CI-style framing rather than a single-number anchor.
+
+**Propagation watch-list (add to the top-of-file table):**
+
+| Claim | Still appears in | Required cleanup |
+|---|---|---|
+| "54/100 high-risk L2 deployers had mainnet predating L2" (corpus-wide framing) | `docs/lexicon.md` Pattern D entry; `docs/lexicon.md` Behavioral Laundering entry; `reports/cross_chain_import_candidates.md`; potentially `l3-narrative/` decks | Replace with "28.1% corpus-wide" and disambiguate from the top-100 cohort. |
+| "Long mainnet vintage = adversarial cover identity" (Pattern D directional framing) | `docs/lexicon.md` Pattern D entry; possibly `surveillance/analytics/cross_chain_choreography.py` pattern_d_gap scoring | Replace with bidirectional language; explicit note that the drain-completing predator has *recent* bridge gap. |
+| Q-005 pattern_d_gap detector scoring | `surveillance/analytics/cross_chain_choreography.py` | Engineering follow-up to invert direction or replace with recency-based primitive. |
+
+---
+
+## Correction #22 — Camouflage Ratio Direction Reversal: Confirmed-Tier Predators Have *Higher* Revert Rates Than Baseline, Not Lower
+
+**Date:** 2026-05-19
+**Discovery method:** Two-proportion z-test (`surveillance/analytics/camouflage_ratio_z_test.py`, commit pending) on per-contract revert rates with Wilson 95% CIs and per-chain breakdown.
+**Severity:** HIGH — Camouflage Ratio is the headline retention metric in pitch materials and the existence-claim underlying the "Camouflage Equilibrium" lexicon entry. Direction of effect is now reversed for the confirmed tier.
+
+**Claim (what was asserted in the lexicon entry):**
+
+The Camouflage Ratio entry stated that "dangerous contracts maintain low revert rates (under 10%) to evade standard detection." The numerical anchors were:
+
+- Pre-2026-04-02: 68% (retired in CORRECTIONS.md)
+- Post-2026-04-02: 70–79% across chains, organizations, and time (described as "stable")
+- 2026-04-29 robustness check (lexicon Section A7): full-corpus 67.1%, top-12-excluded 68.1%
+
+The directional framing was that PREDATORS deliberately keep revert rates low as camouflage. The Camouflage Equilibrium claim depended on predator-class contracts being *over*-represented in the low-revert population.
+
+**Reality (what the data now shows):**
+
+Two-proportion z-test on 8,252 contracts with ≥5 transactions, partitioned by `confidence_tier`:
+
+| Tier | N | Low-revert (<10%) | Ratio | 95% Wilson CI |
+|---|---|---|---|---|
+| confirmed | 1,163 | 354 | **0.3044** | [0.2786, 0.3314] |
+| suspected | 4,585 | 4,202 | 0.9165 | [0.9081, 0.9241] |
+| unanalyzed (baseline) | 2,386 | 2,150 | 0.9011 | [0.8885, 0.9124] |
+| unknown | 118 | 115 | 0.9746 | [0.9279, 0.9913] |
+
+Tests:
+- **confirmed vs unanalyzed:** Δ = −59.67 pp, z = −36.61, p < 10⁻⁶. Confirmed-tier predators are FAR LESS likely to maintain low revert rates than baseline.
+- **suspected vs unanalyzed:** Δ = +1.54 pp, z = 2.14, p = 0.032. Suspected tier is marginally higher than baseline.
+
+Per-chain breakdown confirms the reversal at every chain:
+- Base confirmed: 0.2893 vs Base unanalyzed 0.9247 (gap −63.5 pp)
+- Arbitrum confirmed: 0.3881 vs Arbitrum unanalyzed 0.7500 (gap −36.2 pp)
+- Optimism confirmed: 0.4783 vs Optimism unanalyzed 0.9655 (gap −48.7 pp)
+
+The "70–79% across chains" range applies to the *baseline* population (unanalyzed contracts have ~75% low-revert across chains). It does not apply to confirmed-tier predators, which sit at 30.44% corpus-wide.
+
+**Discovery (how it was caught):**
+
+The 2026-05-19 lexicon-validation pass tested whether the headline corpus claims would survive a two-proportion z-test against the unanalyzed baseline. The expected finding was confirmed-tier z > 0 (predators camouflaged → higher than baseline). The actual z = −36.61 (predators *anti*-camouflaged) inverted the entire framing. The Wilson CI on the confirmed-tier ratio [0.2786, 0.3314] does not touch the 70–79% claim band.
+
+**Root cause of the original error:**
+
+The 2026-04-02 retirement of "Camouflage ratio 68%" replaced the number with "70–79% across chains, organizations, and time" without specifying the partition. The 2026-04-29 Section A7 robustness check used *full-corpus* and *top-12-excluded* averages — both of which are dominated by suspected + unanalyzed contracts (5,748 of 8,252 in this corpus = 70%). Those tier-blended averages happened to land at 67.1% / 68.1% because the unanalyzed baseline drives them, not because predator-class contracts maintain that rate.
+
+When the lexicon framing translated "Camouflage Ratio stable" into "predators maintain low revert rates as camouflage," it inverted causation. The low-revert *baseline* is the population norm. Predators (confirmed-tier) are systematically *more reverted*, not less. The "camouflage" framing was implying intent that the data does not support.
+
+**Numerical effect on headline statistics:**
+
+| Claim location | Old (retired) form | Corrected form |
+|---|---|---|
+| Lexicon Camouflage Ratio entry headline | "Camouflage Ratio 70–79% across chains" (predator framing) | **Population-level low-revert rate is 70–79% baseline. Confirmed-tier predators are at 30.44% [27.86, 33.14], significantly LOWER than baseline (z = −36.6, p < 10⁻⁶).** |
+| Lexicon Section A7 robustness | "full-corpus 67.1%, top-12-excluded 68.1%" | **Retained — but reframed: these are tier-blended averages dominated by the ~90% baseline of unanalyzed/suspected contracts. They are not predator measurements.** |
+| Camouflage Equilibrium claim | "Predators systematically calibrate to low revert rates to evade detection" | **Retired.** Confirmed-tier contracts revert MORE than baseline. If predators are calibrating to anything, it is to a higher-friction signature, not lower. The "equilibrium" was a measurement artifact from blending tiers. |
+| Any deck/brief claim that uses "Camouflage Ratio" as evidence of predator stealth | Treats the 70–79% figure as predator camouflage | **Reframe.** The 70–79% figure is a population baseline. The predator-class divergence is the inverse: 30.44%. |
+
+**Fix:**
+- This correction-log entry (#22) — 2026-05-19, commit pending
+- Lexicon `Camouflage Ratio` entry updated with 2026-05-19 revision section pointing here; old "70–79% across chains" framing retained with retirement annotation
+- Lexicon `Camouflage Equilibrium` claim flagged for retirement or substantial reframing
+- `CORRECTIONS.md` Quick Retirement Index entry revised: "Camouflage ratio 70-79% stable" → "70–79% is the baseline-population low-revert rate, not predator behavior. Confirmed-tier predators at 30.44%."
+- `surveillance/analytics/camouflage_ratio_z_test.py` script committed as the canonical regenerator
+
+**Open work:**
+- Investigate WHY confirmed-tier contracts have higher revert rates than baseline. Hypotheses:
+  - (a) Genuine adversarial mechanics (conditional reverts on user-input dependence, decoy logic, anti-bot checks that fail honest users).
+  - (b) Selection-effect from the labeling pipeline — contracts that revert on diverse inputs may be more readily flagged as `confirmed`, producing a confound.
+  - (c) Mixed: predators of *one* class (e.g., honeypots) revert by design; predators of *another* class (e.g., drainers) don't, and we're aggregating both.
+- The (b) hypothesis is most concerning. If `confidence_tier='confirmed'` is partially conditioned on revert-rate (e.g., reverts contribute to risk score), the test confounds outcome with input. Audit the `confidence_reason` populations of the 1,163 confirmed contracts to verify the tier is not directly derived from revert frequency.
+- Once the mechanism is identified, decide whether the "Camouflage Ratio" name should be retired entirely (the metric measures something real about the baseline population but does not measure "camouflage" in any actionable sense).
+
+**Why this matters epistemically:**
+
+This is the second correction in two days where a lexicon claim with a stable, multi-month-stated number turned out to be a tier-aggregation artifact. The Pattern D 54% (Correction #21) was a top-100 cohort number that had been promoted to corpus-general. The Camouflage Ratio 70–79% is a tier-blended average that was promoted to predator-specific.
+
+The shared root cause is using single-number anchors without partition specification. Going forward every quantitative lexicon claim must specify:
+1. The partition the number applies to (tier, chain, cohort, all-contracts).
+2. The baseline it is compared against.
+3. The direction of the effect — explicitly, with a CI or p-value.
+
+The Q-001 role_classifier and Q-002 approval_spike_detector outputs are already partitioned this way. The lexicon entries written before that discipline existed need to be reviewed in bulk. Adding to operational priority list.
+
+**Propagation watch-list (add to the top-of-file table):**
+
+| Claim | Still appears in | Required cleanup |
+|---|---|---|
+| "Camouflage Ratio 70–79% (stable) across chains, organizations, and time" — as a predator claim | `docs/lexicon.md` Camouflage Ratio entry; `docs/lexicon.md` Camouflage Equilibrium claim; `l3-narrative/` decks | Reframe as baseline-population low-revert rate. Predator-class measurement is the *inverse* finding (30.44% confirmed-tier). |
+| "Camouflage Equilibrium" as a behavioral claim about predator intent | `docs/lexicon.md` | Retire or substantially reframe — the inversion direction does not support the equilibrium framing. |
+| Section A7 robustness check (full-corpus 67.1%, top-12-excluded 68.1%) | `docs/lexicon.md` | Retain numerically but annotate: these are tier-blended baselines, not predator-class measurements. |
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.

@@ -16,6 +16,62 @@ A living record of claims made, errors found, and how they were fixed. Every ent
 
 ---
 
+## Quick Retirement Index
+
+**Do not cite any of the following as live. See the dated entry below for the corrected form and methodology context.**
+
+| Retired claim | Retired on | Use instead | Detailed entry |
+|---|---|---|---|
+| Trust amplification factor 14.2× (`0xd4624228`) | 2026-04-02 | `router_percentage` and per-contract `amplification_factor` from current `trust_amplification` table. The 14.2× multiplier specifically was computed against the `T2-eaef6a5d` family baseline that Correction #3 dissolved; not currently reproducible. The 2,910 victims and 96.6–98.7% router-delivered traffic remain Tier A. | "Trust amplification factor of 14.2x" (2026-04-02); lexicon Trust Amplification Factor entry methodological caveat (2026-04-25); Correction #17 |
+| org_001 has 899 deployers and 2,042 contracts | 2026-04-02 | 308 deployers / 1,856 contracts via `funding_chain` method, with explicit `methodology_note` on which attribution method is used. Conservative count via `entity_classification` is 16/462. Always state the method. | "org_001 has 899 deployers and 2,042 contracts" (2026-04-02) |
+| GoPlus detects 0 of top 50 | 2026-04-02 | 50 GoPlus results now stored in `goplus_results`. Reframe as L3_ONLY match counts (contracts Layer 3 catches that GoPlus did not flag or did not have data on). Do not use "100% detection gap" wording. | "GoPlus detects 0 of the top 50 contracts" (2026-04-02) |
+| Camouflage ratio 68% | 2026-04-02 | 70–79% range, stable across chains and time windows. Recompute from `transaction_events` for the citation date — do not pull from the older `camouflage_metrics` table. | "Camouflage ratio 68%" (2026-04-02) |
+| "Camouflage ratio 70–79% stable across chains" as a predator-class claim | 2026-05-19 | The 70–79% rate is the BASELINE-population low-revert ratio (unanalyzed + suspected = ~90% low-revert). Confirmed-tier predators sit at **30.44%** [27.86, 33.14] low-revert — significantly LOWER than baseline (two-prop z = −36.6, p < 10⁻⁶). The "predators calibrate to low revert rates as camouflage" framing is the inverse of what the data shows; the "Camouflage Equilibrium" claim is retired pending re-investigation. See `reports/correction_log.md` Correction #22. | "Camouflage Ratio Direction Reversal" (2026-05-19) |
+| "54 of 100 high-risk L2 deployers have mainnet predating L2" — as a corpus-wide Pattern D rate | 2026-05-19 | **28.1%** corpus-wide (of 9,567 high-risk deployers), not 54%. The 54% figure was the top-100 curated cohort, which was selected for mainnet enrichment. The directional claim — long mainnet vintage as predator signature — is also reversed: drained-completing predators have median bridge gap of **53.6 days**, vs 644 days for flagged-quiet (KS Test B, D=0.36, p=0.012). See `reports/correction_log.md` Correction #21. | "Pattern D Direction Reversal" (2026-05-19) |
+| 832 wallet rotations / 302 high-confidence | 2026-04-02 | 274 with temporal succession filter (similarity ≥ 0.85 AND one deployer's `last_seen` < other's `first_seen`). State the criteria. | "832 wallet rotations, 302 high-confidence" (2026-04-02) |
+| 49 victim-to-predator conversions | 2026-04-02 | 2 with strict 24h filter. Narrative effectively collapsed — do not use "victim-to-predator pipeline" as a corpus-supported claim without explicit Tier B framing and the corrected count. | "49 victim-to-predator conversions" (2026-04-02) |
+| Anti-forensic implementation destruction behind `0x08b8b941` proxy slot 1 | 2026-04-05 | `0x93614117…` is an EOA (nonce > 0, actively transacting on Aave V3 / Uniswap V3 / ParaSwap). Not a destroyed contract. Closed-loop infrastructure ecosystem is confirmed; evidence of extraction is inconclusive. | "Destroyed Implementation → EOA" (2026-04-05) |
+| Coffee fleet size 55 | 2026-04-08 | 56 (production). Local DB had stale 209 superset. Case file rewrite pending. | "Coffee fleet size 55" entry in summary table (2026-04-08) |
+| 0x785ce546 is a $256K victim of E3B2 | 2026-04-13 | Controlled intermediary funded by E717 with 1,406 ETH, distributing $9.8M to address-poisoning collectors. Not a victim. | "0x785c: $256K victim of E3B2" entry in summary table (2026-04-13) |
+| 6 rogue facilitators | 2026-04-13 | 7 confirmed: CE5E, E717, A7B9, E3B2, D270, 881E, F71C. | "6 rogue facilitators" entry in summary table (2026-04-13) |
+| $3.9M drain volume | 2026-04-15 | ~$2.3M real victim extraction + ~$1.6M pass-through laundering. 42% of top-value events are drainer cycling own funds through compromised wallets. Real pass-through fraction likely higher than 42% (see 2026-04-16 follow-up). | "$3.9M drain volume" entry in summary table (2026-04-15) |
+| $3.1 quadrillion OP drain (DRAINER-D270) | 2026-04-12 | Token decimals normalization bug: amount divided by 10^6 (USDC default) instead of 10^18 (OP). Real drain ~3,100 OP (~$4,650–$6,200). Alert pipeline's token decimals lookup needs generalizing — not yet patched. | "Token Decimals Normalization Bug — OP Drain Amount Off by 10^12" (2026-04-12) |
+| "Anti-forensic confirmed" / "infrastructure-layer extraction confirmed" | 2026-04-05 | "Architecturally valid, unconfirmed." Do not use "confirmed" wording for the infrastructure-layer extraction hypothesis. | "Destroyed Implementation → EOA" (2026-04-05); summary table entry |
+| "Pipeline is down" (2026-04-07) | 2026-04-08 | Pipeline was healthy. Local DB was stale. Fixed via sync 2026-04-07. | Summary table entry |
+| 4,015 stale deployer counts (2026-04-07) | 2026-04-08 | Local artifact only. Production had 3 stale, all -1 deltas. Corrected via `railway ssh refresh`. | Summary table entry |
+
+**Propagation watch-list (cleanup pending):**
+
+Retired claims that the audit has identified as still appearing in downstream files. These do not change the retirement — they are cleanup tasks. Do not cite the retired form from any of these locations.
+
+| Retired claim | Still appears in | Required cleanup |
+|---|---|---|
+| 14.2× trust amplification | `docs/lexicon.md` line ~943 (Bug-Bounty Structural Gap empirical grounding); two case files: `PARASITE_ARCHITECTURE_0xd4624228.md` and `TRUST_LAYER_EXPLOITATION_20260324.md`; deck `Layer3_Intelligence_Platform_1.pptx` slide 5 | Rewrite each citation to use `router_percentage` + `amplification_factor` per the lexicon's Trust Amplification Factor entry methodological caveat. Surface the Cantina rejection quote separately from the multiplier figure. |
+| Bot anchor `0x84792c2a` (Tuition Extraction Markets lexicon entry) | `docs/lexicon.md` Tuition Extraction Markets entry | Bot has zero corpus entries per Epistemic Test #2 A12. Either re-source the anchor or relabel the entry to remove the specific address. |
+| "Cross-Domain Compositional Harm" lexicon entry empirical grounding | `docs/lexicon.md` | Vercel and Bancor case files referenced do not exist. Either create the case files or revise the entry to cite conversation-level evidence with explicit framing. |
+| "Camouflage Ratio 70–79% (predator class)" as anchoring evidence | `docs/lexicon.md` Tuition Extraction Markets entry; `docs/lexicon.md` Publishing-Induced Recursive Evasion empirical grounding; `docs/lexicon.md` GoPlus-gap entry; `l3-narrative/Digital_Physics_Blockchain_Security.pptx` slide 7; `l3-narrative/Stored_Potential_Risk_Model.pptx` slide 6 | Replace any predator-class invocation with the partitioned numbers: confirmed-tier 30.44% [27.86, 33.14], baseline 90.11%. Lexicon entries annotated 2026-05-19; deck slides pending. |
+| "Pattern D — 54% / long mainnet vintage" as a predator-class claim | `docs/lexicon.md` Pattern D entry (annotated 2026-05-19); `docs/lexicon.md` Behavioral Laundering entry (annotated 2026-05-19); `reports/cross_chain_import_candidates.md`; `surveillance/analytics/cross_chain_choreography.py` (`pattern_d_gap` scoring) | Replace with "28.1% corpus-wide, 54% in the top-100 curated cohort." Disambiguate. Q-005 scoring direction needs engineering follow-up (recency-based, not vintage-based). |
+
+---
+
+## How to use this index
+
+**At session start:** scan the Retired Claim column and the Use Instead column. Note any item your task is likely to touch.
+
+**Before citing any number:** check if the number, its anchor (an address role, a percentage, a count), or its named claim appears in the retired list. If yes, use the corrected form and do not cite the retired form — even if it appears in a non-CORRECTIONS file.
+
+**When adding a new retirement:**
+
+1. Append the full dated entry to the body of CORRECTIONS.md (existing format).
+2. Add a row to the Quick Retirement Index table above.
+3. If the retired claim is known to appear in downstream files (lexicon, case files, decks, INDEX.md), add a row to the Propagation watch-list.
+4. Update the relevant lexicon entry if the retirement changes a definition or methodological grounding.
+5. Add a numbered entry to `reports/correction_log.md` if the retirement is also a methodology correction.
+
+**Authority:** This index is supreme over any other file containing the same claim. If lexicon, INDEX.md, a case file, a deck, or claude.md cites a retired claim as live, the file is wrong — not this index.
+
+---
+
 ## 2026-04-02 Epistemic Integrity Audit — 6 Corrections
 
 ### "GoPlus detects 0 of the top 50 contracts"
@@ -363,7 +419,7 @@ EventMonitors live on production as of 2026-04-08 05:18 UTC heartbeat. Bridge sc
 | "GoPlus detects 0/50" | 50 GoPlus results stored, most L3_ONLY matches. Not "0/50" but an honest gap of "L3 caught, GoPlus didn't check or rated clean" | FIXED in API |
 | "org_001: 899 deployers" | 16-324 depending on method; primary funding_chain = 308 | FIXED in API |
 | "Trust amplification 14.2x" | Data now exists (32 rows), actual amplification_factor per contract | FIXED in API |
-| "Camouflage 68%" | Actual: 79.2% | FIXED in API |
+| "Camouflage 68%" | Actual: 79.2% (corpus-blended baseline). **2026-05-19 update:** tier-partitioned numbers reveal a direction reversal — confirmed-tier predators are at 30.44% [27.86, 33.14] low-revert, vs ~90% for unanalyzed baseline. The 79.2% corpus number is the BASELINE rate, not predator behavior. See Correction #22. | FIXED in API; predator-class framing RETIRED 2026-05-19 |
 | "832 wallet rotations" | Actual with temporal filter: 274 | FIXED in API |
 | "49 victim-to-predator" | Actual with 24h filter: 2 | REMOVED from narrative |
 | "Anti-forensic implementation destruction" | It was an EOA | FIXED in report + proxy watcher |
@@ -386,6 +442,37 @@ EventMonitors live on production as of 2026-04-08 05:18 UTC heartbeat. Bridge sc
 - **Discovery:** Manual review of the D270 drain alert during facilitator classification on 2026-04-12. The quadrillion-dollar figure was immediately implausible.
 - **Fix:** Corrected amount logged in CASE_X402_DRAINER_OPERATION.md. The alert pipeline's token decimals lookup needs to be generalized beyond the stablecoin assumption (6 decimals) to query actual token decimals on-chain or from a registry. Not yet patched in code.
 - **Severity:** HIGH — a customer receiving a $3.1Q alert would either (a) lose trust in the system immediately, or (b) fail to act on what is actually a real drain because the number looks like a bug. Both outcomes are bad.
+
+---
+
+## 2026-05-19 Pattern D Direction Reversal — Cross-Chain Reputation Import (correction_log #21)
+
+- **Claim:** "54 of 100 high-risk L2 deployers had mainnet first-tx predating L2 first-seen. The strongest-supported pattern of the six." Long mainnet vintage was framed as the predator-class signature (adversarial cover identity).
+- **Reality:** Three independent statistical analyses run on the 2026-05-18 corpus snapshot reverse both anchors of this claim:
+  - **Cox PH multi-covariate model:** `mainnet_l2_gap_days` β = −0.005, SE = 0.023, **p = 0.82**. No hazard effect once chain + tier + funder are controlled.
+  - **KS Test A (predator vs control by tier):** D = 0.2098, p = 6.59×10⁻⁷². Reject H₀ in the OPPOSITE direction — predator group 10th-percentile gap is **12.8 days**, control is 85.2 days.
+  - **KS Test B (drained vs flagged-quiet):** D = 0.3645, p = 0.012. Drained-set median gap = **53.6 days**; flagged-quiet median = 644 days. Drain-completing predators are 12× more recently bridged than flagged-but-quiet ones.
+  - **Corpus-wide refresh:** 28.1% of all 9,567 high-risk deployers have mainnet predating L2 (not 54%). The 54% was the top-100 curated cohort that was selected for mainnet enrichment.
+- **Discovery:** Cox PH was run as part of the 2026-05-18 SAI inferential-layer build-out (`surveillance/analytics/cox_proportional_hazards.py`, commit `e6ecc7c`). The p=0.82 null on `mainnet_l2_gap_days` was the second-highest p-value in the table; a follow-up KS test (`surveillance/analytics/pattern_d_ks_test.py`, commit `6d2f881`) was run to characterize the distributional difference. The rejection of H₀ in the *opposite* direction crystallized the correction.
+- **Fix:** `reports/correction_log.md` Correction #21 (this date); `docs/lexicon.md` Pattern D entry revised with 2026-05-19 section; lexicon Behavioral Laundering entry annotated; CORRECTIONS.md Quick Retirement Index and Propagation Watch-List updated; Q-005 `pattern_d_gap` scoring flagged for engineering follow-up (currently rewards larger gap; should be inverted or replaced with bridge-recency primitive).
+- **Severity:** HIGH — Pattern D is one of six load-bearing primitives in the Behavioral Laundering framework. Directional reversal requires correcting external materials.
+
+---
+
+## 2026-05-19 Camouflage Ratio Direction Reversal — Confirmed-Tier Predators Have *Higher* Revert Rates (correction_log #22)
+
+- **Claim:** "Dangerous contracts maintain low revert rates (under 10%) to evade standard detection. Stable at 70–79% across chains, organizations, and time. Camouflage Equilibrium — operators calibrate against detection tools at scale." Section A7 robustness check (2026-04-29): full-corpus 67.1%, top-12-excluded 68.1%.
+- **Reality:** Two-proportion z-test on 8,252 contracts (≥5 tx), partitioned by `confidence_tier`:
+  - **confirmed (predator class):** 30.44% low-revert [Wilson 95% CI 27.86, 33.14]
+  - **suspected:** 91.65% [91.08, 92.41]
+  - **unanalyzed (baseline):** 90.11% [88.85, 91.24]
+  - confirmed vs unanalyzed: Δ = **−59.67 pp**, z = **−36.61**, p < 10⁻⁶. Confirmed-tier predators are FAR LESS likely to maintain low revert rates than baseline.
+  - Per-chain confirms reversal: Base −63.5 pp, Arbitrum −36.2 pp, Optimism −48.7 pp.
+- **Discovery:** Two-proportion z-test (`surveillance/analytics/camouflage_ratio_z_test.py`, run 2026-05-19) was scoped to validate whether the headline "Camouflage Ratio 70–79%" claim was a predator-specific signature or a tier-blended baseline. The −36.6 z-statistic against the unanalyzed baseline established the inversion: predators revert MORE than baseline, not less. The Wilson CI on confirmed-tier [0.279, 0.331] does not overlap the 70–79% band.
+- **Root cause of original error:** The 2026-04-02 retirement of "Camouflage ratio 68%" replaced the number with "70–79% across chains" without specifying tier. The 2026-04-29 Section A7 robustness check (full-corpus / top-12-excluded) was tier-blended, so it landed at 67–68% because the ~90% baseline of unanalyzed+suspected contracts dominates the weighted average. The framing translated stability into "predators camouflage to low revert rates" — which the tier-partitioned test now refutes.
+- **Fix:** `reports/correction_log.md` Correction #22 (this date); `docs/lexicon.md` Camouflage Ratio entry rewritten with pre-correction framing retained for traceability and refreshed numbers; lexicon Tuition Extraction Markets, Publishing-Induced Recursive Evasion, and GoPlus-gap entries annotated; CORRECTIONS.md Quick Retirement Index entry added; `surveillance/analytics/camouflage_ratio_z_test.py` committed as canonical regenerator. Camouflage Equilibrium claim flagged for retirement.
+- **Open work:** Investigate why confirmed-tier contracts revert *more* than baseline. Three hypotheses on the table: (a) genuine adversarial mechanics (conditional reverts, anti-bot checks), (b) selection-effect from labeling pipeline (revert frequency may feed back into tier assignment — this is the audit concern), (c) mixed populations being aggregated. Audit of `confidence_reason` distributions for the 1,163 confirmed contracts is the next step.
+- **Severity:** HIGH — Camouflage Ratio is a headline pitch number with the framing "predators calibrate to low revert rates as camouflage." Direction is now reversed; deck slides need revision.
 
 ---
 

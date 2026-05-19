@@ -290,18 +290,42 @@ The vulnerability arises because the deputy's authorization architecture checks 
 
 ### Camouflage Ratio
 
-**Definition.** The percentage of dangerous contracts that maintain low revert rates (under 10%) to evade standard detection. Stable at 70–79% across chains, organizations, and time.
+**Definition (revised 2026-05-19).** The corpus-wide low-revert ratio (proportion of contracts with revert_rate < 10%) is a **baseline-population** measurement, not a predator-specific signature. Baseline (unanalyzed) contracts sit at ~90% low-revert. Confirmed-tier predators sit at **30.44%** [95% Wilson CI 27.86–33.14] — significantly *lower* than baseline (z = −36.6, p < 10⁻⁶). The original framing of "predators maintain low revert rates to evade detection" is **inverted** by the data and is retired (see Correction #22 in `reports/correction_log.md`).
 
-**Extended description.** Interpreted as a Nash equilibrium — operators calibrate against detection tools at scale. Running too aggressive (high revert rate) loses victims to detection; running too conservative loses efficiency. The market converges on the temperature at which exploitation is optimally invisible. Stable across Base (~82%), Arbitrum (~70%), and Optimism, across two weeks of observation, and across four mapped organizations.
+**Extended description (revised).** The 70–79% figure that was cited as "stable across chains" is now understood as the **baseline rate at which most contracts revert infrequently** — driven by the unanalyzed + suspected populations, which together comprise ~85% of the corpus. The "Camouflage Equilibrium" framing (predators calibrate to be optimally invisible) does not survive direct two-proportion testing against the unanalyzed baseline: confirmed-tier predators are *systematically* over-represented in the high-revert population, not the low-revert one.
 
-**Empirical robustness (2026-04-29).** The 2026-04-25 caveat asked whether the camouflage ratio was an artifact of the top-12 funder cluster's calibration (the cluster represents ~39% of the active deployer subset per `scripts/funder_metrics.py`). The test was run as Section A7 of `reports/epistemic_test_results_2026-04-29.md`. Result: full corpus 67.1%, top-12-excluded cohort 68.1%, delta +0.9pp. Well below the 5pp threshold that would have indicated the cluster was driving the equilibrium. The equilibrium is stable across operator classes; this strengthens rather than weakens the claim that the ratio reflects a structural Nash equilibrium rather than an artifact of any single operator's calibration.
+**Pre-correction (retired) framing, retained here for traceability:**
+> "The percentage of dangerous contracts that maintain low revert rates (under 10%) to evade standard detection. Stable at 70–79% across chains, organizations, and time. Interpreted as a Nash equilibrium — operators calibrate against detection tools at scale. Stable across Base (~82%), Arbitrum (~70%), and Optimism."
 
-**Empirical grounding.**
-- `camouflage_metrics` table populated nightly via `surveillance/camouflage_tracker.py`. Corpus-wide ratio stable at 79.2% across the initial 9-day run (2026-03-17 through 2026-03-25) before the producer cron died (fixed in Correction #7).
-- Dataset: 5,845 camouflaged victims vs 233 overt-trap victims (25:1 ratio).
-- Deck: `l3-narrative/Digital_Physics_Blockchain_Security.pptx` slide 7 frames this as a behavioral equilibrium, not a bug.
+The pre-correction interpretation conflated baseline population behavior with predator-class behavior. Tier-blended averages (the 67.1% / 68.1% Section A7 numbers) are stable because they are dominated by the ~90% baseline — not because predators converged to that rate.
 
-**Cross-references.** [Trust Amplification Factor](#trust-amplification-factor), [Behavioral Laundering](#behavioral-laundering), [Publishing-Induced Recursive Evasion](#publishing-induced-recursive-evasion) (the feedback loop that produces the equilibrium), [Infrastructure-Scale Operator](#infrastructure-scale-operator) (the corpus-dominance finding that requires the camouflage ratio to be re-computed against a cluster-excluded cohort).
+**Refreshed numbers (2026-05-19, `surveillance/analytics/camouflage_ratio_z_test.py`, N = 8,252 contracts with ≥5 tx):**
+
+| Tier | N | Low-revert ratio | 95% Wilson CI |
+|---|---|---|---|
+| confirmed (predator class) | 1,163 | **0.3044** | [0.2786, 0.3314] |
+| suspected | 4,585 | 0.9165 | [0.9081, 0.9241] |
+| unanalyzed (baseline) | 2,386 | 0.9011 | [0.8885, 0.9124] |
+| unknown | 118 | 0.9746 | [0.9279, 0.9913] |
+
+Per-chain confirmed-tier ratios (all confirm the reversal):
+- Base: 0.2893 vs Base unanalyzed 0.9247 (Δ = −63.5 pp)
+- Arbitrum: 0.3881 vs Arbitrum unanalyzed 0.7500 (Δ = −36.2 pp)
+- Optimism: 0.4783 vs Optimism unanalyzed 0.9655 (Δ = −48.7 pp)
+
+**Empirical robustness (2026-04-29, retained for the record — re-interpreted 2026-05-19).** Section A7 of `reports/epistemic_test_results_2026-04-29.md` reported full-corpus 67.1% and top-12-excluded 68.1% (delta +0.9 pp). 2026-05-19 re-reading: those numbers are tier-blended averages dominated by the ~90% baseline of unanalyzed/suspected contracts. Stability across the top-12 exclusion is *baseline* stability, not predator stability. The robustness check did not partition by `confidence_tier` and therefore did not surface the predator-class divergence.
+
+**Empirical grounding (original, retained):**
+- `camouflage_metrics` table populated nightly via `surveillance/camouflage_tracker.py`. The 79.2% corpus-wide rate across the 9-day initial run is consistent with the 2026-05-19 baseline measurement (the producer was sampling the corpus-blended ratio).
+- Dataset: 5,845 camouflaged victims vs 233 overt-trap victims (25:1 ratio) — these counts predate the tier-aware methodology and have not yet been re-partitioned by `confidence_tier`.
+- Deck: `l3-narrative/Digital_Physics_Blockchain_Security.pptx` slide 7 frames this as a behavioral equilibrium. **Slide needs revision** — the equilibrium framing is the retired interpretation.
+
+**Open work:**
+- Investigate why confirmed-tier contracts revert *more* than baseline. Three hypotheses: (a) genuine adversarial mechanics (conditional reverts on user-input dependence, anti-bot checks), (b) selection-effect from the labeling pipeline (revert frequency may feed back into tier assignment), (c) mixed — different predator classes have opposite revert signatures and are being aggregated. Audit of `confidence_reason` distributions for the 1,163 confirmed contracts is the next step.
+- Reframe or retire the "Camouflage Equilibrium" claim in deck materials.
+- Decide whether the metric name should be retired or repurposed.
+
+**Cross-references.** [Trust Amplification Factor](#trust-amplification-factor), [Behavioral Laundering](#behavioral-laundering), [Publishing-Induced Recursive Evasion](#publishing-induced-recursive-evasion) (feedback loop framing now under review given the equilibrium retirement), [Infrastructure-Scale Operator](#infrastructure-scale-operator). 2026-05-19 revision: see `reports/correction_log.md` Correction #22.
 
 ---
 
@@ -315,7 +339,7 @@ The vulnerability arises because the deputy's authorization architecture checks 
 
 **Empirical grounding.**
 - Framework scoped in `reports/behavioral_laundering_detection_scope.md`.
-- Pattern D is the strongest validated (54% of 100 high-risk recent L2 deployers have Ethereum mainnet history we weren't linking — Tier A via Etherscan v2 multichain, `reports/cross_chain_import_candidates.md`).
+- Pattern D is the most distributionally distinct (lowest p-value of any KS test against the corpus) but with revised framing as of 2026-05-19: corpus-wide rate is **28.1%** of high-risk deployers have mainnet predating L2 (not 54% — that was a top-100 curated cohort number), and the directional signature is **recent** bridge gap, not long vintage. See [Pattern D — Cross-Chain Reputation Import](#pattern-d--cross-chain-reputation-import) entry below and `reports/correction_log.md` Correction #21 for the full reversal.
 - Pattern F scanned negative against the 30-day corpus but structurally scoped (`reports/advisor_parasite_candidates.md`).
 - Other patterns (A, B, C, E) scoped and partially scanned; see individual pattern entries below.
 
@@ -377,12 +401,22 @@ The vulnerability arises because the deputy's authorization architecture checks 
 
 **Empirical grounding.**
 - Scanned 2026-04-18 via Etherscan v2 multichain (`scripts/pattern_d_scan.py`, report: `reports/cross_chain_import_candidates.md`).
-- **Result: 54 of 100 high-risk L2 deployers had mainnet first-tx predating L2 first-seen. The strongest-supported pattern of the six.**
+- **Original result (2026-04-18, top-100 curated cohort): 54 of 100 high-risk L2 deployers had mainnet first-tx predating L2 first-seen.** This was the cohort number, not the corpus-wide rate (see 2026-05-19 revision below).
 - Longest gap: `0x7fd9a5104f…60d0` — Ethereum mainnet first-tx 2017-06-20, L2 first-seen 2026-04-02 = **3,208 days** (8.8 years). 14 suspected contracts on Base.
 - Production-ready enrichment shipped: Correction-adjacent work added `deployers.mainnet_first_tx` column and one Etherscan v2 call per new deployer in `auto_funder_tracer` (2026-04-18, commit `9d1d337`). Backfill for existing 36k+ deployers running at time of writing.
 - Also validated in **EXTRACTION_004 (Rhea)**: the Rhea Subject Wallet was funded via `intents.near` cross-chain bridge — the NEAR analog of Pattern D (cross-chain import *via bridge* rather than *via address-reuse*).
 
-**Cross-references.** [Pattern F — Advisor-Parasite Pattern](#pattern-f--advisor-parasite-pattern) (orthogonal — victim-extraction cadence), [Intelligence-as-Compounding-Asset](#intelligence-as-compounding-asset) (Pattern D enrichment grows in value as more addresses accumulate history), [Pristine Solo Operator](#pristine-solo-operator) (related but distinct — Pattern D imports active mainnet reputation; pristine-solo exploits dormant mainnet age).
+**Revision (2026-05-19) — see `reports/correction_log.md` Correction #21.** Three independent statistical tests run on the 2026-05-18 corpus (Cox PH multi-covariate, KS Test A by tier, KS Test B by drain outcome) **reverse the directional framing of this pattern** and refine its quantitative anchor:
+
+- **Corpus-wide rate (Tier A):** 28.1% of all 9,567 high-risk deployers have mainnet predating L2 — not 54%. The 54% figure was the top-100 curated cohort that was *selected* for mainnet enrichment. Only 28.8% of high-risk deployers have `mainnet_first_tx` populated at all.
+- **Cox PH hazard test:** `mainnet_l2_gap_days` β = −0.005, SE = 0.023, p = 0.82. Gap size has **no detectable hazard effect** once chain + tier + funder are controlled. The "long-vintage cover identity" framing fails.
+- **KS Test B (drained vs flagged-quiet):** drained-set median gap is **53.6 days**, flagged-quiet median is **644 days** (D = 0.36, p = 0.012). The drain-completing predators are **12× more recently bridged** than flagged-but-quiet ones. Direction is opposite the lexicon's original framing.
+
+**Revised definition (Tier A direction-of-effect):** Pattern D is most distributionally distinct (lowest p-value of any KS test against the corpus), but the predator-class signature is **recent cross-chain appearance** (median gap ~54 days for drainers), not long-vintage cover. The original "8.8-year mainnet veteran" exemplar (`0x7fd9a5104f…60d0`) represents the *non-draining* mode of Pattern D, not the drain-completing mode. Both modes are real; only the latter is the prediction signal.
+
+**Open engineering work:** Q-005 `cross_chain_choreography.py` `pattern_d_gap` scoring currently awards points proportional to *larger* gap. Direction needs inversion or replacement with a bridge-recency primitive.
+
+**Cross-references.** [Pattern F — Advisor-Parasite Pattern](#pattern-f--advisor-parasite-pattern) (orthogonal — victim-extraction cadence), [Intelligence-as-Compounding-Asset](#intelligence-as-compounding-asset) (Pattern D enrichment grows in value as more addresses accumulate history), [Pristine Solo Operator](#pristine-solo-operator) (related but distinct — Pattern D imports active mainnet reputation; pristine-solo exploits dormant mainnet age). 2026-05-19 revision: see `reports/correction_log.md` #21.
 
 ---
 
@@ -690,7 +724,7 @@ The third condition is what distinguishes activation events from the pre-stage v
 **Empirical grounding.**
 - `0xc0dec76000f6c2d32f23d523748e50ebb5bb34a3` (Base, 2026-04-29 corpus snapshot): 57,023 transactions, 48,455 reverts (85.0%), 174 distinct contracts touched, 24,518 blocks active over a 23-day window (2026-04-05 → 2026-04-28). Top selector `d2154138` × 46,853 — a single signature carrying 82% of activity, the fingerprint of a probing instrument rather than a varied-strategy bot. Parallel-infrastructure signal: bot's deployer record shows funder `0x18b0f4547a89fe4c5fe84f258bea3601fa281e9f`, which also funds five other deployers with fleets of 44, 42, 30, 6, and 6 contracts. The funder is not the bot operator's only piece of infrastructure — it's a node in a network of paid-for capability. Search methodology and full candidate list in `reports/tuition_extraction_anchor_search_2026-04-29.md`.
 - Prior anchor `0x84792c2a` (cited in earlier lexicon versions) was retired by Correction #18 (2026-04-29): the bot has zero `transaction_events` rows in the corpus and the 375K+ figure was external block-walking with methodology not preserved. The bot's own case file (`BOT_INVESTIGATION_0x84792c2a_20260322.md`) confirms the corpus-coverage gap. The Tuition Extraction concept survives the anchor swap; the framework's grounding now lives entirely in corpus-derived measurement.
-- [Camouflage Ratio](#camouflage-ratio) is itself a measurement of how efficiently the predator layer is calibrated against the prey layer. The ratio's stability across chains, time, and operator subsets (per the 2026-04-29 robustness check) is consistent with a market that maintains its predator/prey equilibrium structurally, not contingently.
+- [Camouflage Ratio](#camouflage-ratio) was originally interpreted as a measurement of how efficiently the predator layer is calibrated against the prey layer. **Note (2026-05-19, Correction #22):** the 70–79% "stable" ratio is now understood as the baseline-population low-revert rate, not a predator-class measurement. Confirmed-tier predators are at 30.44%, significantly *lower* than baseline. The "predator/prey equilibrium" framing is being reviewed in light of this reversal; the Tuition Extraction Market frame survives on its broader grounding (bot-as-research-instrument, parallel-infrastructure funders) but should not invoke the Camouflage Ratio as evidence of predator calibration without disambiguating tier.
 
 **Cross-references.** [Camouflage Ratio](#camouflage-ratio), [Trust Amplification Factor](#trust-amplification-factor) (a measurement of how much the predator layer's edge is amplified through trusted infrastructure), [Victim-to-Predator Pipeline](#victim-to-predator-pipeline), [Cost-Habituation Asymmetry](#cost-habituation-asymmetry) (a psychological mechanism that sustains the prey inflow).
 
@@ -802,7 +836,7 @@ The framework implication is that the population statistics of the L2 adversaria
 **Extended description.** The central commercial-strategic tension in detection work. Open publication grows the defender community but also gives attackers the baseline they need to optimize against. Layer 3's methodology (stored potential scoring, DVN configuration monitoring, cross-chain mainnet-import enrichment) will, once widely adopted, become the specification against which operators calibrate their next generation of laundering. This is not a reason to keep methodology secret — the edge decays either way — but it shapes what the sustainable edge actually is: corpus depth, not methodological novelty.
 
 **Empirical grounding.**
-- [Camouflage Ratio](#camouflage-ratio) at 70–79% is the standing example. Operators have already calibrated to whatever revert-rate threshold the current detection tools use.
+- [Camouflage Ratio](#camouflage-ratio) at 70–79% was the standing example; **revised 2026-05-19 (Correction #22):** the 70–79% rate applies to the baseline (unanalyzed-tier) population, not to confirmed-tier predators (who sit at 30.44% low-revert). The recursive-evasion framing survives — operators do calibrate against published detection thresholds — but the example needs replacement with a metric that actually shows predator calibration, not a baseline-blend.
 - GoPlus-family benchmarks (`l3-narrative/Stored_Potential_Risk_Model.pptx` slide 6): 10/10 CRITICAL contracts in Layer 3 returned NO DATA from GoPlus. The GoPlus threshold is the attacker's calibration target.
 
 **Cross-references.** [The Detection Gap as Product](#the-detection-gap-as-product), [Intelligence-as-Compounding-Asset](#intelligence-as-compounding-asset), [Strategy Lifecycle](#strategy-lifecycle), [Adversarial Vanity Branding](#adversarial-vanity-branding) (the anti-forensic-spoofing sub-category exploits the truncated-prefix display convention published by analyst tooling — a recursive-evasion pattern at the intelligence layer).
@@ -1071,11 +1105,11 @@ The shift is consequential in three ways:
 
 **Definition.** The 100% gap between what free benchmarks like GoPlus detect and what sophisticated operators actually deploy. Free security data functions as an attack vector because operators calibrate against it, and "clean" results become trust amplification signals for predators.
 
-**Extended description.** A user who checks a contract on a free scanner and sees "clean" interprets the clean result as a positive safety signal. Sophisticated operators are AWARE of this behavior and optimize bytecode to produce clean results on free scanners specifically. The user's trust in the signal is inverted by the operator's awareness of the signal. Layer 3's commercial positioning is in this gap: the 70-79% camouflage ratio IS the product — the fraction of trap contracts that defeat free tools is the fraction where paid intelligence is load-bearing.
+**Extended description.** A user who checks a contract on a free scanner and sees "clean" interprets the clean result as a positive safety signal. Sophisticated operators are AWARE of this behavior and optimize bytecode to produce clean results on free scanners specifically. The user's trust in the signal is inverted by the operator's awareness of the signal. Layer 3's commercial positioning is in this gap: the fraction of trap contracts that defeat free tools is the fraction where paid intelligence is load-bearing. *Original framing cited the 70–79% camouflage ratio as "the product"; revised 2026-05-19 (Correction #22) — that figure is the baseline-population low-revert rate, not the predator-class signature. The product positioning survives on the GoPlus benchmark gap (10/10 CRITICAL contracts with NO DATA) and on the corpus-depth argument; the specific 70–79% anchor needs to be replaced with the confirmed-tier-specific number once the post-correction methodology stabilizes.*
 
 **Empirical grounding.**
 - 10/10 Layer 3 CRITICAL contracts returned NO DATA from GoPlus (`l3-narrative/Stored_Potential_Risk_Model.pptx` slide 6).
-- Camouflage ratio stable 70-79% across chains (discussed under [Camouflage Ratio](#camouflage-ratio)).
+- Camouflage ratio: **2026-05-19 refresh (Correction #22):** confirmed-tier 30.44% [27.86, 33.14], unanalyzed-tier 90.11%, suspected-tier 91.65%. The 70–79% figure that previously anchored this entry was a tier-blended average; the tier-partitioned numbers show the predator class diverges in the opposite direction. See [Camouflage Ratio](#camouflage-ratio).
 
 **Cross-references.** [Camouflage Ratio](#camouflage-ratio), [Publishing-Induced Recursive Evasion](#publishing-induced-recursive-evasion), [The Bug-Bounty Structural Gap](#the-bug-bounty-structural-gap).
 
