@@ -1,4 +1,21 @@
-# Case File — `0x752c5a95` Pre-Drain Harvester Discharge (EXTRACTION_011)
+> # ⚠ RETRACTED IN ITS ENTIRETY — 2026-05-21 (same day as creation)
+>
+> **This case file is RETRACTED per Correction #24 (filed 2026-05-21, same day this file was created).** Content below is preserved verbatim per the immutable-corpus-record discipline but should **NOT BE CITED AS A LIVE FINDING UNDER ANY CIRCUMSTANCE.**
+>
+> **What was claimed (retired):** That `0x752c5a95` was a Pre-Drain Harvester deployed by an Animoca-tagged wallet, and that it discharged on 2026-05-09 by sweeping 4,587 unique victims in 30 minutes via two independent drainer EOAs. The case file framed this as "the strongest validated Tier-C prediction in the Layer 3 corpus to date."
+>
+> **What is actually true:** `0x752c5a95` is **OneFootball Club (OFC)**, a legitimate verified `ERC20FixedSupply` contract from Animoca's `@animoca-network/contracts` framework. Listed on CoinGecko (`https://assets.coingecko.com/coins/images/67442/small/ofc.jpg`). 3,904 holders. $7.9M circulating market cap. The "second contract" `0xDA42FE` is the LayerZero OFT bridge adapter for OFC, not an unused sibling. The "discharge" transactions on 2026-05-09 were FAILED `transferFrom` calls (gas ~25K, status=error, zero tokens moved). Layer 3's `approval_watchlist.drain_detected` pipeline incorrectly credited those failed reverts as multi-victim mass drains.
+>
+> **Three stacked false-positive bugs produced this case file:**
+> 1. **Bytecode classifier FP** on Animoca's `@animoca-network/contracts` framework (the `asymmetric_transfer + obfuscated_fee` flags match standard ContractOwnership + TokenRecovery patterns).
+> 2. **Behavioral classifier FP** on pre-launch ERC-20 token launches (bots front-running pre-trading triggered a revert which the pipeline read as a trap firing).
+> 3. **`approval_watchlist` pipeline bug** crediting failed transferFrom transactions as multi-victim discharge events.
+>
+> Full root-cause analysis: `reports/correction_log.md` Correction #24.
+>
+> ---
+
+# Case File — `0x752c5a95` Pre-Drain Harvester Discharge (EXTRACTION_011) [RETRACTED]
 
 **Status:** CONFIRMED — discharge event observed on-chain. Layer 3's 2026-04-24 prediction model materialized within 15 days.
 **Discharge date:** 2026-05-09 (single-day event, ~30 minutes total drain window)

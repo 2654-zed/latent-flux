@@ -1259,6 +1259,135 @@ Recommendation: Path B if there is any 1inch account on Layer 3's side; Path A i
 
 ---
 
+## Correction #24 — `0x752c5a95` Was Never a Harvester. Three Stacked Bugs Manufactured the Entire "Pre-Drain Harvester / 4,587-Victim Discharge" Finding.
+
+**Date:** 2026-05-21 (filed same day as the retracted case file)
+**Discovery method:** Task 4 of the 2026-05-21 recent-activity review — investigating "why an Animoca-tagged wallet deployed a confirmed-tier approval-harvesting contract" — produced a falsifiable answer: it didn't. Cross-chain Blockscout probe revealed the contract is `ERC20FixedSupply` (OneFootball Club, ticker OFC), a verified, CoinGecko-listed Animoca-affiliated token. Direct tx inspection on the "discharge" hashes showed both were FAILED `transferFrom` calls.
+**Severity:** **CRITICAL — retracts every claim derived from the `0x752c5a95` finding from 2026-04-24 through 2026-05-21.**
+
+**Claim (what was asserted, in chronological order):**
+
+1. **2026-04-24 (INDEX.md, original entry):** "Confirmed-tier contract harvesting Permit2 approvals from 1,898+ victims without firing a sweep. Deployer `0x80b12bd0` (pristine-solo, 2019 mainnet vintage). Largest active confirmed-tier approval pool in the corpus." Tier-C prediction implicit: this is a Pre-Drain Harvester in accumulation phase; it will discharge.
+2. **2026-05-09 (corpus observation):** "Harvester discharged. Two independent drain_caller EOAs swept 4,587 unique victims in 30 minutes (3,228 + 1,359). Total drains 4,587, drain pct 56.3%."
+3. **2026-05-19 (Correction #20):** Deployer `0x80b12bd0` reframed as "Animoca: Deployer" per OLI labels. Harvester behavior NOT retracted; "investigate why an Animoca-tagged wallet deployed a confirmed-tier approval-harvesting contract" filed as open work.
+4. **2026-05-21 (CASE_HARVESTER_DISCHARGE_0x752C5A95_20260509.md):** Documented the 2026-05-09 event as EXTRACTION_011, framed as "the strongest validated Tier-C prediction in the Layer 3 corpus to date." 4,587 victims drained validated the 2026-04-24 prediction within 15 days.
+5. **2026-05-21 (lexicon Adversarial Maneuver entry, line 1065):** "Empirical leverage: Layer 3's 2026-04-24 pre-drain flag on operator `0x80b12bd0` (15 days of lead time before the May-9 4,587-victim discharge) is the canonical example of disrupt-positioning succeeding."
+
+**Reality (what the data shows):**
+
+Blockscout probe via MCP `mcp__44ed366a-ba42-4fe9-93fa-ca1c6bdc9f66__get_address_info` on mainnet (chain_id=1):
+
+```
+0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8:
+  tags: [
+    {slug: "animoca-deployer", name: "Animoca: Deployer",
+     meta: {main_entity: "Animoca", tooltipUrl: "https://www.revvmotorsport.com/"}},
+    {slug: "contract-deployer", name: "Contract Deployer"},
+    {slug: "animoca", name: "Animoca", tagType: "protocol"}
+  ]
+  first_transaction: 2019-05-23T07:20:41Z (Tier A — matches our corpus mainnet_first_tx)
+```
+
+The Animoca attribution is real, multi-tag, and live on mainnet Blockscout.
+
+Blockscout probe on Base (chain_id=8453) on the harvester contract:
+
+```
+0x752c5a95d202972e124390f30a50154409d3c858:
+  contract_type: "ERC20FixedSupply"  (verified source, compiler v0.8.28)
+  token:
+    name: "OneFootball Club"
+    symbol: "OFC"
+    decimals: 18
+    holders_count: 3,904
+    circulating_market_cap: $7,902,567
+    exchange_rate: $0.04921397
+    icon_url: "https://assets.coingecko.com/coins/images/67442/small/ofc.jpg"
+    volume_24h: $3,286,969
+  source_code: @animoca-network/contracts framework + OpenZeppelin
+  initial_holder: 0xDA42FE397c3fc9d08ac6675EecD2709880fDFD73
+  initial_supply: 1,000,000,000 * 10^18
+```
+
+`0xDA42FE397c3fc9d0` (the "second contract Layer 3 thought was an unused sibling") is `OFTAdapterFixedSupply` — the LayerZero Omnichain Fungible Token bridge adapter for OFC. It received the entire 1B token supply at TGE.
+
+The "discharge" transactions (`get_transaction_info` MCP probe on both):
+
+| TX hash | Method | Status | Gas used | Value |
+|---|---|---|---|---|
+| `0x044feaebbe7380...` | `transferFrom(from=0x752C5a95, to=0x1d81AFF2..., value=10^14)` | **ERROR (reverted)** | 25,285 | 0 |
+| `0x9cabf720a66d30...` | `transferFrom(from=0xaD6C87E9..., to=0x0e222468..., value=4.5×10^12)` | **ERROR (reverted)** | 25,297 | 0 |
+
+Both transactions are nonsensical `transferFrom` attempts (the first tries to transfer from the token contract address itself) that reverted on-chain. **Zero OFC tokens moved in either transaction.** Layer 3's `approval_watchlist.drain_detected=1` pipeline marked them as discharging 3,228 + 1,128 + 231 = 4,587 victims respectively. The 4,587-victim discharge event did not happen.
+
+**Three stacked bugs produced the finding:**
+
+1. **Behavioral classifier false-positive on pre-launch ERC-20 token launches.** OFC's confirmed-tier label came from `confidence_reason: "Behavioral confirmation: bot 0x8c858126a972dd313e91d0d6b68e90e2e1eb9508 trapped in tx 5c6d3a661db3..."`. The bot tried to interact with the token while it was in pre-trading state, the contract reverted as designed (trading not yet enabled / forwarder-restricted), and Layer 3's behavioral confirmation pipeline interpreted the revert as a trap firing. **Class of false positive:** any ERC-20 token launch with a pre-launch trading gate that bots front-run will produce a confirmed-trap classification on Layer 3.
+
+2. **Bytecode classifier false-positive on the Animoca / `@animoca-network/contracts` framework.** OFC was flagged with `has_asymmetric_transfer=1` and `has_unusual_fee_structure=1`. The diagnostic string identifies the patterns: `"CALLER at 0x101c -> EQ at 0x101e -> JUMPI at 0x1022 -> REVERT at 0x1053: conditional revert gated on msg.sender in transfer context"` — that is the standard `onlyOwner` / `ContractOwnership` modifier pattern used by Animoca's framework (and by OpenZeppelin). `"SHA3 at 0xc3a -> SLOAD at 0xc3e -> JUMPI at 0xc4f -> MUL at 0xc76: KECCAK256-keyed storage lookup gates arithmetic on transfer amount"` is the standard `TokenRecovery` pattern. **Class of false positive:** any ERC-20 built on Animoca's framework — and likely any using ContractOwnership + TokenRecovery in general — gets a trap-pattern signature. The OneFootball Club token sits at the intersection: Animoca framework + verified ERC-20 + active trading. The bytecode classifier produces a false positive class size that is *at least* the count of Animoca-framework deployments (which is large; Animoca has 380+ portfolio companies).
+
+3. **`approval_watchlist.drain_detected` pipeline credits failed transferFrom calls as multi-victim drain events.** The 2026-05-09 "discharge" was 3 failed `transferFrom` transactions with single-`from` parameters. The pipeline credited each failed tx as drains against ~all approvers in the pool at the time. The numerical attribution: tx 1 → 3,228 phantom drain rows; tx 2 → 1,128; tx 3 → 231. **Class of false positive:** any contract that experiences a failed transferFrom attempt produces phantom drain rows against unrelated approvers. The 8,108 drain events in the past 14 days (per the 2026-05-21 recent-activity probe) likely contain a non-trivial false-positive fraction from this same bug — the headline drain counts are unreliable until the pipeline is audited.
+
+**Discovery (how it was caught):**
+
+The 2026-05-21 recent-activity review surfaced the harvester discharge as a major finding. Writing Phase 4 "Confirms" documentation under the strict CLAUDE.md discipline forced a Phase 2 literature review. The literature review found the Correction #20 open work flag ("investigate why an Animoca-tagged wallet deployed a confirmed-tier approval-harvesting contract"). The cross-chain Blockscout probe was the next-step input prescribed by Correction #20. The first probe (`get_address_info` on `0x752c5a95` Base) returned the ERC20FixedSupply / OneFootball Club / 3,904-holders / CoinGecko-listed token metadata — at which point the entire premise of the harvester finding collapsed in a single API call.
+
+Subsequent probes confirmed: the second contract (`0xDA42FE`) is the LayerZero adapter, not an unused sibling; both discharge txs are failed transferFrom calls, not 4,587-victim sweeps; the mainnet Blockscout label confirms the Animoca attribution is real and not stale.
+
+The discipline of "investigate the open work before declaring victory" caught the error before the case file's "strongest-validated Tier-C prediction" framing propagated into external materials. Without that discipline the 4,587-victim discharge would have anchored a pitch slide.
+
+**Numerical effect on published / committed claims:**
+
+| Claim location | Old (retired) form | Corrected form |
+|---|---|---|
+| INDEX.md Section 1 `0x752c5a95` entry | "DISCHARGED 2026-05-09 — 4,587 victims drained in 30 minutes... validated the 2026-04-24 Tier-C prediction within 15 days" | **Retired entirely.** Contract is OneFootball Club (OFC), a legitimate Animoca-deployed verified ERC-20 token with 3,904 holders. The 2026-04-24 "harvester" framing was a stacked-false-positive misclassification. There was no discharge. |
+| CASE_HARVESTER_DISCHARGE_0x752C5A95_20260509.md (created 2026-05-21) | "EXTRACTION_011. Strongest validated Tier-C prediction in the corpus to date." | **Retracted entirely.** Case file is annotated with a top-of-file retraction notice; content preserved verbatim per immutable-corpus-record discipline. |
+| Lexicon Adversarial Maneuver / Disrupt-Positioning entry (line 1065) | "Layer 3's 2026-04-24 pre-drain flag on operator `0x80b12bd0` (15 days of lead time before the May-9 4,587-victim discharge) is the canonical example of disrupt-positioning succeeding." | **Retracted.** Disrupt-positioning concept retained; the `0x80b12bd0` example is removed. No corpus-derived canonical example currently exists. |
+| `approval_watchlist` table "drain_detected" counts | "3,437 lifetime drain events" (CLAUDE.md priority #14) | **Unreliable.** Pipeline bug credits failed transferFrom calls as multi-victim drains. Headline count includes false positives at an unknown ratio. Per-event audit required before the headline can be republished. |
+| "Strongest validated Tier-C prediction in the corpus" | "0x752c5a95 harvester discharge, 15-day lead time" | **No validated Tier-C prediction currently in the corpus.** All prior Phase A predictions were disproven; the 0x752c5a95 prediction was misclassification-driven and is now retracted. The Strategy Lifecycle / Tier-C prediction model has no currently-validated example. |
+
+**Fix:**
+
+- This correction-log entry (#24) — 2026-05-21, commit pending.
+- `CASE_HARVESTER_DISCHARGE_0x752C5A95_20260509.md` — top-of-file retraction notice added per immutable-record discipline; original content preserved.
+- `INDEX.md` — `0x752c5a95` Pre-Drain Harvester entry retired; replaced with RETRACTED notice. Section 2 entries for the two "discharge wallets" retired.
+- `CORRECTIONS.md` — Quick Retirement Index row added; full dated entry added.
+- `lexicon.md` — Adversarial Maneuver / Disrupt-Positioning entry's `0x80b12bd0` example removed.
+- `CLAUDE.md` retired-claims list updated.
+
+**Operational priorities added (three new bugs to fix):**
+
+- **Bug #1 (behavioral classifier FP on pre-launch ERC-20s):** Audit the `behavioral_confirmation` path. When a bot triggers a revert during the pre-launch window of a verified ERC-20 token, the system should NOT promote to confirmed-trap. Requires a pre-launch / not-yet-public-listed check. Sample size: at minimum the OFC case; almost certainly more in the corpus.
+- **Bug #2 (bytecode classifier FP on `@animoca-network/contracts` framework):** Audit `bytecode_cache` for all rows with `has_asymmetric_transfer=1 + has_unusual_fee_structure=1` that are verified contracts on Blockscout. Cross-check against deployer's mainnet labels. Sample expected: every Animoca-framework deployment (Animoca has 380+ portfolio companies; per-company contract count varies).
+- **Bug #3 (approval_watchlist drain credit on failed transferFrom):** Audit the `drain_detected=1` pipeline. Add a tx.status filter — a failed `transferFrom` must NOT generate `drain_detected=1` rows for any approver. Re-flag all existing `drain_detected=1` rows that correspond to reverted txs as `drain_detected=0` (or remove). Then recompute headline corpus statistics. This is the load-bearing fix.
+
+**Open work (post-correction):**
+
+- Bulk audit of Animoca-framework contracts in our corpus: how many confirmed/suspected entries are framework false-positives? The OFC case is one data point; corpus-wide count requires the bytecode_cache + OLI cross-reference described above.
+- Bulk audit of `drain_detected=1` rows that map to failed transactions: recompute the 3,437-lifetime-drain claim.
+- Re-evaluate every "self_deploying_trap_operator" archetype case file written under the same approval_watchlist methodology (`0xacc79e7b`, `0x73c0c56b`, `0xc0ee427b`). If the pipeline credits failed transferFroms as drains, the 290-drain count on `0xacc79e7b` (Case file CASE_SELF_DEPLOYING_TRAP_OPERATOR_0xACC79E7B_20260521.md, committed 2026-05-21) needs re-verification before its findings can be trusted.
+- Audit the OLI enrichment pipeline (`surveillance/oli_enrichment.py`): the production `oli_labels` table has 13 rows, 0 of which have tags populated. The live Blockscout tags for `0x80b12bd0` ARE present (3 tags returned in the MCP probe), so the fetch path is broken somewhere between Blockscout response and table write. Until this is fixed, the OLI-based detector caveats (Correction #20's "use is_known_legitimate at promotion time") are running with empty data.
+
+**Why this matters epistemically (the meta-finding):**
+
+Correction #24 is the second consecutive correction (after #21 + #22) where statistical or external-source verification overturned a previously-accepted finding. Correction #21 (Pattern D direction reversal) was caught by Cox PH + KS testing. Correction #22 (Camouflage Ratio direction reversal) was caught by tier-partitioned z-testing. Correction #24 was caught by single-call cross-chain external probe.
+
+The shared root cause: **Layer 3's classifiers were not stress-tested against the external truth-layer before being trusted as ground truth.** The "confirmed-tier" label, the "drain_detected=1" pipeline, and the bytecode trap-pattern flags all produced confident, internally-consistent labels — and all three were wrong on the same contract simultaneously.
+
+The CLAUDE.md "loud failures over silent wrong output" doctrine assumed the classifier paths would fail loudly when wrong. They didn't — they failed silently, agreeing with each other in a self-reinforcing way that produced a "strongest-validated Tier-C prediction" finding from a normal ERC-20 token launch.
+
+Process change implied: **any "confirmed-tier" finding in the corpus that has an externally-attestable identity (verified on Blockscout, listed on CoinGecko, OLI-tagged, on a major exchange) must be cross-checked against the external source before being treated as adversarial.** This is not optional and not deferred. It is a precondition for the classifier output to be cited.
+
+**Propagation watch-list (add to top-of-file table):**
+
+| Claim | Still appears in | Required cleanup |
+|---|---|---|
+| "`0x752c5a95` Pre-Drain Harvester" as an adversarial contract | `docs/INDEX.md` Section 1 + Section 2; `surveillance/data/cases/CASE_HARVESTER_DISCHARGE_0x752C5A95_20260509.md`; production `contracts` table (confidence_tier='confirmed'); production `approval_watchlist` table (4,587 drain_detected=1 rows); `docs/lexicon.md` line 1065 (Adversarial Maneuver canonical example) | INDEX entries retired; case file retraction notice; lexicon line removed; production DB rows pending (require migration script — flagged as engineering work). |
+| "4,587 victims drained in a 30-minute discharge" | All references to EXTRACTION_011 | Retracted entirely. No corpus-derived "discharge" event corresponds to a real on-chain mass-drain on this contract. |
+| "Strongest validated Tier-C prediction in the corpus" | `surveillance/data/cases/CASE_HARVESTER_DISCHARGE_0x752C5A95_20260509.md` and any derived materials | Retracted. No validated Tier-C prediction currently exists in the corpus. |
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.
