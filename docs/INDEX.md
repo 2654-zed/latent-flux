@@ -168,11 +168,24 @@
   - `0x147b8869655bc09f226955cc676ff78efe240ca8` (gap 1,777d, Base, fleet 4) **[CORRECTION #20 → Luchadores: Deployer]**
   - `0xf6c99cec5bd639316a19d2f56afc14bd046d3a90` (gap ≈1,748d, Base, fleet 2)
 
-### `0x752c5a95` Pre-Drain Harvester (Base)
-- **ID:** No canonical ID — investigation only
-- **Description:** Confirmed-tier contract harvesting Permit2 approvals from 1,898+ victims (as of 2026-04-24) without firing a sweep. Deployer is `0x80b12bd0` (pristine-solo, 2019 mainnet vintage). Bytecode flags `has_asymmetric_transfer=1`, `has_unusual_fee_structure=1`. The harvester is the largest active confirmed-tier approval pool in the corpus.
-- **Primary case file:** None — gap. Only investigated via session scripts (`scripts/investigate_0x752c5a95.py`).
-- **Status:** UNDER_INVESTIGATION — pre-drain accumulation, no sweep yet
+### `0x752c5a95` Pre-Drain Harvester (Base) — **DISCHARGED 2026-05-09**
+- **ID:** EXTRACTION_011 (assigned 2026-05-21 retroactively to the discharge event)
+- **Description:** Confirmed-tier contract that harvested Permit2 approvals from 1,898+ victims (as of 2026-04-24) without firing a sweep. Deployer is `0x80b12bd0` — **Animoca: Deployer** per OLI labels after Correction #20 (was originally framed as pristine-solo with 2019 mainnet vintage). Bytecode flags `has_asymmetric_transfer=1`, `has_unusual_fee_structure=1`.
+- **2026-05-09 discharge event:** Two independent drain_caller EOAs swept the harvester within 30 minutes. `0x1d81aff2a24c` drained 3,228 victims in a single tx at 11:28:23Z; `0x0e2224685fe7` drained 1,359 victims across 11:50:05Z–11:58:01Z. **Total: 4,587 unique victims drained in 30 minutes.** Validated the 2026-04-24 Tier-C prediction within 15 days.
+- **Post-discharge state:** harvester still attracting fresh approvals. Pool is now **8,152 unique victims, 56.3% drained, 43.7% (3,565 victims) still armed.** Last new approval 2026-05-21T14:13Z.
+- **Primary case file:** `cases/CASE_HARVESTER_DISCHARGE_0x752C5A95_20260509.md`
+- **Status:** DISCHARGED — first event 2026-05-09, second discharge structurally possible at any time on the 3,565 still-armed approvals.
+
+### Self-Deploying Trap Operator archetype (2026-04-27 onward, 3 documented instances)
+- **ID:** No canonical ID — operator-class typology
+- **Description:** Pure-L2 EOAs that deploy trap contracts AND sweep approvals from those same contracts. The same EOA serves as both `deployer_address` and `drain_caller`. All instances share: pristine pure-L2 identity (no mainnet history), behavioral_score 0 at deploy, L2-native funder, drains begin within hours of deploy. Non-overlapping bytecode and non-overlapping funders across instances — independent operators converging on the same operational template. Distinct from Pristine Solo Operator (which has mainnet vintage) and from accumulator-class operators (e.g., `0x752c5a95`) which separate deploy and discharge across weeks.
+- **Primary case file:** `cases/CASE_SELF_DEPLOYING_TRAP_OPERATOR_0xACC79E7B_20260521.md` (anchors the typology with the most-active instance; covers all three operators).
+- **Documented operators:**
+  - `0xacc79e7b9f8dbb22e197c76d92ff8c0472ac81b4` — Base, 3 contracts, 290 drains / 277 unique victims, **95.7% drain efficiency**, **ACTIVE 22 consecutive days through 2026-05-21**. Two-phase pattern: contract #2 ran a 22-hour mass-drain window then shifted to contract #3's sustained slow-bleed (~10 drains/day). Funder `0x1b1d2149d656`.
+  - `0x73c0c56bbf164d23028ea7a35d9089ce0c12fcec` — intermittent, active 2026-05-06 + 2026-05-20. Funder `0xa67d7eb4dc68`.
+  - `0xc0ee427bee1d1f67861612c11fdf5f9b6b49cd66` — Arbitrum, added to watchlist 2026-05-21. 5 drains in first 4 hours post-deploy (single contract). Active today.
+- **Lexicon proposal pending:** Worth a new lexicon entry **Self-Deploying Trap Operator** alongside but distinct from Pristine Solo Operator. Three instances within one month is sufficient scoping; deferred to a follow-up session.
+- **Status:** ACTIVE — pattern continuing to surface in 2026-05-21 recent-activity review.
 
 ### Industrial-scale PSO+Single-Purpose hybrid — pulse-burst operator (2026-05-01, **RETRACTED 2026-05-09 — Correction #20**)
 
@@ -428,6 +441,15 @@ Flat alphabetical (lowercase). Use Ctrl-F. Format: `address  primary_classificat
 - `0xefef185e2c89bbede21a1c41427bdf1332eca392` — high-confirmation-ratio operator (watchlist HIGH 2026-04-23) — no case file, lexicon-only
 - `0x00169219376146760298417404949075285cab72` — high-confirmation-rate operator (5 confirmed traps in 24h on 2026-04-26, fleet 22, mainnet 2024-09-03) — funded by `0x3304e22d` (infrastructure-scale candidate). No case file. Investigated via `scripts/investigate_0x00169219.py`. Bot victims: `0xf2b54380...`, `0x5555553ac295`, `0xffffff35da6e`, `0x999999a4d40f` (vanity-prefix MEV bots, NOT the c0ffee fleet).
 - `0x202c8b326ca75bf737fd709b524a1333681f0480` — dual role: self-funded trap operator (fleet 13, 2 confirmed, mainnet 2021-05-02) AND deployer-victim of `0x752c5a95` harvester. No case file; first surfaced in 2026-04-24 task-4 deployer-victim investigation, fired 1 trap event 2026-04-26.
+
+### Self-Deploying Trap Operators (2026-04-27 onward)
+- `0xacc79e7b9f8dbb22e197c76d92ff8c0472ac81b4` — Base, self-deploying trap operator. 3 contracts deployed (`0xba1d9ed108ec`, `0x20abaff7650759`, `0xa7e1e8ab7b7c`). 290 drains / 277 unique victims. 95.7% drain efficiency. **ACTIVE 22 consecutive days through 2026-05-21.** Funder `0x1b1d2149d656`. Watchlist HIGH `self_deploying_trap_operator_acc79e`. Case: `cases/CASE_SELF_DEPLOYING_TRAP_OPERATOR_0xACC79E7B_20260521.md`.
+- `0x73c0c56bbf164d23028ea7a35d9089ce0c12fcec` — Base, same archetype. Intermittent active 2026-05-06 + 2026-05-20. Funder `0xa67d7eb4dc68`. Watchlist HIGH `self_deploying_drainer_73c0c56b`. Hit_count=52. No standalone case file; covered in `cases/CASE_SELF_DEPLOYING_TRAP_OPERATOR_0xACC79E7B_20260521.md` as sibling.
+- `0xc0ee427bee1d1f67861612c11fdf5f9b6b49cd66` — **Arbitrum** (first Arbitrum instance of archetype). Self-deploying. Deployed `0x7937b4c76ec2` on 2026-05-21T09:41Z, drained 5 victims in 4 hours post-deploy. Watchlist HIGH `self_deploying_trap_operator_c0ee427b` (added 2026-05-21). No mainnet history, no funder trace, behavioral_score 0.
+
+### EXTRACTION_011 — `0x752c5a95` Harvester discharge wallets (2026-05-09)
+- `0x1d81aff2a24c822d715ec09a0f81801face6e6fd` — Base. Drained 3,228 victims of `0x752c5a95` harvester in a single tx at 2026-05-09T11:28:23Z. Itself a deployer (3 contracts on Base, first deploy 2026-04-16). Did not drain any other corpus contract. Currently dormant. Should be added to watchlist HIGH. Case: `cases/CASE_HARVESTER_DISCHARGE_0x752C5A95_20260509.md`.
+- `0x0e2224685fe775b471b457c643913e4bbd66c8d2` — Base. Drained 1,359 victims of `0x752c5a95` harvester in an 8-minute window 2026-05-09T11:50:05Z → 11:58:01Z. Pure EOA, no deployer record. Did not drain any other corpus contract. Currently dormant. Should be added to watchlist HIGH. Case: `cases/CASE_HARVESTER_DISCHARGE_0x752C5A95_20260509.md`.
 
 ### org_001 drainer escalation (`0xfbf44e96` on Arbitrum, 2026-05-06)
 - **Drainer:** `0xfbf44e969d4fc5cbad62870207341c976f9e38f9` — Arbitrum, fleet=1, deploy-once-and-dispose. Watchlist HIGH (`self_deploying_drainer_fbf44e96_org001`).
