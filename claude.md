@@ -290,6 +290,9 @@ Source: production `/stats` at `https://stellar-embrace-production-2020.up.railw
 13. Evaluate hybrid cache architecture for `risk_scores` persistence (see Correction #6).
 14. Drain-wave USD attribution gap — `approval_watchlist` schema captures victims, contracts, drainers, tx hashes, timestamps, but **zero USD attribution** on any of 3,437 lifetime drain events across 94 drainers and 2,963 victims. Single largest unmeasured-harm gap in the corpus. Estimated $1.7M–$6.9M unaccounted.
 15. `trap_events.loss_estimate_usd` column: 0 of 2,159 lifetime rows populated. Either deprecate or build the populator.
+16. **Routing-monitor silent failure** — `surveillance/routing_monitor.py` has produced 0 operational signals corpus-wide (0 `routing_presence=1` rows, 0 `detection_method='routing_anomaly'` rows). Last heartbeat 2026-04-29; no live process on container; `ONEINCH_API_KEY` not configured. Either re-provision the API key + add respawn logic + add a watchdog, or retire the monitor and drop the schema columns + lexicon cross-references. See Correction #23 (2026-05-21).
+17. **Detailed-health endpoint** — `/stats` shows only the most-recent single heartbeat row, which lets silent per-component failures hide behind active chain monitors. Add `/api/health/detailed` that surfaces per-component freshness. The routing-monitor failure went 22 days undetected because the public surface did not expose the gap.
+18. **Audit other ANALYSIS_JOBS for the same silent-death pathway** that killed the routing monitor — which background subprocesses have respawn logic and which do not? The fail-once-stay-dead pattern is reproducible.
 
 ### Reference files
 

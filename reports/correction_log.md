@@ -1189,6 +1189,76 @@ The Q-001 role_classifier and Q-002 approval_spike_detector outputs are already 
 
 ---
 
+## Correction #23 — Routing-Monitor Silent Failure: 0 1inch-Routing-Anomaly Signals Produced Across Entire Corpus
+
+**Date:** 2026-05-21
+**Discovery method:** Railway production health check via `railway ssh` after the recent Railway outage. The heartbeat-table probe surfaced that `routing_monitor` had not heartbeat since 2026-04-29T22:05:35Z — 22 days stale. Follow-up query of the `contracts` table confirmed the silent-failure scope.
+**Severity:** MEDIUM — the routing-anomaly detection pathway has been *advertised* in code, lexicon Pattern C entry, and Correction #4 as a real signal, but has produced zero operational output across the 282K+ corpus. The downstream impact is not a published claim that needs retraction (no customer-facing material cites a routing-anomaly count), but the corpus does not have the signal it implicitly claims to.
+
+**Claim (what was asserted, implicitly):**
+
+- `surveillance/routing_monitor.py` is one of the production monitors. Correction #4 (2026-04-17) explicitly added `detection_method="routing_anomaly"` to its update-contract-confidence call, implying the monitor was producing real flag-updates.
+- The `contracts` table schema carries dedicated columns for this signal: `routing_presence INTEGER`, `routing_first_seen TEXT`.
+- Lexicon Pattern C — Funding Chain Laundering entry references "1inch pathfinder avoidance" as a corpus-observable signal type.
+- The `run_surveillance.py` launcher at lines 1945–1958 starts the routing monitor as either an in-process Process (if `ONEINCH_API_KEY` is set) or as a subprocess (standalone mode).
+
+**Reality (what the data now shows):**
+
+Probed on 2026-05-21 via `railway ssh`:
+
+| Check | Result |
+|---|---|
+| `heartbeat` row for `routing_monitor` | 2026-04-29T22:05:35Z (22 days stale) |
+| Live `routing_monitor` process on container | **None** |
+| `ONEINCH_API_KEY` env var | **Not set** (key length = 0) |
+| Contracts with `routing_presence = 1` | **0** |
+| Contracts with `routing_first_seen IS NOT NULL` | **0** |
+| Contracts with `detection_method = 'routing_anomaly'` | **0** |
+
+The routing_monitor has produced zero operational signal across the entire corpus, on either Arbitrum (its target chain) or any other. The 2026-04-29 heartbeat appears to be from a brief subprocess-launch that completed initialization (writing the heartbeat row) but then exited or stalled without producing detection output. No subsequent restart occurred.
+
+**Root cause (likely):**
+
+1. `ONEINCH_API_KEY` is not configured in Railway environment. Without the key, the launcher takes the fallback path at lines 1952–1957 and starts the monitor as a subprocess without an API key. The monitor's actual API calls (token-registry check + routing-anomaly quotes) require authentication against `api.1inch.dev`, so the subprocess can write a startup heartbeat but every detection cycle errors out at the API layer.
+2. The detection-cycle error is presumably handled by an uncaught-exception path that exits the subprocess. Without a respawn mechanism (the `processes.append(("routing", routing))` registration does not include re-launch logic), once the subprocess dies the monitor stays dead until the next Railway redeploy.
+3. The 2026-04-29 heartbeat lines up with the redeploy timestamp from that date (per `git log --since=2026-04-28 --until=2026-04-30`), suggesting the subprocess was respawned at deploy time, wrote one heartbeat, then died on its first detection cycle.
+
+**Discovery (how it was caught):**
+
+User asked for a Railway health check after a Railway-side outage. The first probe round (public API) showed everything healthy. The follow-up via `railway ssh` exposed the heartbeat-table-level view, where the four-chain monitors all heartbeated within the same second (07:03:44Z) but `routing_monitor` had a 22-day-stale timestamp. The detection-method count query confirmed zero output corpus-wide.
+
+This is a class of failure the public API surface specifically does NOT expose: `/stats` returns the most-recent heartbeat (which gets dominated by the active chain monitors) and does not surface the per-component freshness gap.
+
+**Numerical effect:**
+
+No published numerical claims need retiring. Internal effect:
+- Pattern C (Funding Chain Laundering) lexicon entry references "1inch pathfinder avoidance" as a detection signal type. The signal exists architecturally but has produced zero outputs. The Pattern C 2026-04-18 scan in `reports/cex_laundered_funding.md` returned 0 strict candidates — that scan was a separate SQL-only run on funding traces, so it did not depend on routing_monitor output and remains valid.
+- Any future analysis that joins on `contracts.routing_presence` will silently match nothing. Pre-existing code that takes the `routing_anomaly` detection_method branch (in `risk_scoring.py` or similar) is a dead code path.
+- `evidence_type` filter on `/risk` endpoint, when set to `routing-anomaly`, returns no contracts.
+
+**Fix:**
+
+- This correction-log entry (#23) — 2026-05-21, commit pending. No CORRECTIONS.md entry: no customer-facing claim was made.
+- CLAUDE.md operational priorities updated to add routing-monitor remediation as a priority (decide between fix vs retire).
+
+**Operational decision required:**
+
+Two paths, listed in increasing order of effort and decreasing order of risk:
+
+A. **Retire the monitor.** Remove the launcher call from `run_surveillance.py`, drop `routing_presence` / `routing_first_seen` columns from the schema (or document them as deprecated), remove the lexicon cross-reference to "1inch pathfinder avoidance" as an active signal. Pattern C remains real and detectable via funding-trace methods; this path concedes that the live-API approach was not productive. Lowest engineering effort, highest signal-loss.
+
+B. **Fix the monitor.** Add `ONEINCH_API_KEY` to Railway env (already provisioned somewhere if Layer 3 has a 1inch account; verify status); add a respawn loop around the subprocess so future single-cycle failures are recoverable; add a watchdog that alerts when `heartbeat.routing_monitor` goes >2× the poll interval stale. Medium engineering effort, restores the documented detection pathway.
+
+Recommendation: Path B if there is any 1inch account on Layer 3's side; Path A if the 1inch key is no longer available and re-provisioning is out of scope. The longer the monitor stays dead, the more the supporting infrastructure (schema columns, code paths, lexicon references) accumulates as cruft.
+
+**Open work:**
+
+- Add a `/api/health/detailed` endpoint that surfaces per-component heartbeat staleness, not just the latest single row. Today's silent failure was invisible to external observers; the system needs to fail loudly per CLAUDE.md "loud failures over silent wrong output."
+- Audit other ANALYSIS_JOBS in `run_surveillance.py` for the same silent-death pathway: which background jobs have respawn logic, and which do not? The routing_monitor pattern is reproducible.
+- Reconcile the lexicon Pattern C "1inch pathfinder avoidance" reference with the actual evidence basis. Either retain the language with explicit "signal architected but not currently producing detections" annotation, or rework to point to the funding-trace methodology only.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.
