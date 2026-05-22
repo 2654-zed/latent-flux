@@ -1481,11 +1481,33 @@ The 7.2% FP rate is in the territory where headline numbers cannot be reused at 
 
 This is also the FIRST audit-derived correction in the log. Corrections #1–#24 were all caught by re-querying primary sources, manual review of specific cases, or statistical analysis of corpus subsets. Correction #25 was caught by **bulk enrichment of the entire confirmed-tier population against external truth sources** (Blockscout verified-source flag, holders count, market cap). That methodology should now be a standing process — not a one-time fix.
 
+### Phase B follow-up migration (2026-05-22, same-day extension of Correction #25)
+
+After the Phase A migration (116 STRONG LIKELY_FP), Phase B applied internal heuristics (deployer recidivism, drain/tx ratio, reason_class, bytecode_cache presence) to the residual NEEDS_REVIEW + EDGE population. Distribution:
+
+| Phase B verdict | Count | Action |
+|---|---|---|
+| LIKELY_TP_RECIDIVIST | 828 | Keep confirmed (recidivist deployer, no institutional tag — strongest internal TP signal; Coffee Fleet alone accounts for ~203) |
+| NEEDS_REVIEW | 488 | Phase C (manual review) |
+| STILL_NEEDS_REVIEW | 62 | Phase C (Phase A EDGE — verified+ERC20 with <10 holders) |
+| LIKELY_FP_WEAK | **40** | **Migrated to `unanalyzed`** (Phase D follow-up; this section) |
+| BUG_19B_SUSPECT | 2 | Phase E work (residual from-matching bug; investigate, don't auto-downgrade) |
+| ALREADY_MIGRATED / LIKELY_TP_PHASE_A | 189 | (Phase A results) |
+
+The 40 LIKELY_FP_WEAK contracts all matched: self-loop or BACKFILL reason + solo deployer (recidivism=0) + zero drain activity + no bytecode_cache row + no institutional OLI tag. Per audit plan Class D guidance: "downgraded en masse pending stronger evidence."
+
+Migration applied on local + production via `scripts/phase_d_weak_migration.py` (and prod-side equivalent). Each contract moved from `confirmed` → `unanalyzed`. Audit annotation prepended to `confidence_reason`. Original reason preserved.
+
+**Post-Phase-B+D production state:**
+- Confirmed tier: **1,495** (was 1,650 before audit; 1,535 after Phase A migration; now 1,495 after Phase B+D)
+- Total audit-driven downgrades: **156 contracts (9.5% of the pre-audit confirmed population)**
+- Remaining audit work: Phase C (550 contracts split between NEEDS_REVIEW and STILL_NEEDS_REVIEW) + Phase E (permanent pipeline fix)
+
 **Propagation watch-list:**
 
 | Claim | Still appears in | Required cleanup |
 |---|---|---|
-| "Confirmed-tier: 1,650" or similar specific count | All Layer 3 materials | Replace with "1,534 post-2026-05-22 audit (subject to further Phase B+C refinement)" with explicit methodology note. |
+| "Confirmed-tier: 1,650" or similar specific count | All Layer 3 materials | Replace with "1,495 post-2026-05-22 Phase A+B+D audit (subject to further Phase C refinement)" with explicit methodology note. |
 | Camouflage Ratio confirmed-tier 30.44% (Correction #22) | `docs/lexicon.md` Camouflage Ratio entry; `reports/correction_log.md` Correction #22 | Re-run the z-test post-migration and update the entry / log. |
 | Pattern D / Behavioral Laundering / Stored Potential lexicon entries that reference confirmed-tier examples | `docs/lexicon.md` various | Verify that example contracts are not in the 116 retracted set; if so, annotate or replace. |
 | Internal queries or analytics modules that `WHERE confidence_tier='confirmed'` | `surveillance/analytics/*`, `surveillance/sai/*` | Re-run with the post-migration corpus; document any meaningful shifts. |
