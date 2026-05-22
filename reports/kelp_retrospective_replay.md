@@ -179,8 +179,18 @@ Ranked by leverage × cost. "Cost" is engineering gut-feel days; "leverage" coun
 | 4. `PacketVerified` event indexer with DVN attribution | Phase 5 class (DVN signing baselines) | 2 days | MEDIUM |
 | 5. Cross-chain mint conservation check (bridged-asset mints vs source burns) | EXTRACTION_007 class, Phase 6 class | 3 days | MEDIUM |
 | 6. Tornado Cash + other mixer watchlist on Ethereum | Phase 4 class (fresh-funded-from-mixer → large inbound) | 1 day (list maintenance) | LOW (LZ / AML context) |
+| **7. RPC-divergence monitor for cross-chain attesters** (added 2026-05-22 from LayerZero Labs report) | New gap class — **operator-layer RPC poisoning**. Catches the Kelp attack mechanism (not just the enabling configuration). Subscribe to a target OApp's DVN attestations + independently query the same source-chain state from M unaffiliated RPC providers + flag any attestation whose committed state diverges from quorum-of-observers. Generalizes to all cross-chain attesters (Wormhole guardians, Axelar relayers, Across watchers, oracle networks). | 4 days (prototype on LZ; longer to generalize) | **HIGH** |
 
-Total if all six shipped: ~16 days of focused work. Items 1 and 3 independently are where the 80/20 lives — 5 days combined, closes the two most substantive Kelp-adjacent detection gaps.
+Total if all seven shipped: ~20 days of focused work. Items 1 and 3 independently are where the 80/20 lives for the *configuration* class — 5 days combined. Item 7 is the cheapest addition to also cover the *operator-layer* class, which item 1 alone does not catch.
+
+**Gap 7 detailed scope (added 2026-05-22).** The LayerZero Labs incident report `kelpdao-incident-report.pdf` (Section 4.2) explicitly identifies "RPC anomaly detection to cross-validate between independent observers" as *currently being built by LayerZero Labs themselves* — the divergence-as-alert framing they describe is the exact same product surface we'd build. Implementation outline:
+
+1. **Subscribe to verification events.** Index `PacketVerified` (or analogous) events emitted by the target endpoint contract on every chain. Extract: source chain, destination chain, payload hash, the DVN/attester address, source-chain block number cited.
+2. **Independent state retrieval.** For each verification event, query M unaffiliated RPC providers (Alchemy, Infura, QuickNode, plus an internal node) for the same source-chain block + relevant log/state.
+3. **Quorum check.** Compute the hash the attester committed to; compare against the hash the M observers compute. If the attester's committed state diverges from a strict quorum of independent observers, **emit an alert before any downstream protocol acts on the attestation** (this requires the alerting path to be faster than the executor's `lzReceive` call — a tight but feasible window).
+4. **Generalize across attester protocols.** LayerZero DVNs are one instance. The same shape applies to Wormhole's 19-guardian set, Axelar relayers, Across UMA-watchers, Chainlink CCIP, and price oracles. Each has a "what does the attester claim about source-chain state" question with a quorum-of-observers answer.
+
+This is the cleanest single product surface that catches an entire attack family that Phase 3 alone (DVN-configuration monitoring) does not. Kelp would have been catchable two ways: pre-exploit (Gap 1, configuration signal, 56-day lead) AND attempt-time (Gap 7, RPC-divergence signal, ~seconds before exploit settles). A defense-in-depth posture wants both.
 
 #### Commercial framing — quote-safe claims
 

@@ -1,9 +1,11 @@
-# Extraction Event 008 — KelpDAO LayerZero DVN Configuration Failure
+# Extraction Event 008 — KelpDAO LayerZero DVN Configuration + RPC Poisoning Failure
 
 **Event date:** 2026-04-18
 **Chain:** Ethereum (destination, monitored_chain=1). Source: Unichain.
-**Purpose:** Corpus expansion. Largest April-2026 exploit; configuration-layer variant of the cross-chain infrastructure cluster.
+**Purpose:** Corpus expansion. Largest April-2026 exploit; configuration-layer enabler + operator-layer RPC poisoning proximate cause.
 **Status:** Draft INSERT. Nothing executed. Paired with deeper retrospective at `reports/kelp_retrospective_replay.md` (scoped separately, 50-call RPC budget).
+
+**2026-05-22 revision.** LayerZero Labs published their official incident report on 2026-05-18 (`kelpdao-incident-report.pdf` in the corpus archive). The report upgrades the attribution from Tier B → Tier A and reveals the proximate attack vector was RPC poisoning, not signer-key compromise or any DVN-internal failure. The 1-of-1 DVN configuration was the *enabler* (any compromise of a single DVN's infrastructure = exploit), but the *mechanism* was operational infrastructure compromise of LayerZero Labs' GCP environment. All prior Tier A facts in this file survive; the framing is expanded. New Tier A facts below.
 
 ---
 
@@ -28,6 +30,8 @@ Sourced from `github.com/DK27ss/KelpDAO-294m-PoC` + Blockaid statement + LayerZe
 - Required DVN (Ethereum): `0x589dedbd617e0cbcb916a9223f4d1300c294236b`
 - Required DVN (Unichain): `0x282b3386571f7f794450d5789911a9804fa346b4`
 - Attack recipient (fresh address): `0x8B1b6c9A6DB1304000412dd21Ae6A70a82d60D3b`
+- **OApp delegate (single EOA, added 2026-05-22 from PDF):** `0x1f7A03b70C5448DFd0a2C5a7865169253c2C769b` — the key that **modified the channel configuration from 2-of-2 to 1-of-1** before the exploit. Single EOA controlled the security policy of a $292M bridge. Should be watchlisted as a configuration-authority anchor.
+- **LayerZero Endpoint (Ethereum, immutable):** `0x1a44076050125825900e736c501f859c50fE728c`
 
 **Configuration at time of attack (verifiable via `getConfig(configType=2)`)**
 | Chain | requiredDVNCount | optionalDVNCount | optionalDVNThreshold |
@@ -40,9 +44,33 @@ Sourced from `github.com/DK27ss/KelpDAO-294m-PoC` + Blockaid statement + LayerZe
 - Borrowed ~$236M WETH against the rsETH
 - Bad debt on Aave V3 post-unbacked
 
+## Tier A — RPC poisoning kill chain (added 2026-05-22 from LayerZero Labs report)
+
+The PDF reveals the **proximate** cause was not DVN-internal. The 1-of-1 configuration was the *enabler* (single point of failure); the *mechanism* was operational compromise of LayerZero Labs' GCP infrastructure:
+
+| Date (UTC) | Event |
+|---|---|
+| 2026-03-06 12:59–13:06 | LayerZero developer (Developer1, on a team running RPC infrastructure) socially engineered to clone malicious GitHub repo `github[.]com/pi2infra-can-4/gtn-candidate-repo.git`. Repo dropped **FLATROOF** + **ROOFDECK** Rust macOS backdoors. EDR missed both. **SSO + MFA were enforced** but bypassed via session-key harvest. |
+| 2026-03-30 → 2026-04-16 | Attacker used Developer1's session keys to access LayerZero's GCP + GitHub via VPN services (ExpressVPN, NordVPN, Mullvad). Reconnaissance + persistence. |
+| 2026-04-16 → 2026-04-18 | Lateral movement to GKE clusters. Patched the `op-geth` running process on **two separate GKE clusters in two regions** via injected ELF Position-Independent Executable (CARVED1 launcher → CARVED2 monitor using `funchook` to hook Go `syscall.Syscall` / `syscall.Syscall6`). The malware was discriminating: returned correct responses to LayerZero monitoring tools but tampered responses to the DVN signing service. |
+| 2026-04-18 16:30 | Denial-of-Service attack on **external** RPC providers. Forced LayerZero's failover logic to rely exclusively on the two poisoned internal RPC nodes. |
+| 2026-04-18 17:35 | Exploit. Single `EndpointV2.lzReceive` call mints 116,500 rsETH to attacker. |
+
+**Signer keys were NEVER compromised.** Forensic analysis confirms no key exfiltration. The DVN signed legitimately, with legitimate keys, over a hash of source-chain state that had been *fabricated* by the poisoned RPC layer. This is qualitatively different from "key compromise" or "signer compromise" framings — the right name is **RPC-Layer Honesty-Assumption Violation** (new lexicon entry).
+
+## Tier A — Attribution upgrade (2026-05-22)
+
+Prior framing (Tier B inference by analogy with Drift heist patterns): "Lazarus/DPRK profile, consistent with prepared automation."
+
+Revised framing (Tier A, multi-source independent corroboration):
+
+- **Mandiant + CrowdStrike:** HIGH-confidence DPRK; MEDIUM-confidence **UNC4899** (aka TraderTraitor, Jade Sleet, Pressure Chollima).
+- **tanuki42 + tayvano (independent researchers):** confirm UNC4899 via de-mixing of attacker funding back to known UNC4899 infrastructure-payment addresses.
+- **UNC4899 lineage:** assessed with high confidence to be aligned with the DPRK Reconnaissance General Bureau. Same group as the **Bybit Safe{Wallet} heist (Feb 2025, $1.5B)**. Pattern reuse: macOS-targeted social engineering → developer-credential harvest → infrastructure compromise → single-attack-window exploit → wallet-laundering ring.
+
 ## Tier B interpretations
 
-- **Attack family:** cross-chain DVN verification failure. Distinct from Aethir (operational key compromise) and Hyperbridge (code-layer MMR bypass); all three are April-2026 cross-chain infrastructure cluster events.
+- **Attack family (revised):** compound failure — configuration (1-of-1 DVN, enabler) + operational (RPC poisoning, proximate cause) + code-assumption (signing service implicitly trusted its RPC layer). Distinct from Aethir (purely operational — key compromise) and Hyperbridge (purely code-level MMR bypass). All three are April-2026 cross-chain infrastructure cluster events; Kelp is the compound-failure exemplar.
 - **Stored-potential pre-attack:** CRITICAL. Per the core interpretive rule, maximum capability (mint authority) + maximum trust binding (Kelp + LayerZero) + maximum victim exposure (rsETH holders) + zero constraint (1-of-1 DVN). Exactly the state the framework identifies as loaded-not-safe.
 - **Detection surface:** DVN configuration enumeration. LayerZero DVN configs are read-only public data on-chain; a surveillance module that polled OApp configurations and flagged `requiredDVNCount=1` would have scored Kelp CRITICAL with significant lead time. The retrospective replay report quantifies "significant" via historical `getConfig` calls at earlier blocks.
 - **Why not Circle/Tether freeze:** rsETH is a yield-bearing LRT (Liquid Restaking Token), not a stablecoin. No Circle or Tether pathway applies. Recovery likely requires protocol-native action by Kelp and downstream counterparties (Aave, LayerZero).
@@ -81,7 +109,9 @@ Three orthogonal attack vectors in nine days against the same structural target.
 - **EXTRACTION_007 (Hyperbridge)** — code-layer cluster sibling, 5 days earlier
 - **EXTRACTION_005 (Drift)** — parallel "stored potential via removed constraint" at governance layer; Drift dropped multisig threshold + timelock; Kelp accepted 1-of-1 DVN from deployment
 - **`reports/kelp_retrospective_replay.md`** — the deep retrospective (scoped 50-RPC budget, 8 phases, paused at every phase boundary) that answers "what signals would Layer 3 have caught if it monitored Ethereum and LayerZero OApp configurations"
-- **`reports/behavioral_laundering_detection_scope.md` Pattern D** — the 54% cross-chain reputation-import finding shares a substrate with this cluster: both are cross-chain-surface observations our single-chain profiling misses
+- **Pattern D (lexicon)** — sibling concept. Pattern D = adversaries importing aged-identity reputation across chains. **Kelp = adversaries compromising the operator infrastructure that bridges chains** (operator-layer compromise, distinct from reputation import). See revised Pattern D entry.
+- **UNC4899 / TraderTraitor (lexicon threat-actor entry, added 2026-05-22)** — same threat actor as Bybit Safe{Wallet} heist (Feb 2025, $1.5B). Pattern reuse documented in lexicon entry.
+- **LayerZero Labs incident report (2026-05-18)** — official post-mortem, source for the 2026-05-22 revision facts above. Archived as `kelpdao-incident-report.pdf`.
 
 ## What the INSERT contains
 

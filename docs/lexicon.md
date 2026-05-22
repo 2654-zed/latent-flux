@@ -35,6 +35,7 @@
 - [Adversarial Vanity Branding](#adversarial-vanity-branding)
 - [Protocol-Family Specialist Operator](#protocol-family-specialist-operator)
 - [Self-Deploying Single-Contract Mass-Drain](#self-deploying-single-contract-mass-drain)
+- [UNC4899 / TraderTraitor](#unc4899--tradertraitor)
 
 ### Structural and Psychological
 - [Participatory Asymmetry / Predatory Literacy](#participatory-asymmetry--predatory-literacy)
@@ -58,6 +59,8 @@
 - [Operational Layer Attack](#operational-layer-attack)
 - [Configuration-Level Vulnerability](#configuration-level-vulnerability)
 - [Verification-Path Trust Failure](#verification-path-trust-failure)
+- [RPC-Layer Honesty-Assumption Violation](#rpc-layer-honesty-assumption-violation)
+- [Operator-Layer Cross-Chain Compromise](#operator-layer-cross-chain-compromise)
 - [Pooled Custody Amplification](#pooled-custody-amplification)
 - [Cross-Domain Compositional Harm](#cross-domain-compositional-harm)
 
@@ -416,7 +419,18 @@ Per-chain confirmed-tier ratios (all confirm the reversal):
 
 **Open engineering work:** Q-005 `cross_chain_choreography.py` `pattern_d_gap` scoring currently awards points proportional to *larger* gap. Direction needs inversion or replacement with a bridge-recency primitive.
 
-**Cross-references.** [Pattern F — Advisor-Parasite Pattern](#pattern-f--advisor-parasite-pattern) (orthogonal — victim-extraction cadence), [Intelligence-as-Compounding-Asset](#intelligence-as-compounding-asset) (Pattern D enrichment grows in value as more addresses accumulate history), [Pristine Solo Operator](#pristine-solo-operator) (related but distinct — Pattern D imports active mainnet reputation; pristine-solo exploits dormant mainnet age). 2026-05-19 revision: see `reports/correction_log.md` #21.
+**Cross-references.** [Pattern F — Advisor-Parasite Pattern](#pattern-f--advisor-parasite-pattern) (orthogonal — victim-extraction cadence), [Intelligence-as-Compounding-Asset](#intelligence-as-compounding-asset) (Pattern D enrichment grows in value as more addresses accumulate history), [Pristine Solo Operator](#pristine-solo-operator) (related but distinct — Pattern D imports active mainnet reputation; pristine-solo exploits dormant mainnet age), [Operator-Layer Cross-Chain Compromise](#operator-layer-cross-chain-compromise) (the sibling attack family — adversaries compromising the operator infrastructure that bridges chains, distinct from importing reputation across chains). 2026-05-19 revision: see `reports/correction_log.md` #21.
+
+**Sibling distinction (added 2026-05-22).** Pattern D and Operator-Layer Cross-Chain Compromise share the substrate "cross-chain attacks evade per-chain monitoring" but they are **structurally different attack families**:
+
+| | Pattern D (Reputation Import) | Operator-Layer Cross-Chain Compromise |
+|---|---|---|
+| What the adversary moves | Their own identity / wallet across chains | The operator's RPC view of source-chain state |
+| Detection surface | Address-level (mainnet history, gap analysis) | Infrastructure-level (RPC source diversity, response cross-validation) |
+| Defense | Cross-chain identity linkage | Multi-source RPC quorum + client diversity |
+| Empirical anchor | 28.1% corpus-wide rate (per 2026-05-19 revision); EXTRACTION_004 (Rhea) NEAR-bridge variant | EXTRACTION_008 (Kelp) — UNC4899 RPC-poisoning of LayerZero Labs GCP, 2026-04-18 |
+
+Do not conflate. A Pattern D detector trained on reputation-import signals will not catch operator-layer compromise; an RPC-divergence monitor will not catch reputation import.
 
 ---
 
@@ -896,14 +910,119 @@ The framework implication is that the population statistics of the L2 adversaria
 
 **Extended description.** The defining property: components downstream of the verifier have no mechanism to question the attestation. A lending protocol with oracle dependency trusts the oracle's price; if the oracle reports a manipulated price (because its own source was compromised), the lending protocol authorizes undercollateralized borrowing without any defect. A cross-chain adapter with DVN dependency trusts the DVN's signature; if the DVN signs a forged message, the adapter mints without defect.
 
+**DVN architecture decomposition (added 2026-05-22 from LayerZero Labs incident report).** The phrase "DVN compromise" obscures a multi-modal failure class with very different blast radii. The standard LayerZero DVN has three distinct sub-surfaces:
+
+| Component | Function | What compromise means | Blast radius |
+|---|---|---|---|
+| **On-chain DVN contract** (`DVN.sol` + `MultiSig.sol`) | Verifies signer-quorum signatures against registered signer set | Admin access → can delay messages, redirect/withdraw operator fees. Cannot forge attestations or change signer set without quorum of signers' signatures | Limited (financial nuisance) |
+| **Gasolina** (off-chain signer infrastructure) | Reads source chain via RPC, decides events are real + final, produces ECDSA signatures with signer-role private keys | Direct key exfiltration → forge attestations. **RPC poisoning → forge attestations** with legitimately-held keys signing fabricated data | Catastrophic (exploit) |
+| **Essence** (off-chain transaction-relay service) | Orchestrates Gasolina, aggregates signatures up to quorum, submits to chain via DVN contract `execute()` | Holds admin role only. Cannot forge attestations because keys live in Gasolina | Limited |
+
+The Kelp incident compromised **neither the contract layer (admin held) nor Essence (admin held) nor Gasolina's keys (forensics found no exfiltration)** — the attack hit **Gasolina's RPC dependencies**, which is the substrate Gasolina implicitly trusts to be honest. This is the failure mode the [RPC-Layer Honesty-Assumption Violation](#rpc-layer-honesty-assumption-violation) entry names. Threat modeling that treats "DVN compromise" as a single concept will miss it; threat modeling that decomposes the DVN into these three surfaces makes the RPC-honesty invariant explicit and auditable.
+
 **Empirical grounding.**
 - **EXTRACTION_005 (Drift)**: fake CVT token wash-traded to ~$1 on Raydium → Drift's oracles reported $1 → Drift accepted CVT as collateral worth hundreds of millions.
 - **EXTRACTION_004 (Rhea)**: fake tokens lacking NEP-141 metadata deployed on implicit accounts → Ref Finance pool IDs 8528-8538 paired them with USDC → Rhea's margin-trading oracle accepted the manipulated prices.
 - **EXTRACTION_008 (Kelp)**: 1-of-1 DVN signed forged cross-chain message → LayerZero endpoint accepted attestation → Kelp adapter minted on Ethereum.
 
-**Cross-references.** [Compositional Harm](#compositional-harm), [Configuration-Level Vulnerability](#configuration-level-vulnerability), [Pooled Custody Amplification](#pooled-custody-amplification).
+**Cross-references.** [Compositional Harm](#compositional-harm), [Configuration-Level Vulnerability](#configuration-level-vulnerability), [Pooled Custody Amplification](#pooled-custody-amplification), [RPC-Layer Honesty-Assumption Violation](#rpc-layer-honesty-assumption-violation) (the proximate-cause failure mode that produced the Kelp DVN's forged signature; signer keys were not compromised — the RPC data the signer trusted was).
 
 **External taxonomy reference.** Maps to the `kadenzipfel/protocol-vulnerabilities-index` oracle cluster: `categories/oracle/*` (12 categories including stale-oracle-price-data, twap-oracle-miscalculation, invalid-oracle-version-handling) and the cross-protocol `oracle-price-manipulation` / `oracle-price-feed-*` entries spanning lending, CDP, derivatives, leveraged-farming, options-vault, and synthetics. The trust-binding-without-question-mechanism failure mode appears under different labels in each protocol type.
+
+---
+
+### RPC-Layer Honesty-Assumption Violation
+
+**Definition.** A compositional harm in which an off-chain attesting service (DVN, oracle, bridge relayer) signs over data fetched from an RPC layer that has been compromised, while the attesting service's signing keys and protocol-layer code execute correctly. The attestation is cryptographically valid; the data it commits to is fabricated. Distinct from key compromise (keys remain held) and from code defects (code runs as designed).
+
+**Extended description.** Every off-chain attesting service in DeFi relies on an unstated invariant: *the RPC layer it queries returns honest source-chain state.* This invariant is rarely enumerated as a security boundary. The Kelp 2026-04-18 exploit is the canonical case where the invariant was violated — UNC4899 patched the `op-geth` running process on two LayerZero internal RPC nodes via injected ELF PIE malware (CARVED1 launcher + CARVED2 monitor hooking Go syscalls via `funchook`), then DoS'd external RPC providers to force the DVN's failover logic onto the poisoned internal nodes only. The DVN signed valid signatures over fabricated data with legitimately-held keys.
+
+The failure surface generalizes: any signer that aggregates "this is what source-chain state is at confirmation depth N" depends on the honesty of its RPC providers. Oracles, validity-proof generators, optimistic-rollup challengers, and bridge attesters all sit on this substrate. The standard hardening — multi-source RPC quorum with client-diversity + geo-diversity + cross-validation — is exactly what LayerZero Labs is now building (PDF Section 4.1–4.2) and was not in place pre-incident.
+
+**Empirical grounding.**
+- **EXTRACTION_008 (Kelp)** is the canonical case. PDF `kelpdao-incident-report.pdf` Section 2.5 documents the CARVED1/CARVED2 malware in detail. The third stage (`librpcw.so` / "Worker" library that decides which RPC responses to modify) and the initial injector were both UNRECOVERED in Mandiant's forensics — the attacker's operational discipline included cleanup.
+- The malware was **discriminating**: returned correct RPC responses to LayerZero monitoring tools and tampered responses to the DVN signing service. Strong evidence of prior reconnaissance about LayerZero's internal architecture.
+- Confirmation depth (`confirmations=42`) was *not bypassed* — it was *fabricated*. The poisoned RPC layer returned a state at depth 42 that included the forged source-chain event. This means raising confirmation depth is not a defense against this class.
+
+**Defense requirements (from PDF Section 4):**
+- **Multi-source RPC quorum** with explicit diversity across providers (internal + external), hosting environments, and geographies. A single internal node being compromised must not be sufficient to influence the signed payload.
+- **Client diversity** — multiple independent client implementations (LayerZero is developing a Rust client to pair with op-geth, requiring both to attest).
+- **RPC response cross-validation** — divergence between independent observers surfaces as an alert before signing.
+- **Real-time monitoring of internal RPC processes** with memory-integrity checks; the malware was undetected because EDR didn't flag the in-memory injection and process monitoring only checked endpoint responses, which the malware faithfully returned to monitoring tools.
+
+**Layer 3 detection surface.** Layer 3 doesn't run signing infrastructure but does have multi-chain RPC observation. A **cross-protocol RPC-divergence monitor** that compares responses from N independent providers against a target bridge's attesting service is a buildable product. The shape: subscribe to a target OApp's DVN attestations + independently query the same source-chain state from M unaffiliated RPC providers + flag any DVN attestation whose committed state diverges from quorum-of-observers. This catches both the Kelp pattern and the broader class. Tracking as a methodology-gap candidate (`reports/kelp_retrospective_replay.md` Phase 8 expansion).
+
+**Cross-references.** [Verification-Path Trust Failure](#verification-path-trust-failure) (the parent compositional-harm category; RPC-Layer Honesty-Assumption Violation is the specific mechanism), [Configuration-Level Vulnerability](#configuration-level-vulnerability) (the enabler — 1-of-1 DVN meant compromise of one RPC layer = exploit), [Operator-Layer Cross-Chain Compromise](#operator-layer-cross-chain-compromise) (the threat-actor framing — UNC4899 specializes in this class), [UNC4899 / TraderTraitor](#unc4899--tradertraitor) (the named threat actor).
+
+---
+
+### Operator-Layer Cross-Chain Compromise
+
+**Definition.** An attack family in which adversaries compromise the *off-chain operator infrastructure* that bridges chains — RPC nodes, signing servers, configuration delegates, deployment tooling — rather than the on-chain protocol itself. Distinct from Pattern D (Cross-Chain Reputation Import) which moves the adversary's own identity across chains; this family moves the adversary's *control* into the operator layer of the existing infrastructure.
+
+**Extended description.** Cross-chain protocols rely on off-chain workers (DVNs, relayers, attesters) to copy information between chains. Each worker has an operator who runs the off-chain infrastructure. If the operator's GCP environment, CI/CD pipeline, developer endpoints, or configuration-management surfaces can be compromised, the adversary inherits the operator's signing legitimacy without ever touching keys or contracts.
+
+The defining property: from the protocol's perspective, the operator's outputs look correct. Signatures verify, messages route as configured, on-chain state-transitions execute against valid attestations. The attack is invisible at the protocol layer because the protocol layer has no mechanism to ask "is the operator's view of source-chain state actually correct?"
+
+**Empirical grounding.**
+- **EXTRACTION_008 (Kelp, 2026-04-18, $292M)** — canonical case. UNC4899 compromised LayerZero Labs' GCP environment via macOS-targeted social engineering of a developer running RPC infrastructure (FLATROOF + ROOFDECK Rust backdoors via malicious GitHub repo), then patched `op-geth` processes in memory to return fabricated RPC responses to the DVN signing service. 43-day kill chain from initial compromise to exploit.
+- **Bybit Safe{Wallet} heist (Feb 2025, $1.5B)** — same threat actor (UNC4899). Pattern reuse: developer-credential harvest → infrastructure compromise → single-attack-window exploit → wallet-laundering ring. The Safe{Wallet} variant compromised the JavaScript front-end serving the multisig signing UI; the Kelp variant compromised the RPC nodes feeding the DVN. Same operational shape, different operator-layer surface.
+
+**Why it's structurally distinct from Pattern D.**
+
+| | Pattern D | Operator-Layer Compromise |
+|---|---|---|
+| What gets moved | Adversary's own identity/wallets across chains | Adversary's control into the operator's infrastructure |
+| Adversary's resource cost | Low — just deploy from an aged-mainnet wallet | High — multi-week reconnaissance, malware development, operational discipline |
+| Adversary class | Distributed (many independent actors) | State-sponsored or organized-crime sophistication |
+| Detection surface | Address-level cross-chain linkage | Operator-infrastructure compromise indicators (anomalous IAM events, RPC response divergence, deployment-pipeline drift) |
+| Pre-attack lead time | Hours-to-days (one address → another) | Weeks-to-months (43 days for Kelp) |
+| Defense | Per-chain identity linkage | Multi-source RPC, client diversity, JIT IAM, log-integrity monitoring |
+
+A surveillance system that catches Pattern D will not catch operator-layer compromise. The lead times and indicators are different by orders of magnitude.
+
+**Layer 3 detection surface.** Layer 3's existing detectors target on-chain signal. Operator-layer compromise is largely off-chain — the on-chain signature looks valid by construction. The Layer-3-relevant on-chain residue is *post-exploit*: rapid laundering distribution (Kelp's 7-wallet fan-out within 98 seconds), Tornado-funded fresh-address activation, cross-chain bridge deposits into DeFi protocols (Aave deposit + WETH borrow). None of these give pre-exploit lead time. The pre-exploit signal lives in the operator's infrastructure layer.
+
+**Cross-references.** [RPC-Layer Honesty-Assumption Violation](#rpc-layer-honesty-assumption-violation) (the specific mechanism in the Kelp case), [Pattern D — Cross-Chain Reputation Import](#pattern-d--cross-chain-reputation-import) (the sibling cross-chain attack family — see "Sibling distinction" table in Pattern D entry), [UNC4899 / TraderTraitor](#unc4899--tradertraitor) (the specialized threat actor), [Configuration-Level Vulnerability](#configuration-level-vulnerability) (the enabler that makes operator-layer compromise catastrophic — a 1-of-1 config means single-operator compromise = exploit).
+
+---
+
+### UNC4899 / TraderTraitor
+
+**Definition.** A DPRK-aligned threat actor (assessed high-confidence as a component of the Reconnaissance General Bureau) specializing in operator-layer compromise of cryptocurrency infrastructure for state-backed financial gain. Also tracked as TraderTraitor, Jade Sleet, Pressure Chollima.
+
+**Extended description.** Mandiant + CrowdStrike (high confidence DPRK, medium confidence UNC4899 specifically) and independent researchers tanuki42 + tayvano (independent attribution via funding de-mixing) converge on UNC4899 as the actor behind the Kelp incident. The operational shape is highly consistent across incidents: macOS-targeted social engineering → developer credential harvest via session-key theft (bypasses SSO + MFA) → infrastructure reconnaissance via VPN-laundered access → lateral movement into deployment / signing infrastructure → single-attack-window exploit → rapid laundering fan-out to prepared wallet rings.
+
+The malware portfolio is Rust-heavy, macOS-targeted (ARM64), and rotates C2 protocols across incidents (Telegram for FLATROOF, Nostr for ROOFDECK in the Kelp incident — the multi-protocol C2 design defeats single-protocol takedown).
+
+**Documented incident chain (2025–2026):**
+
+| Date | Target | Loss | Operator-layer surface compromised |
+|---|---|---|---|
+| Feb 2025 | Bybit / Safe{Wallet} | $1.5B | JavaScript front-end serving multisig signing UI |
+| Apr 18 2026 | KelpDAO / LayerZero Labs | $292M (116,500 rsETH) | LayerZero Labs GCP — RPC nodes feeding DVN signing service |
+
+**Tactics, Techniques, Procedures (Kelp incident anchor):**
+- **Initial access:** social engineering via malicious GitHub repo (`github[.]com/pi2infra-can-4/gtn-candidate-repo.git`), cloned by target developer; Rust backdoors (FLATROOF, ROOFDECK) dropped on macOS via malicious Terraform provider registry (`registry.hashicorp-aws[.]com/hashicorp/awsbeta`). EDR misses both.
+- **Persistence:** Launch Agent on macOS (ROOFDECK).
+- **C2:** Telegram (FLATROOF) + Nostr decentralized protocol (ROOFDECK, multiple relays). Multi-protocol design defeats single-protocol disruption.
+- **Privilege escalation:** session-key harvest bypasses SSO + MFA; no need to phish credentials.
+- **Lateral movement:** VPN-laundered access (ExpressVPN, NordVPN, Mullvad) to GCP + GitHub from harvested session keys.
+- **Target acquisition:** GKE clusters running `op-geth`; in-memory ELF PIE injection (CARVED1 launcher → CARVED2 monitor) hooking Go `syscall.Syscall` via `funchook` library.
+- **Operational discipline:** the malware is **discriminating** — returns correct responses to monitoring tools but tampered responses to the signing service. Cleanup includes deletion of intermediate stages (the `librpcw.so` "Worker" library and the initial injector were both unrecovered in forensics).
+- **Forcing function:** DoS attack on external RPC providers immediately before exploit to force failover onto poisoned internal nodes.
+- **Post-exploit laundering:** Tornado Cash funding 6.5 hours pre-exploit; 7-wallet fan-out within 98 seconds of receiving funds; subsequent deposit into Aave V3 as collateral + WETH borrowing.
+
+**Indicators of Compromise (Kelp incident, archived in `reports/threat_actor_iocs_layer3.md`):**
+- FLATROOF SHA256: `6328567511d88fdc2ae0939c5ef17b7a63d2a833881900de018a4f12f4982525`
+- ROOFDECK SHA256: `61a110681a70af3dc21634558e12b1c00964f0cf48e90c89896eb0fda1e60b2d`
+- CARVED1 SHA256: `ce8a08a888457dd6f44041acbef5db011edf5c6cda29fe603f653087d62f4a5f`
+- CARVED2 SHA256: `5a90ae020ae40965848b7a344cd6e1439b63ab6c56489d4a16c2cfb97ecb034b`
+- C2 domains: `io.caiai[.]net`, `technicais.sytes[.]net`, `commsouthindia[.]com`
+
+**Layer 3 surface.** UNC4899's operational chain is largely off-chain — Layer 3's smart-contract corpus catches only the post-exploit laundering residue (Tornado-funded fresh wallets, rapid fan-out, downstream DeFi deposits). The pre-exploit signal lives at the operator-infrastructure layer outside Layer 3's ingest scope. The IOC list is documented in this corpus for partner-grade incident response but is not actively monitored by Layer 3 pipelines.
+
+**Cross-references.** [Operator-Layer Cross-Chain Compromise](#operator-layer-cross-chain-compromise), [RPC-Layer Honesty-Assumption Violation](#rpc-layer-honesty-assumption-violation), `reports/extraction_event_008_kelp.md`, `reports/kelp_retrospective_replay.md`, `reports/threat_actor_iocs_layer3.md`.
 
 ---
 
