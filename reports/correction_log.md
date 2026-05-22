@@ -1388,6 +1388,110 @@ Process change implied: **any "confirmed-tier" finding in the corpus that has an
 
 ---
 
+## Correction #25 — Confirmed-Tier Audit Phase A: 116 Verified-Source Legitimate Tokens Misclassified as Adversarial (7.2% of corpus)
+
+**Date:** 2026-05-22
+**Discovery method:** Bulk Blockscout v2 REST API enrichment on every confirmed-tier contract (1,603 of 1,609 probed, 99.6% success) + every distinct deployer (719/719). Classifier applied audit-plan rules (token holders ≥ 100, or verified-source ERC-20 with corroborating evidence, or institutional public/private tags). Execution: `scripts/phase_a_blockscout_enrich.py`. Audit CSV: `reports/confirmed_tier_audit_2026-05-22.csv`.
+**Severity:** HIGH — the confirmed-tier population is one of Layer 3's headline corpus statistics and the basis for the Camouflage Ratio confirmed-tier figure (Correction #22) and the headline drain-attribution numbers. 7.2% FP rate is large enough to require migration + headline number recompute. Several individual findings are credibility-critical because the underlying tokens are widely-known (Circle Wrapped Bitcoin, TetherGold, Hyperliquid, Backpack).
+
+**Claim (what was asserted, implicitly):**
+
+The corpus stat "1,650 confirmed-tier adversarial contracts" had been carried as a Tier-A count across multiple internal reports, the Camouflage Ratio z-test (Correction #22), and prior Tier B/C inferences about adversarial behavior. Every contract in this set carried `confidence_tier='confirmed'` with `confidence_reason` claiming evidence of trap behavior (typically "Behavioral confirmation: bot 0x… trapped in tx 0x…").
+
+**Reality (what the audit shows):**
+
+Of the 1,603 confirmed contracts probed via Blockscout enrichment:
+
+| Verdict | Count | Share |
+|---|---|---|
+| **LIKELY_FP (high confidence)** | **116** | **7.2%** |
+| LIKELY_TP | 73 | 4.5% |
+| NEEDS_REVIEW | 1,420 | 88.3% |
+
+The 116 LIKELY_FP cases were caught by three classifier paths:
+1. **Holders count ≥ 100** (CoinGecko-style real onboarding): caught the bulk of meme/protocol tokens with substantial holder onboarding.
+2. **Verified-source ERC-20 with circulating market cap > 0**: caught CoinGecko-listed legitimate tokens (the OFC anchor / Correction #24).
+3. **Verified-source ERC-20 with holders ≥ 10**: caught well-onboarded tokens whose holder count was lower than 100 but with corroborating verification.
+
+EDGE cases (64 additional verified-ERC20 contracts with <10 holders and no market cap) were classified to NEEDS_REVIEW pending source-code inspection — these include brand-new token launches that bots front-ran during the pre-trading window. Some are likely TPs (a real adversary's test deploy); some are legitimate launches caught in the bot-revert FP pattern from Correction #24. They cannot be auto-classified without per-contract review.
+
+**Highest-credibility findings (load-bearing for the retraction):**
+
+| Token | Holders | Identity |
+|---|---|---|
+| **Circle Wrapped Bitcoin** | 119,491 | Circle's wrapped-BTC product (the USDC issuer) |
+| **TetherGold** | 229,676 | Tether's gold-backed token |
+| **Hyperliquid** | 129,150 | Leading perp-DEX protocol token |
+| **Mezo** | 142,230 | Bitcoin DeFi protocol |
+| **Backpack** | 113,357 | Backpack Wallet's ecosystem token |
+| **Gensyn** | 196,671 | Distributed-compute infrastructure |
+| **edgeX** | 194,992 | Real DEX |
+| **Fluent** | 192,231 | Real protocol |
+| **Sentio** | 168,018 | Real analytics platform |
+| **OneFootball Club (OFC)** | 3,914 | Animoca product (Correction #24 anchor) ✓ |
+| 23+ other named projects with ≥90K holders each | | (full list in CSV) |
+
+If any external Layer 3 material had cited confirmed-tier counts that included any of these tokens as adversarial, the claim would be directly disprovable by ten seconds of CoinGecko inspection.
+
+**Root cause (the three stacked classifier failure paths):**
+
+This is the same triple-failure as Correction #24, generalized:
+
+1. **Bytecode classifier FP on standard framework patterns.** OpenZeppelin's `ContractOwnership`, Animoca's `@animoca-network/contracts`, and similar framework imports produce bytecode that trips `has_asymmetric_transfer`, `has_unusual_fee_structure`, and `has_conditional_revert` flags. These flags are designed to detect adversarial reverts but cannot distinguish "framework-standard onlyOwner modifier" from "deceptive trap revert."
+
+2. **Behavioral classifier FP on pre-launch token reverts.** Bots front-run new ERC-20 launches before trading is enabled. The contract reverts as designed. The pipeline reads the revert as a trap firing and applies `confidence_tier='confirmed'`. Pre-Bug-#19 backfill (Phase 0, Correction #24), this also created phantom drain rows.
+
+3. **No verification gate before confirming.** The pipeline never checks Blockscout-verified status, OLI institutional tags, or CoinGecko listing before promoting to confirmed. A 200K-holder verified-source legitimate token can ride straight from behavioral revert → confirmed-tier label.
+
+**Discovery (how it was caught):**
+
+Per `reports/confirmed_tier_audit_plan.md` Phase A. Triggered by Correction #24 (the OFC retraction on 2026-05-21). The audit's first concrete step was bulk Blockscout enrichment on the entire confirmed population — exactly the move the audit plan described as "the cheapest single information-gathering move."
+
+**Numerical effect on headline statistics:**
+
+| Claim location | Old (retired) form | Corrected form |
+|---|---|---|
+| Headline "confirmed-tier adversarial contracts" count | 1,650 (production state 2026-05-21) | **1,534** after 116-row migration (1,650 − 116). Pending Phase B+C audit of NEEDS_REVIEW (1,420) and EDGE (64); the final number may move further. |
+| Camouflage Ratio confirmed-tier figure (Correction #22) | 30.44% [27.86, 33.14] low-revert | Pending recompute. The 116 migrated contracts are mostly legitimate tokens — they tend to have HIGHER revert rates than baseline because of pre-launch bot-revert dynamics. Removing them from the partition is expected to RAISE the confirmed-tier low-revert rate (push it back toward the 70-79% baseline). The Correction #22 directional finding (predators revert MORE than baseline) may attenuate. |
+| All Tier B/C corpus-level inferences that depend on the confirmed-tier as ground truth | Computed against 1,650 | Need re-running against the post-migration 1,534 population. |
+| Lexicon Pattern entries citing confirmed-tier counts | Various | Annotate with the audit's effect; defer until Phase B+C complete. |
+
+**Fix:**
+
+- This correction-log entry (#25) — 2026-05-22, commit pending
+- CORRECTIONS.md Quick Retirement Index entry and dated entry added
+- Phase D migration: `scripts/phase_d_audit_migration.py` — moves 116 STRONG LIKELY_FP contracts from `confirmed` → `unanalyzed` on local + production. Original `confidence_reason` preserved with audit annotation prepended.
+- CLAUDE.md operational priority list updated (audit-derived priorities resolved)
+- INDEX.md cleanup for any of the 116 contracts that have prior INDEX entries (none expected at the top-level — none of these were referenced as "case files" — but to be verified)
+- `scripts/phase_a_blockscout_enrich.py` classifier refined (verified+ERC20 with <10 holders → NEEDS_REVIEW, not LIKELY_FP)
+- 64 EDGE cases remain in `confirmed` tier pending Phase C manual review
+
+**Open work:**
+
+- **Phase B (internal heuristics)**: apply drain/tx ratio, self-loop, recidivism rules to the 1,420 NEEDS_REVIEW population. Expected to surface additional FP candidates from Class C (behavioral-only labels with no bytecode evidence) and Class D (self-loop / BACKFILL).
+- **Phase C (sample manual review)**: stratified sample of NEEDS_REVIEW + all 64 EDGE cases. Per-contract verdict.
+- **Phase E (permanent pipeline fix)**: add Blockscout-verified-source check + OLI institutional tag check + holders threshold check BEFORE promoting any contract to `confirmed`. The audit's root cause was the absence of these gates at promotion time.
+- **Camouflage Ratio recompute (Correction #22 follow-up)**: re-run `surveillance/analytics/camouflage_ratio_z_test.py` against the post-migration corpus. Re-publish the confirmed-tier figure with the audit-derived methodology note.
+- **Headline-drain-attribution recompute** (Correction #24 follow-up): recompute the lifetime drain count from the Phase-0-cleaned `approval_watchlist` and exclude any drain events whose contract is now in `unanalyzed`.
+- **Communication review**: if any external Layer 3 material (deck, brief, pitch, report, email to a customer) cited the confirmed-tier count or any of the 116 retracted contracts by name, draft a customer-facing correction note.
+
+**Why this matters epistemically:**
+
+The 7.2% FP rate is in the territory where headline numbers cannot be reused at face value. Correction #24 was a single anchor case (OFC). Correction #25 is the rate. It is a much harder finding to absorb because it cannot be patched by a single retraction — every cite of the confirmed-tier count is now subject to "which version of the count, and what cleanup state."
+
+This is also the FIRST audit-derived correction in the log. Corrections #1–#24 were all caught by re-querying primary sources, manual review of specific cases, or statistical analysis of corpus subsets. Correction #25 was caught by **bulk enrichment of the entire confirmed-tier population against external truth sources** (Blockscout verified-source flag, holders count, market cap). That methodology should now be a standing process — not a one-time fix.
+
+**Propagation watch-list:**
+
+| Claim | Still appears in | Required cleanup |
+|---|---|---|
+| "Confirmed-tier: 1,650" or similar specific count | All Layer 3 materials | Replace with "1,534 post-2026-05-22 audit (subject to further Phase B+C refinement)" with explicit methodology note. |
+| Camouflage Ratio confirmed-tier 30.44% (Correction #22) | `docs/lexicon.md` Camouflage Ratio entry; `reports/correction_log.md` Correction #22 | Re-run the z-test post-migration and update the entry / log. |
+| Pattern D / Behavioral Laundering / Stored Potential lexicon entries that reference confirmed-tier examples | `docs/lexicon.md` various | Verify that example contracts are not in the 116 retracted set; if so, annotate or replace. |
+| Internal queries or analytics modules that `WHERE confidence_tier='confirmed'` | `surveillance/analytics/*`, `surveillance/sai/*` | Re-run with the post-migration corpus; document any meaningful shifts. |
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.

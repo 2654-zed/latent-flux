@@ -205,17 +205,34 @@ def extract_blockscout_fields(raw_json: str | None) -> dict:
 def classify(row: dict) -> str:
     """Apply the audit-plan classifier rules:
        LIKELY_FP / LIKELY_TP / NEEDS_REVIEW.
-    Rules order matters — first match wins."""
-    # Strong-evidence retraction signals
-    if row.get("holders_count"):
-        try:
-            if int(str(row["holders_count"]).replace(",", "")) >= 100:
-                return "LIKELY_FP"
-        except (ValueError, TypeError):
-            pass
-    if row.get("is_verified") == True and row.get("token_type"):
-        # Verified token with type info = likely legitimate token launch
+    Rules order matters — first match wins.
+
+    Refined 2026-05-22 after Phase A surfaced 64 EDGE cases (verified
+    ERC-20s with <10 holders) that should NOT be auto-classified as FP.
+    Many are brand-new token launches that bots front-ran before user
+    onboarding — those launches are real adversarial deploys some of the
+    time. Conservative rule: require holders>=10 OR a recognized market
+    signal (mcap > 0, named entity tag).
+    """
+    # Parse holders + mcap once
+    try:
+        hc = int(str(row.get("holders_count") or "").replace(",", "")) if row.get("holders_count") else 0
+    except (ValueError, TypeError):
+        hc = 0
+    try:
+        mcap = float(row.get("market_cap_usd") or 0)
+    except (ValueError, TypeError):
+        mcap = 0.0
+    is_verified = row.get("is_verified") == True
+    has_token_type = bool(row.get("token_type"))
+
+    # STRONG-evidence retraction signals
+    if hc >= 100:
         return "LIKELY_FP"
+    if is_verified and has_token_type and hc >= 10:
+        return "LIKELY_FP"
+    if is_verified and has_token_type and mcap > 0:
+        return "LIKELY_FP"  # CoinGecko-listed verified ERC-20
 
     # Public Blockscout tags pointing to known entities
     tags = (row.get("public_tags") or "") + "|" + (row.get("private_tags") or "")
