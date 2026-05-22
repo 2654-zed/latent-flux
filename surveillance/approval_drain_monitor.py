@@ -168,12 +168,18 @@ def check_drains(conn: sqlite3.Connection) -> dict:
         if p["deployer_address"] and p["deployer_address"] in suppressed:
             skipped += 1
             continue
-        # Check for transferFrom on this contract after the approval
+        # Check for transferFrom on this contract after the approval.
+        # IMPORTANT (Correction #24 / Bug #19, 2026-05-21): filter to
+        # successful (non-reverted) transactions. Reverted transferFroms
+        # MUST NOT be credited as drains — they moved zero tokens.
+        # Before this filter was added, the OFC token (0x752c5a95) produced
+        # 4,587 phantom drain rows from 3 failed transferFrom transactions.
         drain = conn.execute("""
             SELECT te.tx_hash, te.timestamp, te.interacting_address as caller
             FROM transaction_events te
             WHERE te.contract_address = ?
             AND te.function_selector = '23b872dd'
+            AND te.is_reverted = 0
             AND te.timestamp > ?
             LIMIT 1
         """, (p["contract_address"], p["approve_timestamp"])).fetchone()
@@ -189,7 +195,9 @@ def check_drains(conn: sqlite3.Connection) -> dict:
             drains_found += 1
 
     # Method 2: Deployer interacting with contract after external approvals
-    # (might use a custom drain function, not standard transferFrom)
+    # (might use a custom drain function, not standard transferFrom).
+    # IMPORTANT (Correction #24 / Bug #19, 2026-05-21): filter to
+    # successful (non-reverted) transactions. See Method 1 comment above.
     deployer_drains = conn.execute("""
         SELECT aw.contract_address, aw.deployer_address,
                te.tx_hash, te.timestamp, te.function_selector
@@ -199,6 +207,7 @@ def check_drains(conn: sqlite3.Connection) -> dict:
         WHERE aw.drain_detected = 0
         AND te.timestamp > aw.approve_timestamp
         AND te.function_selector NOT IN ('095ea7b3', 'a9059cbb')
+        AND te.is_reverted = 0
         GROUP BY aw.contract_address, te.tx_hash
     """).fetchall()
 
