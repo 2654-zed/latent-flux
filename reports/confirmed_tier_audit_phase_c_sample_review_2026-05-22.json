@@ -1,0 +1,1376 @@
+[
+  {
+    "contract": "0x03f1ec788ec92f66d806c9807337c1b81a68db67",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Trapping bot 0x675a38b2a293 is a serial false-positive (231 contracts)",
+    "is_verified": true,
+    "token_name": null,
+    "contract_name": "Storage",
+    "interactors": 1,
+    "txs": 22,
+    "revert_rate": 1.0,
+    "trapping_bot": "0x675a38b2a29376e1db300bba72f2fd5e2fd56dd6",
+    "bot_total_traps": 231,
+    "top_selectors": [
+      [
+        "6e0aacf7",
+        2
+      ],
+      [
+        "mint",
+        2
+      ],
+      [
+        "transferOwnership",
+        1
+      ]
+    ],
+    "source_excerpt": "// SPDX-License-Identifier: GPL-3.0\n\npragma solidity >=0.8.2 <0.9.0;\n\n/**\n * @title Storage\n * @dev Store & retrieve value in a variable\n * @custom:dev-run-script ./scripts/deploy_with_ethers.ts\n */\nc"
+  },
+  {
+    "contract": "0x984b9b7f36788cb9be6241a604de5eb18a5f1b50",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Has token: Unitas (ERC-20)",
+    "is_verified": true,
+    "token_name": "Unitas",
+    "contract_name": "Token",
+    "interactors": 9,
+    "txs": 12,
+    "revert_rate": 0.083,
+    "trapping_bot": "0x9c6c9d3a5d7b6b84b95f9181c24a3716d00e51b2",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "approve",
+        10
+      ],
+      [
+        "transfer",
+        2
+      ]
+    ],
+    "source_excerpt": "pragma solidity ^0.8.26;\r\n\r\ncontract Token {\r\n    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);\r\n\r\n    event Transfer(address indexed from, address indexed to, u"
+  },
+  {
+    "contract": "0x7cff972b2227226ff058e9fabbf281e28200f2b9",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "contract_name='PublicBridge' = Bridge infrastructure",
+    "is_verified": true,
+    "token_name": null,
+    "contract_name": "PublicBridge",
+    "interactors": 6,
+    "txs": 12,
+    "revert_rate": 0.083,
+    "trapping_bot": "0xfa91a7af4152fe2da1315d113a789929970bb2fe",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "3ec77124",
+        5
+      ],
+      [
+        "2f3a2cc7",
+        4
+      ],
+      [
+        "4df59eeb",
+        2
+      ]
+    ],
+    "source_excerpt": "// SPDX-License-Identifier: MIT\npragma solidity 0.8.18;\nimport {IERC20, Token} from \"./Token.sol\";\n\n/// @title TokenVault - Holds ERC20 tokens locked during bridge transfers\n/// @notice Simple vault t"
+  },
+  {
+    "contract": "0xfed9c78371a2694683eac531b1df5bdb59e929c2",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Trapping bot 0x1a1d939b2ee7 is a serial false-positive (13 contracts)",
+    "is_verified": true,
+    "token_name": "\u9f99\u867e (Lobster)",
+    "contract_name": "Token",
+    "interactors": 8,
+    "txs": 12,
+    "revert_rate": 0.25,
+    "trapping_bot": "0x1a1d939b2ee78756d81e6ad1638911bc8eaf63be",
+    "bot_total_traps": 13,
+    "top_selectors": [
+      [
+        "approve",
+        8
+      ],
+      [
+        "35faa416",
+        2
+      ],
+      [
+        "transfer",
+        1
+      ]
+    ],
+    "source_excerpt": "pragma solidity ^0.8.26;\r\n\r\ncontract Token {\r\n    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);\r\n\r\n    event Transfer(address indexed from, address indexed to, u"
+  },
+  {
+    "contract": "0xcce968d27657ad0d80defb48d71867b687656a43",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Trapping bot 0x1a1d939b2ee7 is a serial false-positive (13 contracts)",
+    "is_verified": true,
+    "token_name": "BurnDog",
+    "contract_name": "Token",
+    "interactors": 7,
+    "txs": 11,
+    "revert_rate": 0.273,
+    "trapping_bot": "0x1a1d939b2ee78756d81e6ad1638911bc8eaf63be",
+    "bot_total_traps": 13,
+    "top_selectors": [
+      [
+        "approve",
+        7
+      ],
+      [
+        "transfer",
+        1
+      ],
+      [
+        "8129fc1c",
+        1
+      ]
+    ],
+    "source_excerpt": "pragma solidity ^0.8.26;\r\n\r\ncontract Token {\r\n    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);\r\n\r\n    event Transfer(address indexed from, address indexed to, u"
+  },
+  {
+    "contract": "0x75682ac9d721250c2e677bd25ad5cb4133e0a09b",
+    "chain": "arbitrum",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=2, txs=33, revert=3%, bot_traps=2, verified=True, top_selectors=[('91955002', 8), ('e91a7ca6', 6), ('f5c89aa7', 6)]",
+    "is_verified": true,
+    "token_name": null,
+    "contract_name": "SLIQCore",
+    "interactors": 2,
+    "txs": 33,
+    "revert_rate": 0.03,
+    "trapping_bot": "0x6b4db669cb16653d94a2a27808fce8b8c34f9268",
+    "bot_total_traps": 2,
+    "top_selectors": [
+      [
+        "91955002",
+        8
+      ],
+      [
+        "e91a7ca6",
+        6
+      ],
+      [
+        "f5c89aa7",
+        6
+      ]
+    ],
+    "source_excerpt": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.24;\n\nimport {IERC721ReceiverMinimal} from \"./interfaces/IERC721ReceiverMinimal.sol\";\nimport {INonfungiblePositionManagerMinimal} from \"./interfaces"
+  },
+  {
+    "contract": "0x3f302248214281d18ddfb4d55b264a1a4eddc4b1",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Trapping bot 0x1a1d939b2ee7 is a serial false-positive (13 contracts)",
+    "is_verified": true,
+    "token_name": "OneFootball Credits",
+    "contract_name": "Token",
+    "interactors": 8,
+    "txs": 9,
+    "revert_rate": 0.111,
+    "trapping_bot": "0x1a1d939b2ee78756d81e6ad1638911bc8eaf63be",
+    "bot_total_traps": 13,
+    "top_selectors": [
+      [
+        "approve",
+        7
+      ],
+      [
+        "transfer",
+        1
+      ],
+      [
+        "2e1a7d4d",
+        1
+      ]
+    ],
+    "source_excerpt": "pragma solidity ^0.8.26;\r\n\r\ncontract Token {\r\n    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);\r\n\r\n    event Transfer(address indexed from, address indexed to, u"
+  },
+  {
+    "contract": "0x6a714ae7b5b6ea520f6bca23d2e609c4fd5863f2",
+    "chain": "arbitrum",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "contract_name='ERC1967Proxy' = OpenZeppelin ERC1967 upgradeable proxy",
+    "is_verified": true,
+    "token_name": null,
+    "contract_name": "ERC1967Proxy",
+    "interactors": 16,
+    "txs": 335,
+    "revert_rate": 0.063,
+    "trapping_bot": "0xa169574d0d353e3010997a3e64846b7d1b2a63b6",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "b63c4262",
+        302
+      ],
+      [
+        "683f5efa",
+        23
+      ],
+      [
+        "9646d758",
+        1
+      ]
+    ],
+    "source_excerpt": "// SPDX-License-Identifier: MIT\n// OpenZeppelin Contracts (last updated v5.2.0) (proxy/ERC1967/ERC1967Proxy.sol)\n\npragma solidity ^0.8.22;\n\nimport {Proxy} from \"../Proxy.sol\";\nimport {ERC1967Utils} fr"
+  },
+  {
+    "contract": "0xe6d50ff90532ff1926d32b8b4a757cb44af128e5",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "contract_name='PublicBridge' = Bridge infrastructure",
+    "is_verified": true,
+    "token_name": null,
+    "contract_name": "PublicBridge",
+    "interactors": 6,
+    "txs": 20,
+    "revert_rate": 0.1,
+    "trapping_bot": "0x2caaaa4ff6a1079b6c10b8149f98b45db7ee48f8",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "3ec77124",
+        11
+      ],
+      [
+        "2f3a2cc7",
+        4
+      ],
+      [
+        "4df59eeb",
+        3
+      ]
+    ],
+    "source_excerpt": "// SPDX-License-Identifier: MIT\npragma solidity 0.8.18;\nimport {IERC20, Token} from \"./Token.sol\";\n\n/// @title TokenVault - Holds ERC20 tokens locked during bridge transfers\n/// @notice Simple vault t"
+  },
+  {
+    "contract": "0x144681860389b8925c19b4294dfe7f069d33607e",
+    "chain": "optimism",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "contract_name='AccessControlledOffchainAggregator' = Chainlink price aggregator",
+    "is_verified": true,
+    "token_name": null,
+    "contract_name": "AccessControlledOffchainAggregator",
+    "interactors": 10,
+    "txs": 24,
+    "revert_rate": 0.042,
+    "trapping_bot": "0xa04163e4033a941a3446c33e432a1da7ecc8898a",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "c9807539",
+        18
+      ],
+      [
+        "transferOwnership",
+        2
+      ],
+      [
+        "9c849b30",
+        1
+      ]
+    ],
+    "source_excerpt": "// SPDX-License-Identifier: MIT\npragma solidity 0.7.6;\n\nimport \"./OffchainAggregator.sol\";\nimport \"./SimpleReadAccessController.sol\";\n\n/**\n * @notice Wrapper of OffchainAggregator which checks read ac"
+  },
+  {
+    "contract": "0xf1ed41ad769454bcd457cf84f37fb25d2ec58ef4",
+    "chain": "arbitrum",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Verified source contains 'OpenZeppelin Contracts'",
+    "is_verified": true,
+    "token_name": "defimarketplus HIGHER-USD",
+    "contract_name": "defimarketplus HIGHER-USD",
+    "interactors": 4,
+    "txs": 41,
+    "revert_rate": 0.024,
+    "trapping_bot": "0x11888716817f5bc4791e904ceaaf1c8a1e3d7afc",
+    "bot_total_traps": 2,
+    "top_selectors": [
+      [
+        "8ed955b9",
+        32
+      ],
+      [
+        "6e553f65",
+        5
+      ],
+      [
+        "2f2ff15d",
+        2
+      ]
+    ],
+    "source_excerpt": "// SPDX-License-Identifier: MIT\n// OpenZeppelin Contracts (last updated v5.1.0) (proxy/ERC1967/ERC1967Proxy.sol)\n\npragma solidity ^0.8.20;\n\nimport {Proxy} from \"../Proxy.sol\";\nimport {ERC1967Utils} fr"
+  },
+  {
+    "contract": "0xf0e75412c01fde8344f57e272329e30a3221ffc1",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "contract_name='ERC1967Proxy' = OpenZeppelin ERC1967 upgradeable proxy",
+    "is_verified": true,
+    "token_name": null,
+    "contract_name": "ERC1967Proxy",
+    "interactors": 2,
+    "txs": 369,
+    "revert_rate": 0.003,
+    "trapping_bot": "0x712fb98782f3bed61d19a294832882b860ca9158",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "eede8874",
+        273
+      ],
+      [
+        "062f7ed6",
+        70
+      ],
+      [
+        "80cfd1fa",
+        17
+      ]
+    ],
+    "source_excerpt": "// SPDX-License-Identifier: MIT\n// OpenZeppelin Contracts (last updated v5.0.0) (proxy/ERC1967/ERC1967Proxy.sol)\n\npragma solidity ^0.8.20;\n\nimport {Proxy} from \"../Proxy.sol\";\nimport {ERC1967Utils} fr"
+  },
+  {
+    "contract": "0x612efc91d8f7f3c0940e7cba28312a35d52bc953",
+    "chain": "arbitrum",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "contract_name='ERC1967Proxy' = OpenZeppelin ERC1967 upgradeable proxy",
+    "is_verified": true,
+    "token_name": null,
+    "contract_name": "ERC1967Proxy",
+    "interactors": 2,
+    "txs": 51,
+    "revert_rate": 0.118,
+    "trapping_bot": "0x01e87caa86c91c65d2e3e74a9dfac972c0b8944e",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "da78a9ad",
+        50
+      ],
+      [
+        "transferOwnership",
+        1
+      ]
+    ],
+    "source_excerpt": "// SPDX-License-Identifier: MIT\n// OpenZeppelin Contracts (last updated v5.2.0) (proxy/ERC1967/ERC1967Proxy.sol)\n\npragma solidity ^0.8.22;\n\nimport {Proxy} from \"../Proxy.sol\";\nimport {ERC1967Utils} fr"
+  },
+  {
+    "contract": "0x2c259d3015dbfa25bfee72baf91f23b3591a593a",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Trapping bot 0x1a1d939b2ee7 is a serial false-positive (13 contracts)",
+    "is_verified": true,
+    "token_name": "iShares MSCI Japan ETF (Derivatives)",
+    "contract_name": "Token",
+    "interactors": 4,
+    "txs": 5,
+    "revert_rate": 0.2,
+    "trapping_bot": "0x1a1d939b2ee78756d81e6ad1638911bc8eaf63be",
+    "bot_total_traps": 13,
+    "top_selectors": [
+      [
+        "approve",
+        3
+      ],
+      [
+        "transfer",
+        1
+      ],
+      [
+        "8129fc1c",
+        1
+      ]
+    ],
+    "source_excerpt": "pragma solidity ^0.8.26;\r\n\r\ncontract Token {\r\n    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);\r\n\r\n    event Transfer(address indexed from, address indexed to, u"
+  },
+  {
+    "contract": "0x5960e66f168b441f055e5bacedfd7ad612f87004",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Trapping bot 0x675a38b2a293 is a serial false-positive (231 contracts)",
+    "is_verified": true,
+    "token_name": null,
+    "contract_name": "Storage",
+    "interactors": 1,
+    "txs": 23,
+    "revert_rate": 1.0,
+    "trapping_bot": "0x675a38b2a29376e1db300bba72f2fd5e2fd56dd6",
+    "bot_total_traps": 231,
+    "top_selectors": [
+      [
+        "6e0aacf7",
+        2
+      ],
+      [
+        "mint",
+        2
+      ],
+      [
+        "853828b6",
+        2
+      ]
+    ],
+    "source_excerpt": "// SPDX-License-Identifier: GPL-3.0\n\npragma solidity >=0.8.2 <0.9.0;\n\n/**\n * @title Storage\n * @dev Store & retrieve value in a variable\n * @custom:dev-run-script ./scripts/deploy_with_ethers.ts\n */\nc"
+  },
+  {
+    "contract": "0xda8f9076f965f8d9d4d0791192d5c100220ed79e",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "contract_name='ERC1967Proxy' = OpenZeppelin ERC1967 upgradeable proxy",
+    "is_verified": true,
+    "token_name": "Bondingv2test",
+    "contract_name": "ERC1967Proxy",
+    "interactors": 5,
+    "txs": 17,
+    "revert_rate": 0.059,
+    "trapping_bot": "0x3380266ca63ab28009c0d1dd5f221fc1e733bb9d",
+    "bot_total_traps": 3,
+    "top_selectors": [
+      [
+        "3d98ebed",
+        5
+      ],
+      [
+        "213f4ab8",
+        5
+      ],
+      [
+        "9940686e",
+        4
+      ]
+    ],
+    "source_excerpt": "// SPDX-License-Identifier: MIT\n// OpenZeppelin Contracts (last updated v5.0.0) (proxy/ERC1967/ERC1967Proxy.sol)\n\npragma solidity ^0.8.20;\n\nimport {Proxy} from \"../Proxy.sol\";\nimport {ERC1967Utils} fr"
+  },
+  {
+    "contract": "0x1bbda943b2db98a619212147f71669817d9b1a65",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "contract_name='ERC1967Proxy' = OpenZeppelin ERC1967 upgradeable proxy",
+    "is_verified": true,
+    "token_name": null,
+    "contract_name": "ERC1967Proxy",
+    "interactors": 18,
+    "txs": 50,
+    "revert_rate": 0.08,
+    "trapping_bot": "0xc22ee3cf55214e073e0b9bf89f86a5eadfc75dab",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "ebfa7ade",
+        18
+      ],
+      [
+        "8119c065",
+        18
+      ],
+      [
+        "3659cfe6",
+        5
+      ]
+    ],
+    "source_excerpt": "// SPDX-License-Identifier: MIT\n// OpenZeppelin Contracts (last updated v4.7.0) (proxy/ERC1967/ERC1967Proxy.sol)\n\npragma solidity ^0.8.0;\n\nimport \"../Proxy.sol\";\nimport \"./ERC1967Upgrade.sol\";\n\n/**\n *"
+  },
+  {
+    "contract": "0x28d89489d86373006466fdb5e736d21626dcc4b8",
+    "chain": "arbitrum",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Verified source is ERC-20 token (transferFrom + ERC20 interface)",
+    "is_verified": true,
+    "token_name": null,
+    "contract_name": "MEVExecutor",
+    "interactors": 3,
+    "txs": 59,
+    "revert_rate": 0.322,
+    "trapping_bot": "0x343c3928d65920bf2001593e4d8d866db5f88888",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "6f63677c",
+        57
+      ],
+      [
+        "806ad57e",
+        2
+      ]
+    ],
+    "source_excerpt": "// SPDX-License-Identifier: MIT\r\n// \u5efa\u8bae\u5347\u7ea7\u5230 0.8.4 \u53ca\u4ee5\u4e0a\u4ee5\u652f\u6301 Custom Errors\r\npragma solidity ^0.8.4;\r\n\r\ninterface IERC20 {\r\n    function transfer(address to, uint256 amount) external returns (bool);\r\n\r\n    f"
+  },
+  {
+    "contract": "0x765f39e0959ccd8f849937135d607494f967f1a7",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "contract_name='ERC1967Proxy' = OpenZeppelin ERC1967 upgradeable proxy",
+    "is_verified": true,
+    "token_name": "teststakingPOD",
+    "contract_name": "ERC1967Proxy",
+    "interactors": 5,
+    "txs": 22,
+    "revert_rate": 0.045,
+    "trapping_bot": "0x3380266ca63ab28009c0d1dd5f221fc1e733bb9d",
+    "bot_total_traps": 3,
+    "top_selectors": [
+      [
+        "approve",
+        13
+      ],
+      [
+        "6e553f65",
+        6
+      ],
+      [
+        "2f2ff15d",
+        2
+      ]
+    ],
+    "source_excerpt": "// SPDX-License-Identifier: MIT\n// OpenZeppelin Contracts (last updated v5.0.0) (proxy/ERC1967/ERC1967Proxy.sol)\n\npragma solidity ^0.8.20;\n\nimport {Proxy} from \"../Proxy.sol\";\nimport {ERC1967Utils} fr"
+  },
+  {
+    "contract": "0x49f044ae0ff61b02dde8be7b07455cafefd1d9ea",
+    "chain": "arbitrum",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "contract_name='ERC1967Proxy' = OpenZeppelin ERC1967 upgradeable proxy",
+    "is_verified": true,
+    "token_name": null,
+    "contract_name": "ERC1967Proxy",
+    "interactors": 10,
+    "txs": 859,
+    "revert_rate": 0.008,
+    "trapping_bot": "0xf3a8db4c165502e03cecac68d6c32887ecc6a416",
+    "bot_total_traps": 2,
+    "top_selectors": [
+      [
+        "88457d08",
+        756
+      ],
+      [
+        "91a24fb3",
+        37
+      ],
+      [
+        "a1f1e137",
+        30
+      ]
+    ],
+    "source_excerpt": "// SPDX-License-Identifier: MIT\n// OpenZeppelin Contracts (last updated v5.2.0) (proxy/ERC1967/ERC1967Proxy.sol)\n\npragma solidity ^0.8.22;\n\nimport {Proxy} from \"../Proxy.sol\";\nimport {ERC1967Utils} fr"
+  },
+  {
+    "contract": "0xdecc8d7de2777ae4f8c37e3758d9eee09dcf38fd",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Trapping bot 0x1a1d939b2ee7 is a serial false-positive (13 contracts)",
+    "is_verified": true,
+    "token_name": "MOONDOGE (moondoge.world)",
+    "contract_name": "Token",
+    "interactors": 6,
+    "txs": 8,
+    "revert_rate": 0.125,
+    "trapping_bot": "0x1a1d939b2ee78756d81e6ad1638911bc8eaf63be",
+    "bot_total_traps": 13,
+    "top_selectors": [
+      [
+        "approve",
+        6
+      ],
+      [
+        "transfer",
+        1
+      ],
+      [
+        "2e1a7d4d",
+        1
+      ]
+    ],
+    "source_excerpt": "pragma solidity ^0.8.26;\r\n\r\ncontract Token {\r\n    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);\r\n\r\n    event Transfer(address indexed from, address indexed to, u"
+  },
+  {
+    "contract": "0x359c6981f660d363e6741baef1bda23773706729",
+    "chain": "optimism",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "contract_name='AccessControlledOffchainAggregator' = Chainlink price aggregator",
+    "is_verified": true,
+    "token_name": null,
+    "contract_name": "AccessControlledOffchainAggregator",
+    "interactors": 4,
+    "txs": 7,
+    "revert_rate": 0.143,
+    "trapping_bot": "0xd46acba18e4f3c8b8b6c501df1a6b05609a642bd",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "c9807539",
+        3
+      ],
+      [
+        "9c849b30",
+        1
+      ],
+      [
+        "585aa7de",
+        1
+      ]
+    ],
+    "source_excerpt": "// SPDX-License-Identifier: MIT\npragma solidity 0.7.6;\n\nimport \"./OffchainAggregator.sol\";\nimport \"./SimpleReadAccessController.sol\";\n\n/**\n * @notice Wrapper of OffchainAggregator which checks read ac"
+  },
+  {
+    "contract": "0x3bee729955fffa10f5ba7c420241ebd8a10adb8a",
+    "chain": "base",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=126, txs=1095, revert=97%, bot_traps=1, verified=False, top_selectors=[('3229befd', 1055), ('42c72e56', 33), ('d8fc063d', 3)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 126,
+    "txs": 1095,
+    "revert_rate": 0.966,
+    "trapping_bot": "0x5eb8de8fb313dbf6c5d071f8f210f992ce8e0cff",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "3229befd",
+        1055
+      ],
+      [
+        "42c72e56",
+        33
+      ],
+      [
+        "d8fc063d",
+        3
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0x4486738ec027f0776b25ac2f5e2744fce6f96e1e",
+    "chain": "base",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=3, txs=16, revert=6%, bot_traps=1, verified=False, top_selectors=[('6a5bbc1d', 6), ('b6b55f25', 4), ('4a578978', 4)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 3,
+    "txs": 16,
+    "revert_rate": 0.062,
+    "trapping_bot": "0x11952796edc9ec91090e459fde87bdcfc11e13ad",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "6a5bbc1d",
+        6
+      ],
+      [
+        "b6b55f25",
+        4
+      ],
+      [
+        "4a578978",
+        4
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0xbf8766cb657d306bd3fc1d482cbeb422b7530584",
+    "chain": "base",
+    "verdict": "TP_FROM_SAMPLE",
+    "rationale": "Textbook honeypot: 2 interactors, 100% revert, 75 txs",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 2,
+    "txs": 75,
+    "revert_rate": 1.0,
+    "trapping_bot": "0xbbe8e731627fae1d5a5d9f3111673d0990c34099",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "a7e4008e",
+        75
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0xff7af2a2b1adf41fb3121fbe942eb08c2d87d490",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Trapping bot 0x675a38b2a293 is a serial false-positive (231 contracts)",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 3,
+    "txs": 272,
+    "revert_rate": 0.007,
+    "trapping_bot": "0x675a38b2a29376e1db300bba72f2fd5e2fd56dd6",
+    "bot_total_traps": 231,
+    "top_selectors": [
+      [
+        "45761772",
+        192
+      ],
+      [
+        "4799d5f7",
+        78
+      ],
+      [
+        "transferOwnership",
+        1
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0x91d7d9460e8ea59c75c092cc28e724e1e03605f5",
+    "chain": "base",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=2, txs=43, revert=2%, bot_traps=1, verified=False, top_selectors=[('1878abc2', 14), ('c7925e72', 10), ('93a70c99', 3)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 2,
+    "txs": 43,
+    "revert_rate": 0.023,
+    "trapping_bot": "0x069d202dbb0a2f2cae0e774584b92ed9cafa3561",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "1878abc2",
+        14
+      ],
+      [
+        "c7925e72",
+        10
+      ],
+      [
+        "93a70c99",
+        3
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0xa4c738f7389c3d7eceb7e000f2f820814591a100",
+    "chain": "base",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=2, txs=15, revert=13%, bot_traps=1, verified=False, top_selectors=[('6643adee', 15)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 2,
+    "txs": 15,
+    "revert_rate": 0.133,
+    "trapping_bot": "0xcffdfadd06b92880603dcca5fdfab4aa4cd04330",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "6643adee",
+        15
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0xbf5db1bf2cdf8a70a0b73988e856bd90181003af",
+    "chain": "base",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=2, txs=6044, revert=14%, bot_traps=1, verified=False, top_selectors=[('7d7fa4f5', 5910), ('f3fef3a3', 134)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 2,
+    "txs": 6044,
+    "revert_rate": 0.143,
+    "trapping_bot": "0x829bb1ad5bbe9e92570c739d0e19b2a1c905cf0b",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "7d7fa4f5",
+        5910
+      ],
+      [
+        "f3fef3a3",
+        134
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0xcf8fabb9e96088de90320f48d9faff65009a99db",
+    "chain": "arbitrum",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Has token: Apyee USDC Vault (ERC-20)",
+    "is_verified": false,
+    "token_name": "Apyee USDC Vault",
+    "contract_name": "Apyee USDC Vault",
+    "interactors": 3,
+    "txs": 196,
+    "revert_rate": 0.005,
+    "trapping_bot": "0xeabaad2fb8f2fcca04ce84ae177227f4dc7c881b",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "77e186b6",
+        89
+      ],
+      [
+        "fa211040",
+        88
+      ],
+      [
+        "6e553f65",
+        7
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0x6e0f21e50a8ca1ee8b2c03309c41e86a860c18ad",
+    "chain": "base",
+    "verdict": "TP_FROM_SAMPLE",
+    "rationale": "Textbook honeypot: 1 interactors, 100% revert, 31 txs",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 1,
+    "txs": 31,
+    "revert_rate": 1.0,
+    "trapping_bot": "0x644b7154a6e4796d3bfa0a58865080aa5bf92d0f",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "16443568",
+        31
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0xf835cc3afd0bc4a8ce3f36a28bbce2302960618d",
+    "chain": "base",
+    "verdict": "TP_FROM_SAMPLE",
+    "rationale": "Textbook honeypot: 1 interactors, 100% revert, 80 txs",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 1,
+    "txs": 80,
+    "revert_rate": 1.0,
+    "trapping_bot": null,
+    "bot_total_traps": 0,
+    "top_selectors": [
+      [
+        "30cf6ea2",
+        80
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0xc3e4cc4039275582684b6ecb7b57945a0501d78a",
+    "chain": "base",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=11, txs=78131, revert=36%, bot_traps=1, verified=False, top_selectors=[('19115035', 77599), ('2da1ceaa', 508), ('f80f5dd5', 11)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 11,
+    "txs": 78131,
+    "revert_rate": 0.36,
+    "trapping_bot": "0x5300cf6102e9763b2e43b519530574e9d20c188d",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "19115035",
+        77599
+      ],
+      [
+        "2da1ceaa",
+        508
+      ],
+      [
+        "f80f5dd5",
+        11
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0x91734696e8164cbf79b666569d2504b0e21218f6",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Has token: Ardinal (ERC-721)",
+    "is_verified": false,
+    "token_name": "Ardinal",
+    "contract_name": "Ardinal",
+    "interactors": 27,
+    "txs": 91,
+    "revert_rate": 0.22,
+    "trapping_bot": "0xa199820ba026c534025cae219d019c353c80a99a",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "daedc78e",
+        61
+      ],
+      [
+        "transferFrom",
+        20
+      ],
+      [
+        "42842e0e",
+        9
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0xeefa24c1d9a08b075d577694221e9cac941d7b95",
+    "chain": "arbitrum",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=5, txs=4286, revert=59%, bot_traps=1, verified=False, top_selectors=[('af56878e', 4285), ('NULL', 1)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 5,
+    "txs": 4286,
+    "revert_rate": 0.591,
+    "trapping_bot": "0x76aedacce2a79207825a1a1f2539a30003096f35",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "af56878e",
+        4285
+      ],
+      [
+        "NULL",
+        1
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0xf986c902f4a0adf24115886dd0baa315c250af10",
+    "chain": "optimism",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=6, txs=4988, revert=2%, bot_traps=1, verified=False, top_selectors=[('040b2c63', 1354), ('04a75127', 1100), ('310b2c63', 884)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 6,
+    "txs": 4988,
+    "revert_rate": 0.024,
+    "trapping_bot": "0x1e3073a1de4c856c3bf77d5064fe67f59ec79c01",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "040b2c63",
+        1354
+      ],
+      [
+        "04a75127",
+        1100
+      ],
+      [
+        "310b2c63",
+        884
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0x9836dac3bd474b51a7c428fc0caa14e77fc41024",
+    "chain": "arbitrum",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=2, txs=1241, revert=73%, bot_traps=2, verified=False, top_selectors=[('b31d33e9', 643), ('8f9570fc', 334), ('2c754a5c', 250)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 2,
+    "txs": 1241,
+    "revert_rate": 0.732,
+    "trapping_bot": "0x69ab884ba714dd462da25fb531a5f61d0dbef2c8",
+    "bot_total_traps": 2,
+    "top_selectors": [
+      [
+        "b31d33e9",
+        643
+      ],
+      [
+        "8f9570fc",
+        334
+      ],
+      [
+        "2c754a5c",
+        250
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0x2f805fba291b1e9467643a39ded67228091995f3",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Trapping bot 0x1a1d939b2ee7 is a serial false-positive (13 contracts)",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 2,
+    "txs": 13,
+    "revert_rate": 0.923,
+    "trapping_bot": "0x1a1d939b2ee78756d81e6ad1638911bc8eaf63be",
+    "bot_total_traps": 13,
+    "top_selectors": [
+      [
+        "a980f971",
+        11
+      ],
+      [
+        "db2e21bc",
+        1
+      ],
+      [
+        "9e281a98",
+        1
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0x03b9f640dc3ef49188d94c359344e6ad8620c92b",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Trapping bot 0x6fbd620bc264 is a serial false-positive (12 contracts)",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 2,
+    "txs": 11146,
+    "revert_rate": 0.001,
+    "trapping_bot": "0x6fbd620bc2641238bad794f9402a88200d18dca5",
+    "bot_total_traps": 12,
+    "top_selectors": [
+      [
+        "6f074e32",
+        11145
+      ],
+      [
+        "NULL",
+        1
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0x346434dbb1dfd0d941ab0805cfa7b6d65c927ab0",
+    "chain": "base",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=11, txs=24, revert=4%, bot_traps=1, verified=False, top_selectors=[('7b0472f0', 18), ('93707a19', 5), ('5312ea8e', 1)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 11,
+    "txs": 24,
+    "revert_rate": 0.042,
+    "trapping_bot": "0x45af412e42f417c02f621ad4557f6e7af7c032cb",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "7b0472f0",
+        18
+      ],
+      [
+        "93707a19",
+        5
+      ],
+      [
+        "5312ea8e",
+        1
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0xabc4b078fbc110161b194ad618d0c8ebb6325c34",
+    "chain": "arbitrum",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=25, txs=84574, revert=62%, bot_traps=1, verified=False, top_selectors=[('00000001', 41813), ('00000005', 29280), ('00000002', 5322)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 25,
+    "txs": 84574,
+    "revert_rate": 0.621,
+    "trapping_bot": "0x3034d049959675f6448a4b20aa3639ca6a34c4ce",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "00000001",
+        41813
+      ],
+      [
+        "00000005",
+        29280
+      ],
+      [
+        "00000002",
+        5322
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0x7eb26c03015df1dd7c84913c70b77e5ac8e94eba",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Has token: Chimi Strategy USDC SteakhouseHighYieldTurbo (ERC-20)",
+    "is_verified": false,
+    "token_name": "Chimi Strategy USDC SteakhouseHighYieldTurbo",
+    "contract_name": "Chimi Strategy USDC SteakhouseHighYieldTurbo",
+    "interactors": 2,
+    "txs": 66,
+    "revert_rate": 0.53,
+    "trapping_bot": "0xc272260bf79676b68d9a59a4ac6ff210a6bf7393",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "2606a10b",
+        65
+      ],
+      [
+        "57d89c5c",
+        1
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0xbb2d213f794a56ae179797dd144021f35200a319",
+    "chain": "base",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=30, txs=76, revert=18%, bot_traps=1, verified=False, top_selectors=[('59840cd4', 76)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 30,
+    "txs": 76,
+    "revert_rate": 0.184,
+    "trapping_bot": "0x45dbcc9c3fea566e27d787f6a9937879cad879eb",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "59840cd4",
+        76
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0xf79c2dc829cd3a2d8ceec353bdb1b2414ba1eee0",
+    "chain": "arbitrum",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Has token: The Pool Zap LP Vault V2.1 (ERC-20)",
+    "is_verified": false,
+    "token_name": "The Pool Zap LP Vault V2.1",
+    "contract_name": "The Pool Zap LP Vault V2.1",
+    "interactors": 6,
+    "txs": 35,
+    "revert_rate": 0.229,
+    "trapping_bot": "0x5cb4d906f0464b34c44d6555a770bf6af4a2cefe",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "1c4a8617",
+        8
+      ],
+      [
+        "38cfc17f",
+        6
+      ],
+      [
+        "6e553f65",
+        5
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0x196a943c9cfc795a1607945e1924a48a113feea7",
+    "chain": "base",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=2, txs=143, revert=9%, bot_traps=1, verified=False, top_selectors=[('1de6e2cc', 67), ('5a06dd14', 41), ('066b3cbd', 33)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 2,
+    "txs": 143,
+    "revert_rate": 0.091,
+    "trapping_bot": "0x9f111112d8891afa1639c94d3c55b048f98bbd7b",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "1de6e2cc",
+        67
+      ],
+      [
+        "5a06dd14",
+        41
+      ],
+      [
+        "066b3cbd",
+        33
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0x6b5df69bd79faef13b755254953a13ba4d0fb94a",
+    "chain": "base",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=42, txs=101, revert=4%, bot_traps=1, verified=False, top_selectors=[('f6d956df', 97), ('2f2ff15d', 2), ('d547741f', 2)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 42,
+    "txs": 101,
+    "revert_rate": 0.04,
+    "trapping_bot": "0xaf333f56262dda5851c6586f6575627bd3ea56ac",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "f6d956df",
+        97
+      ],
+      [
+        "2f2ff15d",
+        2
+      ],
+      [
+        "d547741f",
+        2
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0x8eacdb008568431483f07161a53d7e8d555f58c3",
+    "chain": "base",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=3, txs=2364, revert=70%, bot_traps=1, verified=False, top_selectors=[('3fab50da', 2350), ('8acb9299', 5), ('05c1a77e', 5)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 3,
+    "txs": 2364,
+    "revert_rate": 0.701,
+    "trapping_bot": "0x73a8e582a640d231a460b7e8e7ca10a90dd52de5",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "3fab50da",
+        2350
+      ],
+      [
+        "8acb9299",
+        5
+      ],
+      [
+        "05c1a77e",
+        5
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0xc16b1a753308bf909eddcec07bdeded155b0aba7",
+    "chain": "base",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=2, txs=31, revert=3%, bot_traps=2, verified=False, top_selectors=[('f0d6e843', 29), ('NULL', 1), ('43686563', 1)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 2,
+    "txs": 31,
+    "revert_rate": 0.032,
+    "trapping_bot": "0xa57accc582abbf98cbdb223f2f1fdb3d1451b404",
+    "bot_total_traps": 2,
+    "top_selectors": [
+      [
+        "f0d6e843",
+        29
+      ],
+      [
+        "NULL",
+        1
+      ],
+      [
+        "43686563",
+        1
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0xbff5fe7c1565d61aa57ca19192ec4af81a4ab8ee",
+    "chain": "arbitrum",
+    "verdict": "TRULY_AMBIGUOUS",
+    "rationale": "No decisive signal: interactors=1, txs=11, revert=73%, bot_traps=1, verified=False, top_selectors=[('24856bc3', 11)]",
+    "is_verified": false,
+    "token_name": null,
+    "contract_name": null,
+    "interactors": 1,
+    "txs": 11,
+    "revert_rate": 0.727,
+    "trapping_bot": "0x4bdb8234ad81f26985d257f36a2d2d8c30365546",
+    "bot_total_traps": 1,
+    "top_selectors": [
+      [
+        "24856bc3",
+        11
+      ]
+    ],
+    "source_excerpt": ""
+  },
+  {
+    "contract": "0xa558533a48f97e145783470ca2fee1d17b230c94",
+    "chain": "base",
+    "verdict": "FP_FROM_SAMPLE",
+    "rationale": "Trapping bot 0x675a38b2a293 is a serial false-positive (231 contracts)",
+    "is_verified": false,
+    "token_name": "HASH98",
+    "contract_name": "HASH98",
+    "interactors": 3,
+    "txs": 40,
+    "revert_rate": 0.025,
+    "trapping_bot": "0x675a38b2a29376e1db300bba72f2fd5e2fd56dd6",
+    "bot_total_traps": 231,
+    "top_selectors": [
+      [
+        "50fd7367",
+        15
+      ],
+      [
+        "acc8f306",
+        8
+      ],
+      [
+        "d6febde8",
+        4
+      ]
+    ],
+    "source_excerpt": ""
+  }
+]

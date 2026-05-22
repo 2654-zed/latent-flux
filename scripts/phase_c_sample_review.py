@@ -418,6 +418,11 @@ def main() -> int:
     Path(args.output).write_text(md, encoding="utf-8")
     print(f"Wrote {args.output}")
 
+    # Also emit a JSON sidecar with per-contract verdicts (for migration scripts)
+    json_path = Path(args.output).with_suffix(".json")
+    json_path.write_text(json.dumps(reviews, indent=2, default=str), encoding="utf-8")
+    print(f"Wrote {json_path}")
+
     counts = Counter(r["verdict"] for r in reviews)
     print()
     print("  Sample verdict distribution:")
