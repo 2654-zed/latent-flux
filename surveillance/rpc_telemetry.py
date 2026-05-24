@@ -241,65 +241,83 @@ def wrap_async_provider(provider: Any, component: str, chain: str | None,
 
 def wrap_async_web3(w3: Any, component: str, chain: str | None,
                     telemetry: RpcTelemetry | None = None) -> None:
-    """Wrap BOTH the provider AND the request manager so we capture every
-    RPC call regardless of whether the caller used a high-level helper
-    (`w3.eth.get_block(...)`) or the direct `provider.make_request(...)`.
+    """Wrap every RPC entry point on the AsyncWeb3 instance.
 
-    In web3.py async, the request manager's `coro_request` is the
-    universal entry point for all RPC calls produced by the high-level
-    `w3.eth.*` helpers. The provider's `make_request` is what
-    `coro_request` ultimately calls, but middleware can short-circuit
-    between the two. Hooking both is belt-and-suspenders.
+    web3.py 7.x async has multiple entry points for RPC calls:
+      - `manager.coro_request(method, params)` — high-level public API
+      - `manager._coro_make_request(method, params)` — internal core
+      - `manager.socket_request(method, params)` — WebSocket-specific
+      - `provider.make_request(method, params)` — provider-level direct
+        (used by code that bypasses the manager, like
+        auto_funder_tracer's alchemy_getAssetTransfers call)
 
-    Idempotent.
+    Different `w3.eth.*` helpers route through different combinations of
+    these depending on the provider and the method. Empirically (web3.py
+    7.16 + WebSocketProvider): `w3.eth.chain_id` and many other helpers
+    bypass `coro_request` and go straight to `_coro_make_request`.
+
+    Strategy: wrap all four entry points, using a contextvar to ensure
+    that any one call is only recorded ONCE regardless of how it
+    propagates through the stack.
+
+    Idempotent (checks _rpc_telemetry_wrapped marker).
     """
     if telemetry is None:
         telemetry = get_telemetry()
 
-    # 1. Wrap provider.make_request (catches direct provider calls + acts
-    #    as a fallback if manager wrap fails on this web3.py version)
-    if getattr(w3, "provider", None) is not None:
-        wrap_async_provider(w3.provider, component, chain, telemetry)
+    # Provider-level wrap (catches direct provider.make_request calls).
+    # The contextvar will suppress this if a higher-level wrap already
+    # recorded the call.
+    provider = getattr(w3, "provider", None)
+    if provider is not None:
+        wrap_async_provider(provider, component, chain, telemetry)
 
-    # 2. Wrap the manager's coro_request (catches all w3.eth.* helpers).
-    #    We tag these calls with component+":manager" so the breakdown
-    #    makes it clear which layer caught the call. Most components will
-    #    only ever see one or the other in a given window — but recording
-    #    both is the safe default.
     manager = getattr(w3, "manager", None)
     if manager is None:
         return
     if getattr(manager, "_rpc_telemetry_wrapped", False):
         return
 
-    coro_request = getattr(manager, "coro_request", None)
-    if coro_request is None:
-        # web3.py version without coro_request — fall back to provider wrap only
-        return
+    def _wrap_manager_method(attr_name: str) -> bool:
+        """Wrap manager.<attr_name> if it exists. Returns True if wrapped."""
+        method_fn = getattr(manager, attr_name, None)
+        if method_fn is None or not callable(method_fn):
+            return False
 
-    async def wrapped_coro_request(method, params, *args, **kwargs):
-        t0 = time.monotonic()
-        ok = False
-        # Mark this context so the provider wrap below us doesn't also
-        # count the same call. Reset on exit so sibling tasks aren't
-        # affected.
-        token = _in_manager_wrap.set(True)
-        try:
-            result = await coro_request(method, params, *args, **kwargs)
-            ok = True  # if it returned, the JSON-RPC layer accepted the result
-            return result
-        except Exception:
+        async def wrapped(method, params, *args, **kwargs):
+            # If a higher-level wrap already counted this call, just
+            # delegate without recording.
+            if _in_manager_wrap.get():
+                return await method_fn(method, params, *args, **kwargs)
+
+            t0 = time.monotonic()
             ok = False
-            raise
-        finally:
-            _in_manager_wrap.reset(token)
-            ms = int((time.monotonic() - t0) * 1000)
-            telemetry.record(component, chain, str(method), ok=ok, duration_ms=ms)
+            token = _in_manager_wrap.set(True)
+            try:
+                result = await method_fn(method, params, *args, **kwargs)
+                ok = True
+                return result
+            except Exception:
+                ok = False
+                raise
+            finally:
+                _in_manager_wrap.reset(token)
+                ms = int((time.monotonic() - t0) * 1000)
+                telemetry.record(component, chain, str(method),
+                                 ok=ok, duration_ms=ms)
 
-    manager.coro_request = wrapped_coro_request
-    manager._rpc_telemetry_wrapped = True
-    logger.info("rpc_telemetry: wrapped Web3 manager for component=%s chain=%s",
-                component, chain)
+        setattr(manager, attr_name, wrapped)
+        return True
+
+    wrapped_any = False
+    for name in ("coro_request", "_coro_make_request", "socket_request"):
+        if _wrap_manager_method(name):
+            wrapped_any = True
+
+    if wrapped_any:
+        manager._rpc_telemetry_wrapped = True
+        logger.info("rpc_telemetry: wrapped Web3 manager (multi-entry) "
+                    "for component=%s chain=%s", component, chain)
 
 
 # --- query helpers (for the CLI + the /api/rpc/usage endpoint) ---
