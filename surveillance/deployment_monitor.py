@@ -184,12 +184,16 @@ class DeploymentMonitor:
         async with AsyncWeb3(WebSocketProvider(self.rpc_url)) as w3:
             self._w3 = w3
 
-            # Wrap the provider's make_request for per-method CU telemetry.
+            # Wrap manager + provider for per-method CU telemetry.
             # Idempotent + best-effort: never raises into the hot path.
+            # wrap_async_web3 hooks both manager.coro_request (catches
+            # w3.eth.* helpers) and provider.make_request (catches direct
+            # provider.make_request calls like auto_funder_tracer's
+            # alchemy_getAssetTransfers). Contextvar prevents double-count.
             try:
-                from surveillance.rpc_telemetry import wrap_async_provider
-                wrap_async_provider(
-                    w3.provider,
+                from surveillance.rpc_telemetry import wrap_async_web3
+                wrap_async_web3(
+                    w3,
                     component=f"deployment_monitor_{self.chain}",
                     chain=self.chain,
                 )
