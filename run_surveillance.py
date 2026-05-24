@@ -955,8 +955,18 @@ class StatsHandler(BaseHTTPRequestHandler):
             limit = max(1, min(limit, 500))
             try:
                 from surveillance.rpc_telemetry import summarize, ensure_rpc_log_table
-                ensure_rpc_log_table(self.conn)
-                rows = summarize(self.conn, since=since, group_by=by)[:limit]
+                # Need write access for ensure_rpc_log_table (CREATE IF NOT EXISTS).
+                # Then re-open read-only for the summarize query.
+                _wcon = sqlite3.connect(DB_PATH, timeout=5)
+                try:
+                    ensure_rpc_log_table(_wcon)
+                finally:
+                    _wcon.close()
+                _rcon = _ro_connect()
+                try:
+                    rows = summarize(_rcon, since=since, group_by=by)[:limit]
+                finally:
+                    _rcon.close()
                 total_calls = sum(r["calls"] for r in rows)
                 total_cu = sum(r["cu"] for r in rows)
                 self._json(200, {
@@ -971,7 +981,7 @@ class StatsHandler(BaseHTTPRequestHandler):
                 self._json(200, {
                     "window_hours": hours,
                     "rows": [],
-                    "note": f"rpc_call_log not yet populated: {e}",
+                    "note": f"rpc_call_log query failed: {e}",
                 })
 
         elif self.path == "/api/sai/questions":
