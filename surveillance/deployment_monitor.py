@@ -184,6 +184,18 @@ class DeploymentMonitor:
         async with AsyncWeb3(WebSocketProvider(self.rpc_url)) as w3:
             self._w3 = w3
 
+            # Wrap the provider's make_request for per-method CU telemetry.
+            # Idempotent + best-effort: never raises into the hot path.
+            try:
+                from surveillance.rpc_telemetry import wrap_async_provider
+                wrap_async_provider(
+                    w3.provider,
+                    component=f"deployment_monitor_{self.chain}",
+                    chain=self.chain,
+                )
+            except Exception as e:  # noqa: BLE001 - telemetry must not break the monitor
+                logger.warning("rpc_telemetry wrap failed (continuing without telemetry): %s", e)
+
             chain_id = await w3.eth.chain_id
             latest = await w3.eth.block_number
             logger.info("Connected -- chain_id=%d, latest_block=%d", chain_id, latest)

@@ -929,6 +929,51 @@ class StatsHandler(BaseHTTPRequestHandler):
                     "note": f"sai_alerts table not yet populated: {e}",
                 })
 
+        elif self.path == "/api/rpc/usage" or self.path.startswith("/api/rpc/usage?"):
+            # Per-method Alchemy CU instrumentation. Reports rpc_call_log
+            # aggregates over a window (default last 24h), grouped by
+            # method | component | chain. See surveillance/rpc_telemetry.py.
+            import urllib.parse
+            from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+            qs = urllib.parse.urlparse(self.path).query
+            params = urllib.parse.parse_qs(qs)
+            by = (params.get("by") or ["method"])[0]
+            if by not in ("method", "component", "chain"):
+                by = "method"
+            hours_param = params.get("hours")
+            try:
+                hours = int(hours_param[0]) if hours_param else 24
+            except (ValueError, TypeError):
+                hours = 24
+            hours = max(1, min(hours, 24 * 30))  # 1h to 30d
+            since = (_dt.now(_tz.utc) - _td(hours=hours)).isoformat()
+            limit_param = params.get("limit")
+            try:
+                limit = int(limit_param[0]) if limit_param else 50
+            except (ValueError, TypeError):
+                limit = 50
+            limit = max(1, min(limit, 500))
+            try:
+                from surveillance.rpc_telemetry import summarize, ensure_rpc_log_table
+                ensure_rpc_log_table(self.conn)
+                rows = summarize(self.conn, since=since, group_by=by)[:limit]
+                total_calls = sum(r["calls"] for r in rows)
+                total_cu = sum(r["cu"] for r in rows)
+                self._json(200, {
+                    "window_hours": hours,
+                    "since": since,
+                    "group_by": by,
+                    "total_calls": total_calls,
+                    "total_cu_estimate": total_cu,
+                    "rows": rows,
+                })
+            except Exception as e:
+                self._json(200, {
+                    "window_hours": hours,
+                    "rows": [],
+                    "note": f"rpc_call_log not yet populated: {e}",
+                })
+
         elif self.path == "/api/sai/questions":
             # Load the question store from memory/questions.yaml and return ranked.
             try:
@@ -972,7 +1017,9 @@ class StatsHandler(BaseHTTPRequestHandler):
                               "/old-dump",
                               # SAI substrate (added 2026-05-17):
                               "/api/sai/alerts", "/api/sai/alerts/summary",
-                              "/api/sai/questions"],
+                              "/api/sai/questions",
+                              # RPC instrumentation (added 2026-05-24 post-CU-spike):
+                              "/api/rpc/usage"],
             })
 
     def do_POST(self):
