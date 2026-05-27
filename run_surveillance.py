@@ -4,6 +4,26 @@ import sqlite3
 import subprocess
 import sys
 import threading
+import time
+
+# === KILL SWITCH (Correction #26 / Dark window 2026-05-27 → 2026-06-01) ===
+# If SURVEILLANCE_DISABLED=1 in the env, sleep forever and don't start
+# monitors / HTTP server / RPC connections. Used to pause the service
+# without removing the deployment (which would lose the volume). Toggle:
+#   railway variable set SURVEILLANCE_DISABLED=1   # pause
+#   railway variable delete SURVEILLANCE_DISABLED  # resume
+# Resume also requires either an explicit redeploy or letting the next
+# scheduled deploy roll over.
+if os.environ.get("SURVEILLANCE_DISABLED", "").strip() == "1":
+    sys.stderr.write(
+        "SURVEILLANCE_DISABLED=1 — kill switch active. "
+        "Sleeping forever. Container holds the volume but does not open "
+        "RPC connections, run the HTTP server, or start any monitor. "
+        "Unset SURVEILLANCE_DISABLED to resume.\n"
+    )
+    sys.stderr.flush()
+    while True:
+        time.sleep(3600)
 from datetime import datetime, timedelta, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 import multiprocessing

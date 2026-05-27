@@ -2,9 +2,4 @@
 cmds = ["pip install -r requirements.txt"]
 
 [start]
-# === PAUSED 2026-05-27 → 2026-06-01 (Correction #26) ===
-# Surveillance is intentionally dark to preserve the remaining Alchemy CU
-# budget for layer3-trading-exp testing through 2026-06-01.
-# To RESUME on 2026-06-01: revert THIS commit (`git revert <sha>`) and push.
-# The previous start cmd was: python run_surveillance.py
-cmd = "sleep infinity"
+cmd = "python run_surveillance.py"
