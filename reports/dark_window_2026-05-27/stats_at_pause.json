@@ -1,0 +1,137 @@
+{
+    "contracts": {
+        "confirmed": 1450,
+        "suspected": 135474,
+        "unanalyzed": 64223,
+        "unknown": 163007
+    },
+    "deployers": 91749,
+    "trap_events": 2928,
+    "tx_events": 19848090,
+    "bot_candidates": 4794,
+    "bot_deployer_hits": 199,
+    "last_heartbeat": [
+        "deployment_monitor_base",
+        "2026-05-27T18:01:51.067707+00:00"
+    ],
+    "cache": {
+        "entries": 35391,
+        "total_hits": 92168
+    },
+    "top_bot_selectors": [
+        {
+            "selector": "8152712b",
+            "bots": 14,
+            "total_calls": 130179
+        },
+        {
+            "selector": "91a62449",
+            "bots": 2011,
+            "total_calls": 83427
+        },
+        {
+            "selector": "d2fca68a",
+            "bots": 17,
+            "total_calls": 48139
+        },
+        {
+            "selector": "49dd1262",
+            "bots": 1,
+            "total_calls": 47959
+        },
+        {
+            "selector": "636a5a02",
+            "bots": 1,
+            "total_calls": 42843
+        },
+        {
+            "selector": "000000e7",
+            "bots": 31,
+            "total_calls": 35678
+        },
+        {
+            "selector": "2213bc0b",
+            "bots": 62,
+            "total_calls": 34530
+        },
+        {
+            "selector": "e3ead59e",
+            "bots": 1,
+            "total_calls": 27601
+        },
+        {
+            "selector": "3f0bde25",
+            "bots": 3,
+            "total_calls": 27195
+        },
+        {
+            "selector": "e21fd0e9",
+            "bots": 4,
+            "total_calls": 25439
+        }
+    ],
+    "clusters": [],
+    "cross_chain": {
+        "chains_monitored": [
+            "arbitrum",
+            "base",
+            "optimism"
+        ],
+        "shared_deployers": 1260
+    },
+    "recent_alerts": [
+        {
+            "type": "COORDINATED_DEPLOYMENT",
+            "address": "0x25e94e6880f09882548593a21ac59d429ec0fa8e",
+            "tx": null,
+            "timestamp": "2026-05-27T17:59:51+00:00"
+        },
+        {
+            "type": "COORDINATED_DEPLOYMENT",
+            "address": "0xe5240f9d88e4e63517d1e573626afe4081f77a8e",
+            "tx": null,
+            "timestamp": "2026-05-27T17:56:11+00:00"
+        },
+        {
+            "type": "COORDINATED_DEPLOYMENT",
+            "address": "0xdc58f963eab35f3911301d054097014e5da0ece1",
+            "tx": null,
+            "timestamp": "2026-05-27T17:56:05+00:00"
+        },
+        {
+            "type": "COORDINATED_DEPLOYMENT",
+            "address": "0xf2e9369f931246d6c578d3ac0cf547d7c9540686",
+            "tx": null,
+            "timestamp": "2026-05-27T17:55:41+00:00"
+        },
+        {
+            "type": "COORDINATED_DEPLOYMENT",
+            "address": "0xd73a97a4454ea7c46a19ec77434e7c02ae693615",
+            "tx": null,
+            "timestamp": "2026-05-27T17:55:23+00:00"
+        }
+    ],
+    "longitudinal": {
+        "scored_deployers": 0,
+        "high_confidence": 0,
+        "critical": 0,
+        "top_scorer": "0x766c21b09fc29e26f17243cf675cccfcf7270e1a",
+        "top_score": 0
+    },
+    "event_monitors": {
+        "liquidity_events": 37477,
+        "liquidity_critical": 1454,
+        "approval_events": 84441,
+        "bridge_events": 63,
+        "pair_creations": 348,
+        "pair_creations_critical": 68,
+        "cex_deposit_candidates": 0
+    },
+    "funder_tracing": {
+        "deployers_traced": 86420,
+        "coverage_pct": 94.2,
+        "org_links_found": 5723,
+        "gas_stations": 280,
+        "hop_traced": 0
+    }
+}

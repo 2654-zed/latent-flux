@@ -1,0 +1,191 @@
+=== tier counts at pause ===
+{
+  "confirmed": 1450,
+  "suspected": 135479,
+  "unanalyzed": 64223,
+  "unknown": 163011
+}
+
+=== last 24h drain events (post-Phase 0 fix only) ===
+[
+  {
+    "contract": "0x4232d8063a5b7d3c7de4b0dcc55a7e8e763e58ed",
+    "caller": "0x4aa9e639013833ed8b0b9f670f4ceb41d53c8273",
+    "victim": "0x5564325afbedd031f4c76b124a7f5927a021e677",
+    "ts": "2026-05-27T17:56:17+00:00"
+  },
+  {
+    "contract": "0x4232d8063a5b7d3c7de4b0dcc55a7e8e763e58ed",
+    "caller": "0x4aa9e639013833ed8b0b9f670f4ceb41d53c8273",
+    "victim": "0x6eea41cded47b419055502dc05a4fbf2700711e4",
+    "ts": "2026-05-27T17:56:17+00:00"
+  },
+  {
+    "contract": "0x4232d8063a5b7d3c7de4b0dcc55a7e8e763e58ed",
+    "caller": "0x4aa9e639013833ed8b0b9f670f4ceb41d53c8273",
+    "victim": "0xe89496c64f6db570e2970d511468c76b6734fd77",
+    "ts": "2026-05-27T16:20:26+00:00"
+  },
+  {
+    "contract": "0xfe101c4b694695a65cf4e7030837276ebdc5a26e",
+    "caller": "0x3a575f624a654d8df5645ecc3c0c26e5f6632232",
+    "victim": "0xd29922ac7209fa52cdfd41f30a2382d2ee48011b",
+    "ts": "2026-05-27T15:38:43+00:00"
+  },
+  {
+    "contract": "0xfe101c4b694695a65cf4e7030837276ebdc5a26e",
+    "caller": "0x3a575f624a654d8df5645ecc3c0c26e5f6632232",
+    "victim": "0x09f786729ef7344a272438ed7561e9b15230c4a0",
+    "ts": "2026-05-27T14:21:53+00:00"
+  },
+  {
+    "contract": "0x4232d8063a5b7d3c7de4b0dcc55a7e8e763e58ed",
+    "caller": "0x4aa9e639013833ed8b0b9f670f4ceb41d53c8273",
+    "victim": "0x2a69bb6aebbe1907e724e0330753ab19aa6100b8",
+    "ts": "2026-05-27T14:02:39+00:00"
+  },
+  {
+    "contract": "0x4232d8063a5b7d3c7de4b0dcc55a7e8e763e58ed",
+    "caller": "0x4aa9e639013833ed8b0b9f670f4ceb41d53c8273",
+    "victim": "0xd1ec3dce3d7130049bd1dc9b5ab41cc00349b6e2",
+    "ts": "2026-05-27T12:17:18+00:00"
+  },
+  {
+    "contract": "0x4232d8063a5b7d3c7de4b0dcc55a7e8e763e58ed",
+    "caller": "0x4aa9e639013833ed8b0b9f670f4ceb41d53c8273",
+    "victim": "0x4e499ab741890f3e63e158db27c658951358f5d4",
+    "ts": "2026-05-27T12:17:18+00:00"
+  },
+  {
+    "contract": "0x4232d8063a5b7d3c7de4b0dcc55a7e8e763e58ed",
+    "caller": "0x4aa9e639013833ed8b0b9f670f4ceb41d53c8273",
+    "victim": "0xeaa2bcbe4b246c09f7ee2d59c956bb2474820304",
+    "ts": "2026-05-27T12:17:18+00:00"
+  },
+  {
+    "contract": "0x4232d8063a5b7d3c7de4b0dcc55a7e8e763e58ed",
+    "caller": "0x4aa9e639013833ed8b0b9f670f4ceb41d53c8273",
+    "victim": "0xc6c780bb30415064f5917d9b6858d9b4a02c791f",
+    "ts": "2026-05-27T12:17:18+00:00"
+  },
+  {
+    "contract": "0x4232d8063a5b7d3c7de4b0dcc55a7e8e763e58ed",
+    "caller": "0x4aa9e639013833ed8b0b9f670f4ceb41d53c8273",
+    "victim": "0xffa7ffea2c10d0d5f102de656b5299d456a8cbf7",
+    "ts": "2026-05-27T12:17:18+00:00"
+  },
+  {
+    "contract": "0xfe101c4b694695a65cf4e7030837276ebdc5a26e",
+    "caller": "0x3a575f624a654d8df5645ecc3c0c26e5f6632232",
+    "victim": "0x8cabb92489a3f200c7d22abeb4dc739de909a34e",
+    "ts": "2026-05-27T11:34:13+00:00"
+  },
+  {
+    "contract": "0xfe101c4b694695a65cf4e7030837276ebdc5a26e",
+    "caller": "0x3a575f624a654d8df5645ecc3c0c26e5f6632232",
+    "victim": "0x04f33e6514d13c8e3312731069b53cb2bd54d106",
+    "ts": "2026-05-27T11:25:23+00:00"
+  },
+  {
+    "contract": "0xfe101c4b694695a65cf4e7030837276ebdc5a26e",
+    "caller": "0x3a575f624a654d8df5645ecc3c0c26e5f6632232",
+    "victim": "0xae584dc85d3206ddbf87777e95e6b24ddcd3ac58",
+    "ts": "2026-05-27T11:09:35+00:00"
+  },
+  {
+    "contract": "0x48f26c532fe3fd08a97b4b52e58e2ac674286c92",
+    "caller": "0x876671c224a34086ca099a22b3a2726e394c1c2d",
+    "victim": "0x36b59021dd229ea8523415db66931d95eb2023d8",
+    "ts": "2026-05-27T06:23:29+00:00"
+  },
+  {
+    "contract": "0x48f26c532fe3fd08a97b4b52e58e2ac674286c92",
+    "caller": "0x876671c224a34086ca099a22b3a2726e394c1c2d",
+    "victim": "0x3a65e521dd27e0d4cd4e99a1bb0e95b0890477db",
+    "ts": "2026-05-27T06:23:29+00:00"
+  },
+  {
+    "contract": "0x48f26c532fe3fd08a97b4b52e58e2ac674286c92",
+    "caller": "0x876671c224a34086ca099a22b3a2726e394c1c2d",
+    "victim": "0xbb7dfcc177eab4b482db75a5f61fdd4e266935b1",
+    "ts": "2026-05-27T06:23:29+00:00"
+  },
+  {
+    "contract": "0x48f26c532fe3fd08a97b4b52e58e2ac674286c92",
+    "caller": "0x876671c224a34086ca099a22b3a2726e394c1c2d",
+    "victim": "0x85b2256821863f9f5bd16f418e53c28094071bb1",
+    "ts": "2026-05-27T06:23:29+00:00"
+  },
+  {
+    "contract": "0x48f26c532fe3fd08a97b4b52e58e2ac674286c92",
+    "caller": "0x876671c224a34086ca099a22b3a2726e394c1c2d",
+    "victim": "0x38cbfda2b8d6f1883a05550ccbeeeadac2736b4b",
+    "ts": "2026-05-27T06:23:29+00:00"
+  },
+  {
+    "contract": "0xda39f1c57f363e8defac20e60e22eabe0e59fb6d",
+    "caller": "0xd6880b6df20d89bc9f1fc59ac6cbdf3f7e9f88ea",
+    "victim": "0x851cc19b1fcf5eb1e17496af8ea236a87eb324d3",
+    "ts": "2026-05-26T20:28:37+00:00"
+  },
+  {
+    "contract": "0xda39f1c57f363e8defac20e60e22eabe0e59fb6d",
+    "caller": "0xd6880b6df20d89bc9f1fc59ac6cbdf3f7e9f88ea",
+    "victim": "0x5cd3c98a916609a550709d1821dd27443099e15c",
+    "ts": "2026-05-26T20:28:37+00:00"
+  },
+  {
+    "contract": "0xda39f1c57f363e8defac20e60e22eabe0e59fb6d",
+    "caller": "0xd6880b6df20d89bc9f1fc59ac6cbdf3f7e9f88ea",
+    "victim": "0xaf28cd888aeed1be5c71910089baff97f825d1e6",
+    "ts": "2026-05-26T20:28:37+00:00"
+  },
+  {
+    "contract": "0xda39f1c57f363e8defac20e60e22eabe0e59fb6d",
+    "caller": "0xd6880b6df20d89bc9f1fc59ac6cbdf3f7e9f88ea",
+    "victim": "0x99c825d2eaa144befa7fd770255f91fe10ed0be2",
+    "ts": "2026-05-26T20:28:37+00:00"
+  },
+  {
+    "contract": "0xda39f1c57f363e8defac20e60e22eabe0e59fb6d",
+    "caller": "0xd6880b6df20d89bc9f1fc59ac6cbdf3f7e9f88ea",
+    "victim": "0x21385c624dfef5f4152cb8b505cdb5d3c19da4aa",
+    "ts": "2026-05-26T20:28:37+00:00"
+  },
+  {
+    "contract": "0xda39f1c57f363e8defac20e60e22eabe0e59fb6d",
+    "caller": "0xd6880b6df20d89bc9f1fc59ac6cbdf3f7e9f88ea",
+    "victim": "0x83ecc4bc5d3b25c4b26e2b273f46061e608a07e6",
+    "ts": "2026-05-26T20:28:37+00:00"
+  },
+  {
+    "contract": "0xda39f1c57f363e8defac20e60e22eabe0e59fb6d",
+    "caller": "0xd6880b6df20d89bc9f1fc59ac6cbdf3f7e9f88ea",
+    "victim": "0x5963553127fbee90e0cd70b127a7660897fa3217",
+    "ts": "2026-05-26T20:28:37+00:00"
+  },
+  {
+    "contract": "0xda39f1c57f363e8defac20e60e22eabe0e59fb6d",
+    "caller": "0xd6880b6df20d89bc9f1fc59ac6cbdf3f7e9f88ea",
+    "victim": "0xdd6c766f788243468e448326347a64368fb791d7",
+    "ts": "2026-05-26T20:28:37+00:00"
+  },
+  {
+    "contract": "0xda39f1c57f363e8defac20e60e22eabe0e59fb6d",
+    "caller": "0xd6880b6df20d89bc9f1fc59ac6cbdf3f7e9f88ea",
+    "victim": "0xbc4ae8b90bc597558bdfc7493ad0c33f800a4a89",
+    "ts": "2026-05-26T20:28:37+00:00"
+  },
+  {
+    "contract": "0xda39f1c57f363e8defac20e60e22eabe0e59fb6d",
+    "caller": "0xd6880b6df20d89bc9f1fc59ac6cbdf3f7e9f88ea",
+    "victim": "0x24edca0d43d8dbacc3a321b31c9bf997d9a7283e",
+    "ts": "2026-05-26T20:28:37+00:00"
+  },
+  {
+    "contract": "0xda39f1c57f363e8defac20e60e22eabe0e59fb6d",
+    "caller": "0xd6880b6df20d89bc9f1fc59ac6cbdf3f7e9f88ea",
+    "victim": "0x814561387ee294c71333d8d6f4c809a240861cc4",
+    "ts": "2026-05-26T20:28:37+00:00"
+  }
+]

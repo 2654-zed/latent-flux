@@ -1,0 +1,65 @@
+{
+  "window_hours": 24,
+  "since": "2026-05-26T18:02:34.965218+00:00",
+  "group_by": "method",
+  "total_calls": 755847,
+  "total_cu_estimate": 11833282,
+  "rows": [
+    {
+      "method": "eth_getTransactionReceipt",
+      "calls": 513365,
+      "cu": 7700475,
+      "errors": 446,
+      "max_avg_ms": 36184
+    },
+    {
+      "method": "eth_getBlockByNumber",
+      "calls": 234358,
+      "cu": 3749728,
+      "errors": 33399,
+      "max_avg_ms": 21932
+    },
+    {
+      "method": "eth_getLogs",
+      "calls": 2007,
+      "cu": 150525,
+      "errors": 11,
+      "max_avg_ms": 208701
+    },
+    {
+      "method": "alchemy_getAssetTransfers",
+      "calls": 1002,
+      "cu": 150300,
+      "errors": 0,
+      "max_avg_ms": 536
+    },
+    {
+      "method": "eth_getCode",
+      "calls": 3456,
+      "cu": 65664,
+      "errors": 1,
+      "max_avg_ms": 53219
+    },
+    {
+      "method": "eth_subscribe",
+      "calls": 553,
+      "cu": 11060,
+      "errors": 0,
+      "max_avg_ms": 40
+    },
+    {
+      "method": "eth_blockNumber",
+      "calls": 553,
+      "cu": 5530,
+      "errors": 0,
+      "max_avg_ms": 41
+    },
+    {
+      "method": "eth_chainId",
+      "calls": 553,
+      "cu": 0,
+      "errors": 0,
+      "max_avg_ms": 63
+    }
+  ]
+}

@@ -1514,6 +1514,65 @@ Migration applied on local + production via `scripts/phase_d_weak_migration.py` 
 
 ---
 
+## Correction #26 — Intentional 5-Day Surveillance Blind Window (2026-05-27 → 2026-06-01)
+
+**Date:** 2026-05-27
+**Type:** Operational pause, not a methodology correction. Logged here so anyone querying the corpus for the dark window dates gets the right framing rather than concluding that activity stopped.
+**Severity:** LOW for the corpus (the gap is intentional and bounded). HIGH for any downstream analytics that join on `detection_timestamp` and assume uniform coverage.
+
+**What was paused:**
+
+The Railway service `stellar-embrace` (the surveillance container running `python run_surveillance.py`) was paused at approximately 2026-05-27T19:00 UTC and is scheduled to resume 2026-06-01. All three chain-monitor WebSocket subscriptions (`deployment_monitor_base`, `deployment_monitor_arbitrum`, `deployment_monitor_optimism`) stop ingesting during this window. SAI scheduled detectors (Q-002 × 4/day, Q-003, Q-005, Q-009, Q-008) do not run. The Stats API stays paused alongside.
+
+**Why:**
+
+The shared Alchemy app (one app, two Railway services — `stellar-embrace` for surveillance and `layer3-trading-exp` for trading) was at ~2.3B of the 2.5B monthly CU limit on 2026-05-27. The trading-exp side needed the remaining headroom (~200M CU) for testing through 2026-06-01. Surveillance's baseline burn (~12M CU/day measured via the May-2026 instrumentation in commit `7195ea5`) would have exhausted the budget before month-end. Pausing was the cleanest path; partial throttling would have introduced detection-quality questions that the corpus discipline does not tolerate.
+
+**Companion finding:** The pause came one day after diagnosing and fixing a separate Alchemy CU spike on the trading-exp side. From 2026-05-22 onward, `layer3-trading-exp` was leaking newHeads subscriptions on Base Mainnet (445M CU/day, 91% of WS usage, 100% from a single subscription type). Root cause: `pool_monitor.py`'s inner reconnect loop re-called `_AlchemyTransport.subscribe_new_heads()` on stall without unsubscribing the prior subscription. Fix shipped as `a810799` in `github.com/2654-zed/layer3-trading-exp`. The surveillance pause is unrelated to this fix — surveillance was confirmed at baseline (~12M/day) via the per-method telemetry endpoint `/api/rpc/usage`. The surveillance pause is a budget-allocation decision, not a remediation.
+
+**What you lose for 5 days:**
+
+| Surface | Estimated gap |
+|---|---|
+| New contract deployments ingested | ~5,000–7,500 across all 3 chains (~1,000–1,500/day, normal ingest rate) |
+| `transaction_events` rows | ~600K–1.2M (~120K–240K/day) |
+| `approval_watchlist` rows | ~1,500–2,500 (~300–500/day at recent rate) |
+| Drain events | ~150–300 if last-7d rate holds (~30–60/day post-Phase 0 fix) |
+| SAI detector runs | 20 missed runs (Q-002 4×, Q-003/Q-005/Q-009/Q-008 1× each, daily × 5 days) |
+| OLI label refresh | None during gap; resume catches up |
+
+**Snapshot artifacts captured at pause (under `reports/dark_window_2026-05-27/`):**
+
+| File | Content |
+|---|---|
+| `stats_at_pause.json` | Production `/stats` snapshot at the pause moment — baseline for resume comparison |
+| `sai_alerts_at_pause.json` | Full SAI alerts (limit=500) — anything still in NEEDS_VERIFICATION / STALE state when surveillance comes back |
+| `watchlist_at_pause.json` | Full active watchlist (110 rows, 100 HIGH) — addresses worth external monitoring during the gap |
+| `rpc_usage_24h.json` + `rpc_usage_24h_by_component.json` | Confirmation of surveillance's ~12M CU/day baseline at pause |
+| `active_addresses_for_etherscan_alerts.json` | Top-10 drain_callers + top-10 high-velocity deployers from the past 14 days — the candidates for free Etherscan address-watch alerts during the gap |
+| `tier_counts_and_recent_drains.json` | Confirmed=1,450 / suspected=135,479 / unanalyzed=64,223 / unknown=163,011 at pause; last 24h drain events |
+
+**Gap-coverage plan during dark window:**
+
+1. **Free external sources stay live:** Blockscout web UI / API, Etherscan free tier, GoPlus free API, Spotonchain / Lookonchain Twitter, DefiHackLabs incidents.yaml — none cost Layer 3 anything. Investigations requested by partners can use any of these.
+2. **Top 5 watchlist addresses get Etherscan email alerts:** `0x73c0c56bbf16…` (self-deploying-trap operator, 6 contracts drained in 14d), `0xf168cddd9093…` (154-victim drainer), `0xf3dd26b8081c…` (most-recent drain, last activity 2026-05-25T15:39Z), `0xa27bba42e0e1…` (pre-discharge bait), `0x80b12bd0…` (Animoca-tagged — most epistemically interesting if it does anything anomalous).
+3. **NO Layer 3 backfill of the gap on resume.** The built-in `connection_gaps` table records the disconnect window. Backfilling 5 days × 3 chains = ~2.1M block fetches × 16 CU ≈ 34M CU just for blocks (60–100M total with receipts) — that would eat most of the next month's budget. Start fresh from current block on 2026-06-01.
+
+**Resumption protocol (for 2026-06-01):**
+
+1. User unpauses `stellar-embrace` in Railway dashboard.
+2. Verify the deployment_monitor heartbeat advances within 5 minutes of unpause.
+3. Verify `/api/rpc/usage?hours=1` shows the post-fix baseline (~12M CU/day rate).
+4. Pull a "resumption summary" report comparing:
+   - `/stats` snapshot at resume vs the captured `stats_at_pause.json` — total contract growth during the gap is rate-extrapolated, not actual
+   - External-source observations gathered during the gap (drain events, watchlist hits, new operators surfaced via Twitter or hack labs)
+   - Any addresses that received Etherscan alerts during the dark window
+5. Append a "Resumption note" sub-entry to this correction documenting any anomalies surfaced.
+
+**Why this is logged in correction_log.md and not just JOURNAL.md:** because future analyses joining on `detection_timestamp BETWEEN 2026-05-27 AND 2026-06-01` will return no rows and may otherwise be interpreted as a real activity flatline. This entry is the audit trail.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.

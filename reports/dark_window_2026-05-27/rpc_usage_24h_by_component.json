@@ -1,0 +1,30 @@
+{
+  "window_hours": 24,
+  "since": "2026-05-26T18:02:36.106048+00:00",
+  "group_by": "component",
+  "total_calls": 755847,
+  "total_cu_estimate": 11833282,
+  "rows": [
+    {
+      "component": "deployment_monitor_base",
+      "calls": 447342,
+      "cu": 6884584,
+      "errors": 5031,
+      "max_avg_ms": 208701
+    },
+    {
+      "component": "deployment_monitor_arbitrum",
+      "calls": 210785,
+      "cu": 3447012,
+      "errors": 24081,
+      "max_avg_ms": 111086
+    },
+    {
+      "component": "deployment_monitor_optimism",
+      "calls": 97720,
+      "cu": 1501686,
+      "errors": 4745,
+      "max_avg_ms": 36184
+    }
+  ]
+}

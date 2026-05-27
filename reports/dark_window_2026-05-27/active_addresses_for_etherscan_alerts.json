@@ -1,0 +1,117 @@
+=== Most active drain_callers (last 14d) ===
+[
+  {
+    "caller": "0x73c0c56bbf162e403b46285f525cdc2409a57bed",
+    "distinct_contracts": 6,
+    "distinct_victims": 3,
+    "last_drain": "2026-05-20T12:41:15+00:00"
+  },
+  {
+    "caller": "0xfc6a46cb8fb913de5fbff15b4faafe6cc2b76de0",
+    "distinct_contracts": 1,
+    "distinct_victims": 1,
+    "last_drain": "2026-05-15T05:11:21+00:00"
+  },
+  {
+    "caller": "0xf60d81df94c19b6d6ce7e9c15f07996fa4fcc0a7",
+    "distinct_contracts": 1,
+    "distinct_victims": 11,
+    "last_drain": "2026-05-20T12:04:56+00:00"
+  },
+  {
+    "caller": "0xf3dd26b8081c0722a7d18813cfc040e2b3f3f5a2",
+    "distinct_contracts": 1,
+    "distinct_victims": 15,
+    "last_drain": "2026-05-25T15:39:57+00:00"
+  },
+  {
+    "caller": "0xf3374083812533b577b1a6fb3b7285fd7fd5d41c",
+    "distinct_contracts": 1,
+    "distinct_victims": 1,
+    "last_drain": "2026-05-17T07:47:55+00:00"
+  },
+  {
+    "caller": "0xf168cddd9093b6257f2562cc6ab4fcc7132e76bd",
+    "distinct_contracts": 1,
+    "distinct_victims": 154,
+    "last_drain": "2026-05-24T08:40:45+00:00"
+  },
+  {
+    "caller": "0xdb12a4e459737eea11d4e2997cdc7091b3f2ead4",
+    "distinct_contracts": 1,
+    "distinct_victims": 29,
+    "last_drain": "2026-05-14T14:53:25+00:00"
+  },
+  {
+    "caller": "0xd9c517eab03f761f4bbbceafa20f085c301977a8",
+    "distinct_contracts": 1,
+    "distinct_victims": 12,
+    "last_drain": "2026-05-24T23:12:09+00:00"
+  },
+  {
+    "caller": "0xd6880b6df20d89bc9f1fc59ac6cbdf3f7e9f88ea",
+    "distinct_contracts": 1,
+    "distinct_victims": 29,
+    "last_drain": "2026-05-26T20:28:37+00:00"
+  },
+  {
+    "caller": "0xd1152c926fbce5ec182860013a91d366b4b336f5",
+    "distinct_contracts": 1,
+    "distinct_victims": 1,
+    "last_drain": "2026-05-14T12:46:47+00:00"
+  }
+]
+
+=== Top-fanout deployers (last 7d, >=5 contracts) ===
+[
+  {
+    "deployer": "0xd11e0dd3374ff9c5cd5be23d71ff306bc79d43b0",
+    "contracts_24h": 1413,
+    "first_seen": "2026-05-20T07:15:21+00:00"
+  },
+  {
+    "deployer": "0xd323cc9c8ad7850fc443f432f7a39395452e0b99",
+    "contracts_24h": 594,
+    "first_seen": "2026-05-20T08:57:55+00:00"
+  },
+  {
+    "deployer": "0x8d0bac37d635b0e4da5c6dcc77738da64a64b2bc",
+    "contracts_24h": 544,
+    "first_seen": "2026-05-22T08:05:25+00:00"
+  },
+  {
+    "deployer": "0x273bd11c16e5f3f6c9dc41d9bea5def44222a068",
+    "contracts_24h": 356,
+    "first_seen": "2026-05-20T08:57:49+00:00"
+  },
+  {
+    "deployer": "0x04e3eebcb2f9fa17640b1792546545b74289a4ef",
+    "contracts_24h": 355,
+    "first_seen": "2026-05-20T08:57:39+00:00"
+  },
+  {
+    "deployer": "0x99c0257148c55771f50f42819fedcfb4c19c69f8",
+    "contracts_24h": 109,
+    "first_seen": "2026-05-24T00:59:53+00:00"
+  },
+  {
+    "deployer": "0x31e54d1ccc43772bd04981b8cc07e8ae6f0af327",
+    "contracts_24h": 102,
+    "first_seen": "2026-05-20T08:02:37+00:00"
+  },
+  {
+    "deployer": "0x2562cba89e6ae48c6a55e307c2b4229511cf888d",
+    "contracts_24h": 97,
+    "first_seen": "2026-05-21T15:08:37+00:00"
+  },
+  {
+    "deployer": "0x52bd3a0ec3fa7380041536cb8233aebbc7e86655",
+    "contracts_24h": 88,
+    "first_seen": "2026-05-26T23:57:23+00:00"
+  },
+  {
+    "deployer": "0x604be06b9f6b6663f78e755db0c5965eb2337e3d",
+    "contracts_24h": 76,
+    "first_seen": "2026-05-20T12:30:23+00:00"
+  }
+]
