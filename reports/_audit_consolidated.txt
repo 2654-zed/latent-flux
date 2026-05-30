@@ -1,0 +1,102 @@
+========================================================================
+A. DRAIN INTEGRITY — Bug #19b (credits all approvers vs actual `from`)
+========================================================================
+drain_detected=1 rows: 7,227 across 735 distinct tx_hashes
+
+Top drain/tx-ratio contracts (high ratio = one tx credited to many victims):
+    0xb738b1568f08b0d6894a580ef805e9298ebfab46  drains= 1618  txs=   2  ratio=   809.0
+    0x9aa9aa0530a6af70ee7bc47cf1240100f514b065  drains=  499  txs=   1  ratio=   499.0
+    0xb0a4741f19cde0bf2fd2ed598c55a6fe724c3653  drains=  319  txs=   1  ratio=   319.0
+    0xcf92c4caff3c8bafeb4ba4b3d23f8550b4b22351  drains=  282  txs=   2  ratio=   141.0
+    0xc8da26025fe78f23cd008a05023549c196459e8e  drains=  211  txs=   2  ratio=   105.5
+    0xaa9c087543f791dfda8f060126b2d81b014901aa  drains=  399  txs=   5  ratio=    79.8
+    0xadaa7256c77aacf1b1b37883d92b794f8761ba58  drains=   79  txs=   1  ratio=    79.0
+    0x9905a7e69ca904b461a74a3afbc0604624c8abc2  drains=  124  txs=   2  ratio=    62.0
+    0x8abbb6e14e6852f8fdf1741bcc95b26ed36744f7  drains=   51  txs=   1  ratio=    51.0
+    0x58efd6c838b0b90f49129c694184fc1fdf2567f4  drains=   49  txs=   1  ratio=    49.0
+    0xccef758eef558fc7f50d2ee31b2383b09946bedf  drains=   43  txs=   1  ratio=    43.0
+    0xf142fa8a5d4a5d5378c4b95867423971a6be7faf  drains=   41  txs=   1  ratio=    41.0
+
+Drains in ratio>=30 contracts (Bug #19b inflation candidates): 3,814 (52.8%)
+Distinct victim_address among drains: 6,361 (vs 7,227 drain rows)
+
+========================================================================
+B. TIER-VS-EVIDENCE CONSISTENCY (Correction #3/#4 recurrence check)
+========================================================================
+
+confirmed-tier by detection_method:
+    deployer_history            : 666
+    bytecode_pattern            : 596
+
+Correction #3/#4 mislabel signature (suspected + detection_method=bytecode_pattern
+  + bytecode_cache all-flags-zero):
+    suspected+bytecode_pattern with a bytecode_cache row: 13,929
+
+confirmed-tier 'thin evidence' triple-negative
+  (no bytecode_cache row AND no approval rows AND deployer has only this 1 confirmed):
+    218 / 1,262 confirmed contracts (17.3%)
+
+========================================================================
+C. WATCHLIST: 22 rows resolving to neither contract nor deployer
+========================================================================
+
+22 unresolved active watchlist rows:
+    0x987b2308c8ca6f906b797386954e486001f4b3d1  [funder] approval_trap_funder                       HIGH
+    0x9f49591a3bf95b49cd8d9477b4481ce9da68d5ca  [drainer] aurellion_diamondcut_attack_20260512_attac HIGH
+    0x0adc63e71b035d5c7fdb1b4593999fa1f296f1b2  [contract] aurellion_diamondcut_attack_20260512_diamo HIGH
+    0x4d7759e69cc973d338a1ea2fdb125c2b818f4d7e  [contract] aurellion_diamondcut_attack_20260512_sweep HIGH
+    0x7c5517e212b00f1344f000edf59b6952a1821281  [contract] discharged_trap_f168cddd_0x7c5517e2        HIGH
+    0x3de8e56d9f31663d7b64b46484ab48cc3a625327  [funder] drainer_funder_3de8e56d                    HIGH
+    0x62ff7f626f8ce47f3c19075c6dbc3cedd34a50e4  [funder] drainer_funder_62ff7f62                    HIGH
+    0x8b8f2c6e32715b7330416e3008430089f48d9662  [funder] drainer_funder_8b8f2c6e                    HIGH
+    0xd64ce40735428f5ef3a121b813a1f06af9870cf6  [funder] drainer_funder_d64ce407                    HIGH
+    0x1f7a03b70c5448dfd0a2c5a7865169253c2c769b  [eoa] kelp_oapp_delegate_config_authority        HIGH
+    0xa707034429c8e4e01df056c0cbcf478f0fbefad7  [eoa] mass_dormant_drain_hub_a707                HIGH
+    0x31e54d1ccc43772b25aa14b1ddd0a36d05ed7b13  [deployer] persistent_operator_31e54d1c               HIGH
+    0xf7cffc27732a5c9c4e2d592f3e33435f8ddb019a  [drainer] private_key_drain_attacker_F7cFFC27        HIGH
+    0x7937b4c76ec2649b8fcf032655762a7b1bffb366  [contract] self_deploy_bait_c0ee427b_7937b4           HIGH
+    0xc0ee427bee1d1f67861612c11fdf5f9b6b49cd66  [deployer] self_deploying_trap_operator_c0ee427b      HIGH
+    0xf168cddd9093b6257f2562cc6ab4fcc7132e76bd  [deployer] self_deploying_trap_operator_f168cddd      HIGH
+    0x35ca5c210a7f87ec8a270ef96656ce6a278b106c  [funder] single_purpose_funder_3161                 HIGH
+    0x68b8b6d48dc6529d7eb4c7943613e04ba2e5b913  [funder] single_purpose_funder_44a2ee13             HIGH
+    0x8c8204b8da3defb2a2f525fa35f5026080963579  [funder] single_purpose_funder_72ed79               HIGH
+    0x6a9c2449c32779f89d0ccafd746152e237c1bdf2  [funder] single_purpose_funder_industrial_bb50      HIGH
+    0xd37bbe5744d730a1d98d8dc97c42f0ca46ad7146  [router] thorchain_router_known_offramp             HIGH
+    0xa7b9874d15742358fb455dd56f97c6d19ad74f5c  [eoa] x402_drain_endpoint_a7b9874d               HIGH
+
+========================================================================
+D. OLI ENRICHMENT SILENT FAILURE (priority #22)
+========================================================================
+oli_labels columns: ['address', 'chain_id', 'tags_json', 'tag_count', 'primary_entity', 'primary_tag_name', 'severity', 'fetched_at']
+oli_labels total rows: 13
+    ('0x147b8869655bc09f226955cc676ff78efe240ca8', 1, None, 0, None, None, 'LOW', '2026-05-11 05:12:25')
+    ('0x3304e22ddaa22bcdc5fca2269b418046ae7b566a', 1, None, 0, None, None, 'HIGH', '2026-05-11 05:12:25')
+    ('0x39591e7c099a379fd7b349ebfecaeef439c40454', 1, None, 0, None, None, 'HIGH', '2026-05-11 05:12:25')
+    ('0x4e3ae00e8323558fa5cac04b152238924aa31b60', 1, None, 0, None, None, 'HIGH', '2026-05-11 05:12:25')
+    ('0x80b12bd0f1793bf6cea767fa83eb2068eaa17dc8', 1, None, 0, None, None, 'LOW', '2026-05-11 05:12:25')
+    ('0x80c67432656d59144ceff962e8faf8926599bcf8', 1, None, 0, None, None, 'HIGH', '2026-05-11 05:12:25')
+    ('0xa2a01b4a68575280a2de45178e289da717bedb6f', 1, None, 0, None, None, 'LOW', '2026-05-11 05:12:25')
+    ('0xbaed383ede0e5d9d72430661f3285daa77e9439f', 1, None, 0, None, None, 'HIGH', '2026-05-11 05:12:25')
+    ('0xc5d133296e17ba25df0409a6c31607bf3b78e3e3', 1, None, 0, None, None, 'LOW', '2026-05-11 05:12:25')
+    ('0xd37bbe5744d730a1d98d8dc97c42f0ca46ad7146', 1, None, 0, None, None, 'HIGH', '2026-05-11 05:12:25')
+    ('0xe4edb277e41dc89ab076a1f049f4a3efa700bce8', 1, None, 0, None, None, 'HIGH', '2026-05-11 05:12:25')
+    ('0xf70da97812cb96acdf810712aa562db8dfa3dbef', 1, None, 0, None, None, 'HIGH', '2026-05-11 05:12:25')
+    ('0xfa7093cdd9ee6932b4eb2c9e1cde7ce00b1fa4b9', 1, None, 0, None, None, 'HIGH', '2026-05-11 05:12:25')
+
+========================================================================
+E. SAI ALERT VALIDITY (alerts built on retracted data?)
+========================================================================
+sai_alerts total: 57
+by detector + severity:
+    Q-003    NEEDS_VERIFICATION        : 12
+    Q-003    STALE                     : 6
+    Q-005    T2_MULTI_CHAIN_DEPLOY     : 9
+    Q-005    T3_PATTERN_D              : 8
+    Q-009    RESOLVED_VIA_OLI          : 16
+    Q-009    RESOLVED_VIA_WATCHLIST    : 6
+
+SAI alerts whose subject is an audit-migrated (now-legitimate) contract: 0
+subject_kind distribution:
+    drain_caller                : 22
+    oli_tagged_address          : 18
+    deployer                    : 17

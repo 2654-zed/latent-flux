@@ -1,0 +1,200 @@
+total audit-migrated contracts: 347
+
+migrated contracts by batch:
+    Phase A (holders/verified)      : 116
+    Phase B (self-loop/BACKFILL)    : 40
+    Phase C sample                  : 29
+    Phase C FROM_SOURCE             : 130
+    Phase C FROM_ACTIVITY           : 25
+    Phase C FROM_CLUSTER            : 7
+    other                           : 0
+
+*** migrated contracts WITH drain_detected evidence: 45 ***
+(these had on-chain drain rows the migration never checked)
+
+  0xa7e1e8ab7b7c93f9e3ceb10724843a4b74f5308c
+    batch=Phase A (holders/verified)  drains=194 distinct_drain_tx=99
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Fin
+
+  0xf768d7d152b40e061ce616a37575a3524136c81e
+    batch=Phase C FROM_ACTIVITY  drains=127 distinct_drain_tx=28
+    [AUDIT 2026-05-22 / Correction #25 Phase C automated: LIKELY_FP_FROM_ACTIVITY - diverse ac
+
+  0xa68079da060e485501cf778de52b738919a43324
+    batch=Phase C FROM_ACTIVITY  drains=152 distinct_drain_tx=25
+    [AUDIT 2026-05-22 / Correction #25 Phase C automated: LIKELY_FP_FROM_ACTIVITY - diverse ac
+
+  0xf6f996663f1fc86fe18b4fb335860f034cf2070a
+    batch=Phase C FROM_ACTIVITY  drains=139 distinct_drain_tx=19
+    [AUDIT 2026-05-22 / Correction #25 Phase C automated: LIKELY_FP_FROM_ACTIVITY - diverse ac
+
+  0xd6cd943bfc0711125bc01cff7b7dfb87be1d10c8
+    batch=Phase A (holders/verified)  drains=118 distinct_drain_tx=19
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Yup
+
+  0x955b2c75efffa1ee9ee54e21e9c5c7cf772fdcb0
+    batch=Phase A (holders/verified)  drains=43 distinct_drain_tx=19
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Fut
+
+  0xee80d04303e2c850cc5571a9f41077afc0ff4887
+    batch=Phase C FROM_ACTIVITY  drains=151 distinct_drain_tx=17
+    [AUDIT 2026-05-22 / Correction #25 Phase C automated: LIKELY_FP_FROM_ACTIVITY - diverse ac
+
+  0x6efcdda84c2d6a2b08dda2374b66d1e4dedfa820
+    batch=Phase A (holders/verified)  drains=41 distinct_drain_tx=16
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Inf
+
+  0x08c4d91507a5a9ede5cb51427455ac5766514e20
+    batch=Phase A (holders/verified)  drains=43 distinct_drain_tx=16
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Dop
+
+  0x97105b485b85c961c527714f265e5f299a3b2c49
+    batch=Phase A (holders/verified)  drains=139 distinct_drain_tx=15
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=DBS
+
+  0x48bb5cd38aba5fec4b9e288ef2dc3e579ee8f8f4
+    batch=Phase A (holders/verified)  drains=154 distinct_drain_tx=15
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=TM,
+
+  0xe626311575aab3f89185b1f55e69879adb17d84f
+    batch=Phase A (holders/verified)  drains=36 distinct_drain_tx=14
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Bag
+
+  0x5c1b1bcba8f500e989c0ff207b6c9a66de8828ec
+    batch=Phase A (holders/verified)  drains=35 distinct_drain_tx=14
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Ope
+
+  0xb0580e8996253d520d4a9505ff83b06eeff7d62d
+    batch=Phase A (holders/verified)  drains=144 distinct_drain_tx=14
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=COL
+
+  0xbbc97bd4d21c4d82ab66f93e22b70819442dd3ac
+    batch=Phase A (holders/verified)  drains=33 distinct_drain_tx=14
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Bag
+
+  0xa7b181381ba5b7e67cf5ca5787a8b4d10926110a
+    batch=Phase A (holders/verified)  drains=38 distinct_drain_tx=14
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Bot
+
+  0x4cc0de8d1547cc2918f6a7f501c1bb42f5a2dd0c
+    batch=Phase A (holders/verified)  drains=27 distinct_drain_tx=14
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=The
+
+  0x883a9de6800767775499982d106e376df975962a
+    batch=Phase A (holders/verified)  drains=154 distinct_drain_tx=13
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=VYG
+
+  0xdc6576e635f9a5ea134a069b74aebe3cdc0d548b
+    batch=Phase A (holders/verified)  drains=115 distinct_drain_tx=13
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Mec
+
+  0x664d7e41fce27d23cecdd0ffaaa20f86dbf79b9d
+    batch=Phase A (holders/verified)  drains=31 distinct_drain_tx=13
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Cru
+
+  0x3fd877dfc33d8ba1914503605057dac16db45fa5
+    batch=Phase A (holders/verified)  drains=29 distinct_drain_tx=13
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Inf
+
+  0x6ca58be72fe7f758584b16d3db55fe5b37736516
+    batch=Phase A (holders/verified)  drains=136 distinct_drain_tx=12
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=ASI
+
+  0xd4cbbbf83a1df58a2c8d2e588500bbe7379d6155
+    batch=Phase A (holders/verified)  drains=153 distinct_drain_tx=12
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=RAL
+
+  0x24b418fb6563c35d0d739f9a2ba102fa8783fa2e
+    batch=Phase C FROM_ACTIVITY  drains=150 distinct_drain_tx=12
+    [AUDIT 2026-05-22 / Correction #25 Phase C automated: LIKELY_FP_FROM_ACTIVITY - diverse ac
+
+  0x2353d00b7e4aedc967fdcc58665752bb59681172
+    batch=Phase A (holders/verified)  drains=38 distinct_drain_tx=11
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Bot
+
+  0x6eb5c25ef5dd5c182fb4e009dfcd589319dd3996
+    batch=Phase A (holders/verified)  drains=38 distinct_drain_tx=11
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Amb
+
+  0xb934beb34966fc73a624ecc71f4e8fe77498c5fc
+    batch=Phase A (holders/verified)  drains=33 distinct_drain_tx=11
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Nev
+
+  0x4d1d718e47b916fc0f7dbc80b8e4478a08381fa4
+    batch=Phase A (holders/verified)  drains=133 distinct_drain_tx=11
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=REA
+
+  0x1f1f7dfb5a50fcb12f6599036b36250e8db7b07e
+    batch=Phase A (holders/verified)  drains=29 distinct_drain_tx=9
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Cru
+
+  0xc41c496f951b47b7174a1e8f6c25d96bbf3f0c64
+    batch=Phase A (holders/verified)  drains=22 distinct_drain_tx=9
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Ren
+
+  0xaa9c087543f791dfda8f060126b2d81b014901aa
+    batch=Phase A (holders/verified)  drains=399 distinct_drain_tx=5
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Run
+
+  0xefa5c323af3ec72a21eb294cd7a59c4d1d7b7a7a
+    batch=Phase A (holders/verified)  drains=13 distinct_drain_tx=4
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Nap
+
+  0xc8997068ed327ab563614dde51bbcf04c9811364
+    batch=Phase A (holders/verified)  drains=3 distinct_drain_tx=2
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Sta
+
+  0x328f20857c19cc72b5aed37b301c129fc2cd8f0a
+    batch=Phase A (holders/verified)  drains=3 distinct_drain_tx=2
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=ERA
+
+  0xa327f4e4cebdc9940570a86aa9b0c8883a673433
+    batch=Phase C FROM_SOURCE  drains=33 distinct_drain_tx=2
+    [AUDIT 2026-05-22 / Correction #25 Phase C automated: LIKELY_FP_FROM_SOURCE - verified sou
+
+  0xf68425d0d451699d0d766150634e436acd2f05a1
+    batch=Phase A (holders/verified)  drains=2 distinct_drain_tx=2
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Ard
+
+  0x3cf987c9ad05e1f4a1d4f143c6fb6dfbe4105c2d
+    batch=Phase A (holders/verified)  drains=39 distinct_drain_tx=2
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=LYN
+
+  0xb738b1568f08b0d6894a580ef805e9298ebfab46
+    batch=Phase A (holders/verified)  drains=1618 distinct_drain_tx=2
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Lan
+
+  0xdd5dca58e01813d7a8f1b5f68bff90ca1e181ddd
+    batch=Phase A (holders/verified)  drains=1 distinct_drain_tx=1
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=DNC
+
+  0x5d482e3c46841cb20cb24ef7531baf4b0d9f026d
+    batch=Phase A (holders/verified)  drains=23 distinct_drain_tx=1
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=ALT
+
+  0xf142fa8a5d4a5d5378c4b95867423971a6be7faf
+    batch=Phase A (holders/verified)  drains=41 distinct_drain_tx=1
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=NUV
+
+  0x765f39e0959ccd8f849937135d607494f967f1a7
+    batch=Phase C sample  drains=2 distinct_drain_tx=1
+    [AUDIT 2026-05-22 / Correction #25 Phase C sample review: FP_FROM_SAMPLE - contract_name='
+
+  0x8ead1460a533bdf63eb1e1bde3535b9e1caa7b59
+    batch=Phase A (holders/verified)  drains=2 distinct_drain_tx=1
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Bas
+
+  0x3a426753d78196aae2e9bc06b1bd9b3326fdead3
+    batch=Phase C FROM_SOURCE  drains=1 distinct_drain_tx=1
+    [AUDIT 2026-05-22 / Correction #25 Phase C automated: LIKELY_FP_FROM_SOURCE - verified sou
+
+  0xb0a4741f19cde0bf2fd2ed598c55a6fe724c3653
+    batch=Phase A (holders/verified)  drains=319 distinct_drain_tx=1
+    [AUDIT 2026-05-22 / Correction #25: STRONG LIKELY_FP per Blockscout enrichment - token=Blo
+
+
+migrated contracts with SELFDESTRUCT/deferred-threat bytecode signal:
+    0x94eb7d3eb3a0781fda95d5349b59146c66af7786: {"has_asymmetric_transfer": true, "has_conditional_revert": false, "has_unusual_fee_structure": false, "pattern_notes": 
+    0xd6cd943bfc0711125bc01cff7b7dfb87be1d10c8: {"has_asymmetric_transfer": false, "has_conditional_revert": false, "has_unusual_fee_structure": false, "pattern_notes":
+    0xe9f87632b2270d495e55be950a58e589bf6fde06: {"has_asymmetric_transfer": false, "has_conditional_revert": false, "has_unusual_fee_structure": false, "pattern_notes":
+  total: 3

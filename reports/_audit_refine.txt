@@ -1,0 +1,21 @@
+CORRECTION #3/#4 SIGNATURE — refined to all-flags-zero
+  suspected total: 136,631
+  suspected + detection_method=bytecode_pattern: 13,945
+  of those, bytecode_cache all-flags-zero (true Correction #3/#4 signature): 4,596
+
+  suspected by detection_method:
+    deployer_history            : 122,686
+    bytecode_pattern            : 13,945
+
+BUG #19b — single tx_hash credited to multiple victims (definitional over-credit)
+  drain tx_hashes credited to >1 victim: 473 / 735 distinct tx
+  drain rows attributable to those multi-victim tx: 6,965 / 7,227
+  (a legit batched/multicall drain CAN hit many victims in 1 tx, so this is an UPPER bound on Bug#19b inflation, not proof)
+
+  worst single tx_hash by victim count:
+    cf2fed47275687febeefb5b1  contract=0xb738b1568f08b0d6  victims=1520
+    43af1c7ce75da36563c35be2  contract=0x9aa9aa0530a6af70  victims=499
+    f8f651106db06cb7ab42a37e  contract=0xb0a4741f19cde0bf  victims=319
+    580f0f764ddf6c143b3b34b4  contract=0xcf92c4caff3c8baf  victims=274
+    1e15d30abe4822784164fc49  contract=0xaa9c087543f791df  victims=166
+    006ddc9c9f35992dd5f59849  contract=0xc8da26025fe78f23  victims=165

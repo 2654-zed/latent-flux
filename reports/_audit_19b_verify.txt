@@ -1,0 +1,13 @@
+worst tx (prefix cf2fed47275687febeefb5b1): full=cf2fed47275687febeefb5b1ac97fc51a72de4d055750865ca373ea8d6bea6d9
+
+transaction_events rows for this tx_hash: 1
+    contract=0xb738b1568f08b0d689 caller=0xa9f65861c9bf68497b selector=f4e2540c reverted=0 ts=2026-05-09T23:11:01+00:00
+
+approval_watchlist rows for this drain_tx_hash, grouped by drain_caller:
+    caller=0xa9f65861c9bf68497b rows=1520 victims=1520 approve_window=[2026-05-05T11:37:43 .. 2026-05-09T23:12:43]
+
+INTERPRETATION:
+  If transaction_events shows ONE transferFrom (selector 23b872dd) for this tx,
+  but approval_watchlist credits 1,520 victims to it, that's Bug #19b over-crediting:
+  the drain-detector matched ANY transferFrom on the contract and stamped it onto
+  EVERY pending approver, rather than the single victim whose tokens actually moved.

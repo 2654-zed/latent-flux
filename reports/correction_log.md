@@ -1573,6 +1573,65 @@ The shared Alchemy app (one app, two Railway services — `stellar-embrace` for 
 
 ---
 
+## Correction #27 — Bug #19b: Drain Detector Credits All Pending Approvers From a Single Contract Interaction
+
+**Date:** 2026-05-27 (dark-window data-integrity audit; see `reports/data_integrity_audit_2026-05-27.md`)
+**Discovery method:** Row-level inspection during the intentional-pause audit. `scripts/audit_verify_19b.py`.
+**Severity:** HIGH — every "N victims drained" / "N drain events" figure derived from `approval_watchlist.drain_detected` is an upper bound, not a count. This is the second half of the Bug #19 family; Phase 0 (Correction #24) fixed only the reverted-tx half.
+
+**Claim (implicit):** `approval_watchlist.drain_detected=1` rows each represent one victim whose approval was actually exercised by a drainer. Headline counts (e.g. "7,227 drain events," the lifetime "3,437 drains / 2,963 victims" in CLAUDE.md priority #14) treated each row as a real victim.
+
+**Reality:** `surveillance/approval_drain_monitor.py` `check_drains()` matches a transaction against the *contract*, then stamps `drain_detected=1` onto **every pending approver of that contract** — not the single victim whose tokens moved. Both detection methods share the defect:
+- Method 1 (transferFrom scan): a single `transferFrom` on the contract credits all approvers.
+- Method 2 (deployer-interaction scan): ANY non-approve call by the deployer credits all approvers — even when the call is not a transfer at all.
+
+**Worst-case proof:** drain tx `cf2fed47…bea6d9` on `0xb738b1568f08…` has exactly ONE `transaction_events` row (caller `0xa9f65861…`, selector `f4e2540c` — a custom method, **not** transferFrom `23b872dd`, `is_reverted=0`). `approval_watchlist` credits it to **1,520 distinct victims** whose approvals span five days. One on-chain action, not a transfer, became 1,520 "drained victims."
+
+**Magnitude (local snapshot 2026-05-27):**
+- 7,227 drain_detected=1 rows across 735 distinct tx_hashes
+- 473 / 735 tx_hashes credited to >1 victim
+- 6,965 / 7,227 (96.4%) drain rows attributable to multi-victim tx — the **upper bound** on inflation
+- True count is between 735 (one-victim-per-tx floor) and 7,227 (current); cannot be pinned without decoding each tx's transfer logs
+
+**Why it's an upper bound, not a fake count:** a legitimate batched/multicall drain CAN sweep many victims in one tx. The bug is that the detector does not *verify* each credited victim's tokens moved — it assumes they all did. Some multi-victim tx are real mass-drains; some (like the 1,520 case on a non-transfer selector) are pure over-credit.
+
+**Fix:**
+- This entry (#27) — documents the bound and the caveat.
+- `reports/data_integrity_audit_2026-05-27.md` — full audit.
+- **Code fix deferred to Phase E (needs RPC, paused during dark window):** decode the actual Transfer logs of each drain tx and credit only addresses whose balance moved. Tracked as resume-action #2.
+- **Until fixed:** quote all drain victim/event counts as upper bounds with this caveat. Update CLAUDE.md priority #14 framing.
+
+**Companion findings from the same audit (not separate corrections):**
+- **OLI enrichment silently broken** (priority #22 confirmed): `oli_labels` 13 rows all have `tags_json=NULL, tag_count=0`. The `is_known_legitimate()` gate runs on empty data — a likely contributing cause of the Correction #25 verified-legitimate-token FP class. Resume-action #1.
+- **Referential integrity CLEAN:** 0 orphan drain rows, 0 Phase-0 reverted-tx residue, 0 stranded SAI alerts, hash format 100% consistent (an earlier same-session "mixed 0x format" claim was a misread and is retracted).
+- **Confirmed-tier thin-evidence residue:** 218/1,262 (17.3%) post-migration confirmed contracts have no bytecode + no approvals + no deployer recidivism. Phase-C-deep candidates, not actioned.
+
+**AMENDMENT (2026-05-27) — Correction #25's migration heuristics never gated on drain evidence:**
+
+The propagation sweep + drain-gate analysis (`scripts/audit_migration_drain_gate.py`) found that **45 of the 347 audit-migrated contracts (13.0%) had `drain_detected=1` rows in `approval_watchlist` that no migration heuristic ever checked.** A contract could be downgraded confirmed→unanalyzed for being a verified token / OZ-framework source / high-holder while carrying recorded drain evidence. The heuristics tested Blockscout legitimacy + activity but had no "does this contract have drains" veto.
+
+Distribution of the 45 by batch (corrects two earlier wrong guesses in this session that blamed `LIKELY_FP_FROM_ACTIVITY`):
+- **Phase A (holders/verified): 35** ← dominant source (30% of Phase A's 116)
+- Phase C FROM_ACTIVITY: 5 (20% of its 25)
+- Phase C FROM_SOURCE: 2 (1.5% of its 130)
+- Phase C sample: 1; Phase B: 0; FROM_CLUSTER: 0
+
+**These 45 are SUSPECTS, not confirmed errors, because the drain counts are themselves Bug #19b-inflated (Correction #27 above).** Split by drain-shape:
+- **~27 with ≥10 distinct drain transactions** → strong false-negative suspects (a legit token doesn't have dozens of separate addresses running transferFrom-drains against it). E.g. `0xa7e1e8ab7b` FIRE (194 drains/99 tx, case-filed harvester), `0xf768d7d152` (127/28), `0xa68079da` (152/25), `0xd6cd943bfc` Yupp AI (118/19, **bytecode has SELFDESTRUCT**).
+- **~11 with 1-2 drain tx fanned to hundreds of victims** → likely Bug #19b artifacts; migration probably correct. E.g. `0xb738b15` (1,618 drains/2 tx), `0xb0a4741f` (319/1).
+
+**Resume-action #0 (ahead of all others):** decode on-chain transfer logs for the 45 (priority: the ~27 high-distinct-tx). This same RPC pass resolves Bug #19b for them. Restore confirmed-tier for any whose drains are real multi-tx drains. Lossless (original `confidence_reason` preserved in annotation). Verification needs prod DB + RPC (local approval_watchlist is a partial snapshot).
+
+**Pipeline fix:** add a drain-evidence veto to migration logic — never auto-migrate a contract with ≥3 distinct drain transactions, regardless of Blockscout legitimacy. (Gate on distinct-tx, not raw drain rows, to avoid Bug #19b false vetoes.)
+
+**Heuristic assessment:** `FROM_SOURCE` (130, 1.5% drain-tainted) and `FROM_CLUSTER` (7, 0%) are clean. Phase A holders/verified (30% drain-tainted) is the worst offender — the cheapest/earliest heuristic, not the Phase C ones.
+
+**Meta-lesson (two layers):**
+1. An FP-cleanup heuristic can manufacture false negatives as readily as the original pipeline made false positives. A legitimacy signal (verified source, holder count) is not a safe exoneration when it ignores the adversarial evidence that earned the original label. Migration must veto on the *presence of harm evidence*, not just weigh *legitimacy signals*.
+2. **Process:** I asserted the wrong mechanism (`FROM_ACTIVITY counts victims as users`) twice in this session before computing the actual batch distribution, because I wrote conclusions in the same tool-batch as the queries that would test them. Corrected only after running `audit_migration_drain_gate.py` and reading it first. The lesson is in the audit report's process note: read output, THEN conclude, in separate steps.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.
