@@ -194,35 +194,33 @@ def check_drains(conn: sqlite3.Connection) -> dict:
                   p["victim_address"], p["contract_address"]))
             drains_found += 1
 
-    # Method 2: Deployer interacting with contract after external approvals
-    # (might use a custom drain function, not standard transferFrom).
-    # IMPORTANT (Correction #24 / Bug #19, 2026-05-21): filter to
-    # successful (non-reverted) transactions. See Method 1 comment above.
-    deployer_drains = conn.execute("""
-        SELECT aw.contract_address, aw.deployer_address,
-               te.tx_hash, te.timestamp, te.function_selector
-        FROM approval_watchlist aw
-        JOIN transaction_events te ON te.contract_address = aw.contract_address
-            AND te.interacting_address = aw.deployer_address
-        WHERE aw.drain_detected = 0
-        AND te.timestamp > aw.approve_timestamp
-        AND te.function_selector NOT IN ('095ea7b3', 'a9059cbb')
-        AND te.is_reverted = 0
-        GROUP BY aw.contract_address, te.tx_hash
-    """).fetchall()
-
-    for d in deployer_drains:
-        if d["deployer_address"] and d["deployer_address"] in suppressed:
-            skipped += 1
-            continue
-        conn.execute("""
-            UPDATE approval_watchlist
-            SET drain_detected = 1, drain_tx_hash = ?, drain_timestamp = ?,
-                drain_caller = ?
-            WHERE contract_address = ? AND drain_detected = 0
-        """, (d["tx_hash"], d["timestamp"], d["deployer_address"],
-              d["contract_address"]))
-        drains_found += 1
+    # Method 2: DISABLED 2026-05-27 (Correction #27 / Bug #19b).
+    # ------------------------------------------------------------------
+    # This was the primary drain OVER-CREDIT source. Its UPDATE clause
+    #   WHERE contract_address = ? AND drain_detected = 0
+    # stamped drain_detected=1 onto EVERY pending approver of a contract
+    # whenever the deployer made ANY non-approve/non-transfer call, with
+    # no check that a specific victim's tokens actually moved. The Phase 0
+    # is_reverted filter (Correction #24) reduced but did not fix this:
+    # a single SUCCESSFUL non-transferFrom call still credited all
+    # approvers. Dark-window audit attributed the largest phantom drain
+    # rows to this method (e.g. a single call crediting 1,520 "victims").
+    #
+    # A custom-drain detector cannot be made precise without decoding the
+    # tx's ERC-20 Transfer logs and crediting only addresses whose balance
+    # moved. Re-introduce later as a weak `drain_suspected` signal gated by
+    # a Transfer-log verification pass before ever setting drain_detected=1.
+    #
+    # Per CLAUDE.md "conservative over aggressive": disabling produces
+    # false negatives (missed custom drains) but removes false positives
+    # (phantom victim credits) — the correct trade for a credibility metric.
+    #
+    # Method 1 (standard transferFrom) remains active. It also lacks
+    # per-victim from-matching, but its UPDATE is scoped to a single
+    # victim_address, bounding the over-credit. From-matching for Method 1
+    # is a tracked resume-action.
+    # ------------------------------------------------------------------
+    _ = suppressed  # still used by Method 1 above; Method 2 body removed
 
     conn.commit()
     return {"drains_detected": drains_found, "oli_suppressed_skips": skipped}
