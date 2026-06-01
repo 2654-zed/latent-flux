@@ -1,0 +1,57 @@
+============================================================================
+T1 APPLY (APPLY)  db=C:\Users\jason\Desktop\ai lang\surveillance\data\surveillance.db
+============================================================================
+drain pairs evaluated: 5174  (cache=5174 fetched=0 errs=0)
+phantom rows to reset: 778
+contracts to RESTORE (>= 2 real victims): 42
+contracts staying unanalyzed (<2 real): 3
+
+real-victim count per contract (post per-row test):
+    0xb738b1568f08b0d6894a580ef805e9298ebfab46  real=1353  -> RESTORE
+    0xaa9c087543f791dfda8f060126b2d81b014901aa  real=397  -> RESTORE
+    0xb0a4741f19cde0bf2fd2ed598c55a6fe724c3653  real=280  -> RESTORE
+    0xa7e1e8ab7b7c93f9e3ceb10724843a4b74f5308c  real=160  -> RESTORE
+    0x883a9de6800767775499982d106e376df975962a  real=143  -> RESTORE
+    0xd4cbbbf83a1df58a2c8d2e588500bbe7379d6155  real=143  -> RESTORE
+    0x48bb5cd38aba5fec4b9e288ef2dc3e579ee8f8f4  real=142  -> RESTORE
+    0x24b418fb6563c35d0d739f9a2ba102fa8783fa2e  real=140  -> RESTORE
+    0xb0580e8996253d520d4a9505ff83b06eeff7d62d  real=138  -> RESTORE
+    0x97105b485b85c961c527714f265e5f299a3b2c49  real=137  -> RESTORE
+    0xee80d04303e2c850cc5571a9f41077afc0ff4887  real=135  -> RESTORE
+    0xf6f996663f1fc86fe18b4fb335860f034cf2070a  real=134  -> RESTORE
+    0x4d1d718e47b916fc0f7dbc80b8e4478a08381fa4  real=129  -> RESTORE
+    0x6ca58be72fe7f758584b16d3db55fe5b37736516  real=126  -> RESTORE
+    0xa68079da060e485501cf778de52b738919a43324  real=117  -> RESTORE
+    0xd6cd943bfc0711125bc01cff7b7dfb87be1d10c8  real=104  -> RESTORE
+    0xdc6576e635f9a5ea134a069b74aebe3cdc0d548b  real=103  -> RESTORE
+    0xf142fa8a5d4a5d5378c4b95867423971a6be7faf  real=40  -> RESTORE
+    0x3cf987c9ad05e1f4a1d4f143c6fb6dfbe4105c2d  real=38  -> RESTORE
+    0x2353d00b7e4aedc967fdcc58665752bb59681172  real=32  -> RESTORE
+    0xa327f4e4cebdc9940570a86aa9b0c8883a673433  real=31  -> RESTORE
+    0x08c4d91507a5a9ede5cb51427455ac5766514e20  real=30  -> RESTORE
+    0x6efcdda84c2d6a2b08dda2374b66d1e4dedfa820  real=29  -> RESTORE
+    0x6eb5c25ef5dd5c182fb4e009dfcd589319dd3996  real=26  -> RESTORE
+    0xb934beb34966fc73a624ecc71f4e8fe77498c5fc  real=26  -> RESTORE
+    0xbbc97bd4d21c4d82ab66f93e22b70819442dd3ac  real=26  -> RESTORE
+    0xe626311575aab3f89185b1f55e69879adb17d84f  real=25  -> RESTORE
+    0xa7b181381ba5b7e67cf5ca5787a8b4d10926110a  real=25  -> RESTORE
+    0x5c1b1bcba8f500e989c0ff207b6c9a66de8828ec  real=24  -> RESTORE
+    0x955b2c75efffa1ee9ee54e21e9c5c7cf772fdcb0  real=24  -> RESTORE
+    0x5d482e3c46841cb20cb24ef7531baf4b0d9f026d  real=22  -> RESTORE
+    0x664d7e41fce27d23cecdd0ffaaa20f86dbf79b9d  real=21  -> RESTORE
+    0x1f1f7dfb5a50fcb12f6599036b36250e8db7b07e  real=20  -> RESTORE
+    0x3fd877dfc33d8ba1914503605057dac16db45fa5  real=18  -> RESTORE
+    0xc41c496f951b47b7174a1e8f6c25d96bbf3f0c64  real=16  -> RESTORE
+    0x4cc0de8d1547cc2918f6a7f501c1bb42f5a2dd0c  real=15  -> RESTORE
+    0xf768d7d152b40e061ce616a37575a3524136c81e  real=8  -> RESTORE
+    0xefa5c323af3ec72a21eb294cd7a59c4d1d7b7a7a  real=8  -> RESTORE
+    0x328f20857c19cc72b5aed37b301c129fc2cd8f0a  real=3  -> RESTORE
+    0xc8997068ed327ab563614dde51bbcf04c9811364  real=2  -> RESTORE
+    0x765f39e0959ccd8f849937135d607494f967f1a7  real=2  -> RESTORE
+    0x8ead1460a533bdf63eb1e1bde3535b9e1caa7b59  real=2  -> RESTORE
+    0xdd5dca58e01813d7a8f1b5f68bff90ca1e181ddd  real=1  -> keep
+    0x3a426753d78196aae2e9bc06b1bd9b3326fdead3  real=1  -> keep
+
+APPLIED: reset 778 phantom drain rows; restored 42 contracts to confirmed.
+  post confirmed: 1304
+  post drain_detected=1: 6449
