@@ -3,14 +3,30 @@
 **Date:** 2026-05-27 (dark window, 0 Alchemy CU — Blockscout probes only)
 **Status:** Investigation result. **No DB mutation performed.**
 
-> **CORRECTION (same day, before any mutation):** An earlier version of this
-> doc concluded "25/25 victims IN_only → all distribution mislabels → restore
-> none." That was WRONG — written from the FIRE-only probe before reading the
-> broader archetype probe. The full 5-contract archetype probe
-> (`_t1_archetypes.txt`) shows the opposite for 4 of 5 contracts: they have
-> real victim-outbound drain legs. The corrected finding is below. This is a
-> read-before-conclude miss, caught at the read step; nothing was applied off
-> the wrong version.
+> **FINAL CORRECTION (2026-05-27, capped full-decode run — supersedes both earlier versions of this doc):**
+> The full per-contract capped decode (`scripts/t1_decode_full.py --cap-victims 12`,
+> output `reports/_t1_decode_full.txt/.json`, 470 victims across all 45
+> contracts, cache `audit_drain_legs`) gives the trustworthy contract-level
+> verdict:
+>
+> **44 of 45 contracts are REAL_DRAINER** (victims have outbound `from=victim`
+> token legs). **1 is DISTRIBUTION_MISLABEL** (`0xf68425d0…`, 2 victims, both
+> with NO token transfers at all — `none`, not even inbound). 2 are MANUAL
+> (single-victim contracts, 1 OUT each). Totals: 407 real victims / 470 checked.
+>
+> **FIRE `0xa7e1e8ab7b` IS a real drainer** (5 OUT / 7 IN of 12 sampled). The
+> doc's two earlier conclusions were both wrong about FIRE: the first FIRE-only
+> probe used `LIMIT 3` and happened to draw 3 of its IN-only recipients, so I
+> over-generalized to "distribution mislabel." A drainer can hold a mix of
+> drained victims (OUT) and airdrop/seed recipients (IN) — FIRE has both.
+>
+> **Bottom line: the Correction #25 migration of these 45 was a large
+> FALSE-NEGATIVE event** — ~44 genuine drainers were wrongly downgraded to
+> unanalyzed. They should be restored to confirmed. The lesson stands
+> (read-before-conclude; never generalize from a `LIMIT 3` sample), but the
+> corrected conclusion is the near-opposite of this doc's original title.
+> **Still no mutation** — the cap proves "is it a drainer" but not the per-row
+> phantom count; the apply needs the uncapped per-row pass (below).
 
 ## What Task 1 set out to do
 Rebuild the drain-transfer decoder to separate real approval-drains from Bug #19b phantom over-credits, then restore wrongly-migrated real drainers (Finding 4) and purge phantoms.
