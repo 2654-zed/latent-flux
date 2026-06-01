@@ -1,0 +1,13 @@
+TASK 0 — approval_drain_monitor.py structural verification
+=======================================================
+  line_count                      : 366
+  check_drains_defined            : True
+  method1_transferfrom_present    : True
+  method1_reverted_filter         : True
+  method2_disabled_marker         : True
+  method2_body_removed            : True
+  correction24_note               : True
+  correction27_note               : True
+  ast_parse                       : OK
+
+VERDICT: INTACT — matches Correction #27 prevention fix

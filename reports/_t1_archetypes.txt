@@ -1,0 +1,45 @@
+========================================================================
+FIRE — 194 rows/99 tx (was 'real drainer')
+  contract=0xa7e1e8ab7b7c93f9e3ceb10724843a4b74f5308c chain=base sample_victims=5
+    0x8df12a0226  out_legs=  0 in_legs=  3  -> IN_only
+    0xdeb1fa1c9f  out_legs=  0 in_legs= 50  -> IN_only
+    0x772f600e96  out_legs=  0 in_legs= 50  -> IN_only
+    0x4bf61bc7c7  out_legs=  0 in_legs= 50  -> IN_only
+    0xe2860f2dae  out_legs=  0 in_legs= 50  -> IN_only
+  SUMMARY: OUT(real-drain shape)=0  IN_only(distribution mislabel)=5  none=0
+========================================================================
+Yupp AI — 118 rows/19 tx +SELFDESTRUCT
+  contract=0xd6cd943bfc0711125bc01cff7b7dfb87be1d10c8 chain=arbitrum sample_victims=5
+    0x1ec7a8452e  out_legs= 11 in_legs=  4  -> OUT
+    0xf6816f0738  out_legs=  3 in_legs=  4  -> OUT
+    0x25e1b5595e  out_legs=  2 in_legs=  5  -> OUT
+    0xf7ec18269a  out_legs=  2 in_legs=  2  -> OUT
+    0x952b61e593  out_legs=  3 in_legs=  5  -> OUT
+  SUMMARY: OUT(real-drain shape)=5  IN_only(distribution mislabel)=0  none=0
+========================================================================
+0xb738 — 1618 rows/2 tx (fan-out shape)
+  contract=0xb738b1568f08b0d6894a580ef805e9298ebfab46 chain=base sample_victims=5
+    0x258007980c  out_legs= 23 in_legs= 27  -> OUT
+    0xd43fe73d4d  out_legs=  2 in_legs=  1  -> OUT
+    0xb372731cc9  out_legs=  1 in_legs=  1  -> OUT
+    0x99e6443032  out_legs=  2 in_legs=  2  -> OUT
+    0x98c398a72d  out_legs= 25 in_legs= 25  -> OUT
+  SUMMARY: OUT(real-drain shape)=5  IN_only(distribution mislabel)=0  none=0
+========================================================================
+0xb0a4 — 319 rows/1 tx (fan-out shape)
+  contract=0xb0a4741f19cde0bf2fd2ed598c55a6fe724c3653 chain=base sample_victims=5
+    0xc4f6f1300f  out_legs=  0 in_legs=  0  -> none
+    0xa5019cf022  out_legs=  0 in_legs=  0  -> none
+    0xbe75c68d0a  out_legs=  0 in_legs=  0  -> none
+    0x7d5beb7629  out_legs=  0 in_legs=  0  -> none
+    0x268dec53b7  out_legs=  1 in_legs=  1  -> OUT
+  SUMMARY: OUT(real-drain shape)=1  IN_only(distribution mislabel)=0  none=4
+========================================================================
+0xaa9c — 399 rows/5 tx
+  contract=0xaa9c087543f791dfda8f060126b2d81b014901aa chain=base sample_victims=5
+    0x851cc19b1f  out_legs=  2 in_legs=  1  -> OUT
+    0x06cf3e299a  out_legs=  4 in_legs=  3  -> OUT
+    0x61cea9d6c7  out_legs=  3 in_legs=  1  -> OUT
+    0x4cebb7dfc2  out_legs=  3 in_legs=  2  -> OUT
+    0xeb3790167c  out_legs=  2 in_legs=  2  -> OUT
+  SUMMARY: OUT(real-drain shape)=5  IN_only(distribution mislabel)=0  none=0

@@ -1,0 +1,121 @@
+TX: 0xc4a74a86c018ccef328310d9880f05c10e7bd389a146df5aebb1a63814e2a692
+CONTRACT: 0xa7e1e8ab7b7c93f9e3ceb10724843a4b74f5308c
+======================================================================
+
+[A] GET https://base.blockscout.com/api/v2/transactions/0xc4a74a86c018ccef328310d9880f05c10e7bd389a146df5aebb1a63814e2a692/token-transfers?type=ERC-20
+  top-level keys: ['items', 'next_page_params']
+  item count: 8
+
+  --- FULL items[0] (pretty) ---
+{
+  "block_hash": "0xd54e15085f58cb433be0e78a63e857ec1c394260af9091a59e22801e3db085b4",
+  "block_number": 45651630,
+  "from": {
+    "ens_domain_name": null,
+    "hash": "0xa7E1E8Ab7B7c93F9e3CeB10724843a4b74f5308C",
+    "implementations": [],
+    "is_contract": true,
+    "is_scam": false,
+    "is_verified": true,
+    "metadata": null,
+    "name": "FinancialIndependenceRetireEarly",
+    "private_tags": [],
+    "proxy_type": null,
+    "public_tags": [],
+    "reputation": "ok",
+    "watchlist_names": []
+  },
+  "log_index": 615,
+  "method": null,
+  "timestamp": null,
+  "to": {
+    "ens_domain_name": null,
+    "hash": "0x4Fe3941B13AC5942E4FEa0D0a1B10E31A92E7c9A",
+    "implementations": [],
+    "is_contract": true,
+    "is_scam": false,
+    "is_verified": false,
+    "metadata": null,
+    "name": "Uniswap V2",
+    "private_tags": [],
+    "proxy_type": null,
+    "public_tags": [],
+    "reputation": "ok",
+    "watchlist_names": []
+  },
+  "token": {
+    "address_hash": "0xa7E1E8Ab7B7c93F9e3CeB10724843a4b74f5308C",
+    "circulating_market_cap": null,
+    "decimals": "18",
+    "exchange_rate": null,
+    "holders_count": "1626",
+    "icon_url": null,
+    "name": "Financial Independence Retire Early",
+    "reputation": "ok",
+    "symbol": "FIRE",
+    "total_supply": "1000000000000000000000000000",
+    "type": "ERC-20",
+    "volume_24h": null
+  },
+  "token_type": "ERC-20",
+  "total": {
+    "decimals": "18",
+    "value": "252800842874283885287512"
+  },
+  "transaction_hash": "0xc4a74a86c018ccef328310d9880f05c10e7bd389a146df5aebb1a63814e2a692",
+  "type": "token_transfer"
+}
+
+  --- key paths present in items[0] ---
+    .block_hash = '0xd54e15085f58cb433be0e78a63e857ec1c394260af9091a59e22801e3db085b4'
+    .block_number = 45651630
+    .from.ens_domain_name = None
+    .from.hash = '0xa7E1E8Ab7B7c93F9e3CeB10724843a4b74f5308C'
+    .from.implementations[0] = None
+    .from.is_contract = True
+    .from.is_scam = False
+    .from.is_verified = True
+    .from.metadata = None
+    .from.name = 'FinancialIndependenceRetireEarly'
+    .from.private_tags[0] = None
+    .from.proxy_type = None
+    .from.public_tags[0] = None
+    .from.reputation = 'ok'
+    .from.watchlist_names[0] = None
+    .log_index = 615
+    .method = None
+    .timestamp = None
+    .to.ens_domain_name = None
+    .to.hash = '0x4Fe3941B13AC5942E4FEa0D0a1B10E31A92E7c9A'
+    .to.implementations[0] = None
+    .to.is_contract = True
+    .to.is_scam = False
+    .to.is_verified = False
+    .to.metadata = None
+    .to.name = 'Uniswap V2'
+    .to.private_tags[0] = None
+    .to.proxy_type = None
+    .to.public_tags[0] = None
+    .to.reputation = 'ok'
+    .to.watchlist_names[0] = None
+    .token.address_hash = '0xa7E1E8Ab7B7c93F9e3CeB10724843a4b74f5308C'
+    .token.circulating_market_cap = None
+    .token.decimals = '18'
+    .token.exchange_rate = None
+    .token.holders_count = '1626'
+    .token.icon_url = None
+    .token.name = 'Financial Independence Retire Early'
+    .token.reputation = 'ok'
+    .token.symbol = 'FIRE'
+    .token.total_supply = '1000000000000000000000000000'
+    .token.type = 'ERC-20'
+    .token.volume_24h = None
+    .token_type = 'ERC-20'
+    .total.decimals = '18'
+    .total.value = '252800842874283885287512'
+    .transaction_hash = '0xc4a74a86c018ccef328310d9880f05c10e7bd389a146df5aebb1a63814e2a692'
+    .type = 'token_transfer'
+
+[B] GET https://base.blockscout.com/api/v2/transactions/0xc4a74a86c018ccef328310d9880f05c10e7bd389a146df5aebb1a63814e2a692/token-transfers (no type filter)
+  item count: 8
+  token.type distribution: {'ERC-20': 8}

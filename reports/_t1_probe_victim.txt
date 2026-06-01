@@ -1,0 +1,33 @@
+CONTRACT (token): 0xa7e1e8ab7b7c93f9e3ceb10724843a4b74f5308c
+sample credited victims + stored drain_tx_hash:
+  victim=0x8df12a0226376ab9acf2a80d610706433ad0fc76  drain_tx=031aced61a8372dec31b30fa33c5dc2f7c6783d573c4ccab96691b311b3ca45c
+  victim=0xdeb1fa1c9f61f70edb77fcf925265b4e326e40ea  drain_tx=8c29341433543aea804be081d841230cc86f8964f963d96ba08da9d03bff210b
+  victim=0x772f600e969661ee97e825c1cd7ecee4fe13a435  drain_tx=8c29341433543aea804be081d841230cc86f8964f963d96ba08da9d03bff210b
+======================================================================
+
+### victim 0x8df12a0226376ab9acf2a80d610706433ad0fc76
+    stored drain_tx: 031aced61a8372dec31b30fa33c5dc2f7c6783d573c4ccab96691b311b3ca45c
+    FIRE transfers touching this victim: 3
+      IN(to=victim)      from=0xa7e1e8ab7b to=0x8df12a0226 tx=0x5c6fbd1cb59e
+      IN(to=victim)      from=0xacc79e7b9f to=0x8df12a0226 tx=0x548bb9deb652
+      IN(to=victim)      from=0xacc79e7b9f to=0x8df12a0226 tx=0x19aa880329e0
+
+### victim 0xdeb1fa1c9f61f70edb77fcf925265b4e326e40ea
+    stored drain_tx: 8c29341433543aea804be081d841230cc86f8964f963d96ba08da9d03bff210b
+    FIRE transfers touching this victim: 50
+      IN(to=victim)      from=0xa7e1e8ab7b to=0xdeb1fa1c9f tx=0xdb7f8ad43049
+      IN(to=victim)      from=0xa7e1e8ab7b to=0xdeb1fa1c9f tx=0x22bbad4a3472
+      IN(to=victim)      from=0xa7e1e8ab7b to=0xdeb1fa1c9f tx=0x02e1c2f01305
+      IN(to=victim)      from=0xa7e1e8ab7b to=0xdeb1fa1c9f tx=0x8ee186e1eb16
+      IN(to=victim)      from=0xa7e1e8ab7b to=0xdeb1fa1c9f tx=0x7d6c5b3ca101
+      IN(to=victim)      from=0xa7e1e8ab7b to=0xdeb1fa1c9f tx=0xa3410d34a22a
+
+### victim 0x772f600e969661ee97e825c1cd7ecee4fe13a435
+    stored drain_tx: 8c29341433543aea804be081d841230cc86f8964f963d96ba08da9d03bff210b
+    FIRE transfers touching this victim: 50
+      IN(to=victim)      from=0xa7e1e8ab7b to=0x772f600e96 tx=0xdb7f8ad43049
+      IN(to=victim)      from=0xa7e1e8ab7b to=0x772f600e96 tx=0x22bbad4a3472
+      IN(to=victim)      from=0xa7e1e8ab7b to=0x772f600e96 tx=0x02e1c2f01305
+      IN(to=victim)      from=0xa7e1e8ab7b to=0x772f600e96 tx=0x8ee186e1eb16
+      IN(to=victim)      from=0xa7e1e8ab7b to=0x772f600e96 tx=0x7d6c5b3ca101
+      IN(to=victim)      from=0xa7e1e8ab7b to=0x772f600e96 tx=0xa3410d34a22a
