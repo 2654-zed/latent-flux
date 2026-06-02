@@ -119,8 +119,15 @@ class SelectorMonitor:
         return self._bots_tagged
 
     async def process_block(self, w3: AsyncWeb3, block: dict,
-                            timestamp_iso: str) -> None:
-        """Scan all transactions in a block for interactions with watched contracts."""
+                            timestamp_iso: str, block_receipts: dict = None) -> None:
+        """Scan all transactions in a block for interactions with watched contracts.
+
+        block_receipts (Fix A): {tx_hash(lower,0x) -> receipt} map fetched once
+        per block by the deployment monitor via eth_getBlockReceipts. Replaces
+        the former per-tx get_transaction_receipt call. If None (fetch failed),
+        revert status is treated as unknown=False and revert-dependent trap
+        confirmation is skipped for the block (loud-fail, no per-tx fallback).
+        """
         # Refresh watched set every 60 seconds
         now = asyncio.get_event_loop().time()
         if now - self._last_refresh > 60:
@@ -144,12 +151,14 @@ class SelectorMonitor:
 
             # This transaction targets a watched contract
             await self._process_interaction(w3, tx, to_lower,
-                                            block_number, timestamp_iso)
+                                            block_number, timestamp_iso,
+                                            block_receipts)
 
     async def _process_interaction(self, w3: AsyncWeb3, tx: dict,
                                    contract_address: str,
                                    block_number: int,
-                                   timestamp_iso: str) -> None:
+                                   timestamp_iso: str,
+                                   block_receipts: dict = None) -> None:
         """Extract selector, tag bots, classify gas, log to DB."""
         # Extract calldata
         input_data = tx.get("input", b"")
@@ -173,12 +182,23 @@ class SelectorMonitor:
 
         gas_pattern = classify_gas_pattern(max_priority_gwei)
 
-        # Check revert status
-        try:
-            receipt = await w3.eth.get_transaction_receipt(tx["hash"])
-            is_reverted = receipt["status"] == 0
-        except Exception:
-            is_reverted = False
+        # Check revert status from the block-level receipts map (Fix A).
+        # Was: per-tx get_transaction_receipt (~19M calls/day = 78% of HTTP CU).
+        # Now: O(1) lookup in the {tx_hash -> receipt} map fetched once per
+        # block. eth_getBlockReceipts returns status as hex ("0x0"/"0x1").
+        # If the map is absent (fetch failed), treat revert as unknown=False.
+        _txh = tx["hash"].hex() if isinstance(tx["hash"], bytes) else str(tx["hash"])
+        if not _txh.startswith("0x"):
+            _txh = "0x" + _txh
+        is_reverted = False
+        if block_receipts is not None:
+            _rcpt = block_receipts.get(_txh.lower())
+            if _rcpt is not None:
+                _status = _rcpt.get("status")
+                if isinstance(_status, str):
+                    is_reverted = int(_status, 16) == 0
+                elif isinstance(_status, int):
+                    is_reverted = _status == 0
 
         # Interacting address
         from_addr = tx["from"]

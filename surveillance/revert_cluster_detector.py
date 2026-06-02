@@ -48,11 +48,18 @@ class RevertClusterDetector:
         return self._deployer_hits
 
     async def process_block(self, w3: AsyncWeb3, block: dict,
-                            timestamp_iso: str) -> None:
+                            timestamp_iso: str, block_receipts: dict = None) -> None:
         """
         Count reverted transactions per sender in this block.
         Flag addresses exceeding the threshold.
+
+        block_receipts (Fix A): {tx_hash(lower,0x) -> receipt} fetched once per
+        block by the deployment monitor. Replaces per-tx get_transaction_receipt.
+        If None (fetch failed), this block is skipped (loud-fail, no per-tx
+        fallback) — a missed revert-cluster pass beats 19M per-tx receipt calls.
         """
+        if block_receipts is None:
+            return
         block_number = block["number"]
         revert_counts: dict[str, int] = defaultdict(int)
 
@@ -94,24 +101,30 @@ class RevertClusterDetector:
             if from_lower not in heavy_senders:
                 continue
 
-            try:
-                receipt = await w3.eth.get_transaction_receipt(tx["hash"])
-                if receipt["status"] == 0:
-                    revert_counts[from_lower] += 1
-                    # Extract function selector from calldata
-                    input_data = tx.get("input", b"")
-                    if isinstance(input_data, bytes):
-                        calldata_hex = input_data.hex()
-                    else:
-                        calldata_hex = str(input_data).replace("0x", "")
-                    selector = calldata_hex[:8] if len(calldata_hex) >= 8 else "00000000"
-                    revert_selectors[from_lower].append(selector)
-                    to_addr = tx.get("to")
-                    if to_addr:
-                        to_lower = to_addr.lower() if isinstance(to_addr, str) else to_addr
-                        revert_targets[from_lower].append(to_lower)
-            except Exception:
+            # Revert status from the block-level receipts map (Fix A) — was a
+            # per-tx get_transaction_receipt. eth_getBlockReceipts status is hex.
+            _txh = tx["hash"].hex() if isinstance(tx["hash"], bytes) else str(tx["hash"])
+            if not _txh.startswith("0x"):
+                _txh = "0x" + _txh
+            _rcpt = block_receipts.get(_txh.lower())
+            if _rcpt is None:
                 continue
+            _status = _rcpt.get("status")
+            _reverted = (int(_status, 16) == 0) if isinstance(_status, str) else (_status == 0)
+            if _reverted:
+                revert_counts[from_lower] += 1
+                # Extract function selector from calldata
+                input_data = tx.get("input", b"")
+                if isinstance(input_data, bytes):
+                    calldata_hex = input_data.hex()
+                else:
+                    calldata_hex = str(input_data).replace("0x", "")
+                selector = calldata_hex[:8] if len(calldata_hex) >= 8 else "00000000"
+                revert_selectors[from_lower].append(selector)
+                to_addr = tx.get("to")
+                if to_addr:
+                    to_lower = to_addr.lower() if isinstance(to_addr, str) else to_addr
+                    revert_targets[from_lower].append(to_lower)
 
         # Flag addresses exceeding threshold
         for addr, count in revert_counts.items():

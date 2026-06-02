@@ -40,6 +40,29 @@ from surveillance import db
 logger = logging.getLogger("surveillance.monitor")
 
 
+def _fetch_block_receipts_http(http_url: str, block_number: int) -> list:
+    """Fetch all receipts for a block via a single eth_getBlockReceipts HTTP
+    POST (Fix A). Returns the list of receipt dicts, or [] on empty.
+
+    MUST be HTTP (not the WS provider): Base blocks return ~880KB of receipts
+    which exceeds the WebSocket frame limit ("1009 message too big"). Verified
+    HTTP-parity on base/arbitrum/optimism (reports/_fixA_parity_http.txt).
+    Blocking urllib call — run via asyncio.to_thread from the async loop.
+    """
+    import json as _json
+    import urllib.request as _ur
+    body = _json.dumps({
+        "jsonrpc": "2.0", "id": 1,
+        "method": "eth_getBlockReceipts", "params": [hex(block_number)],
+    }).encode()
+    req = _ur.Request(http_url, data=body, headers={"Content-Type": "application/json"})
+    with _ur.urlopen(req, timeout=30) as resp:
+        data = _json.loads(resp.read().decode())
+    if isinstance(data, dict) and data.get("error"):
+        raise RuntimeError(f"eth_getBlockReceipts RPC error: {data['error']}")
+    return (data.get("result") if isinstance(data, dict) else None) or []
+
+
 def _sha256_hex(data: str) -> str:
     """SHA-256 hash of a hex string, returned as hex digest."""
     return hashlib.sha256(bytes.fromhex(data) if data else b"").hexdigest()
@@ -84,6 +107,11 @@ class DeploymentMonitor:
             chain: Chain identifier stored in DB (arbitrum, base, etc.)
         """
         self.rpc_url = rpc_url
+        # HTTP endpoint for eth_getBlockReceipts (Fix A). MUST be HTTP, not WS:
+        # Base blocks return ~880KB of receipts which exceeds the WebSocket
+        # frame limit (verified: WS path raises "1009 message too big" on Base,
+        # HTTP path works on all 3 chains — see _fixA_parity_http.txt).
+        self._http_rpc_url = rpc_url.replace("wss://", "https://") if rpc_url else None
         self.conn = conn
         self.classifier = classifier
         self.safe_deployers = safe_deployers or set()
@@ -620,11 +648,42 @@ class DeploymentMonitor:
         for dep in deployments:
             self._record_deployment(dep)
 
+        # Fetch ALL receipts for this block in ONE call (Fix A, Correction-#27
+        # CU work / SPEC_cu_reduction_block_receipts.md). Previously
+        # selector_monitor + revert_cluster_detector each fetched a receipt
+        # PER transaction (~19M eth_getTransactionReceipt/day = 78% of HTTP CU)
+        # just to read the 1-bit revert status. eth_getBlockReceipts returns
+        # every receipt for the block in a single request. We build a
+        # {tx_hash(lower, 0x-prefixed) -> receipt} map and pass it down.
+        #
+        # Loud-failure discipline (CLAUDE.md): on any fetch failure we pass
+        # block_receipts=None — sub-monitors then SKIP revert-dependent logic
+        # for this block rather than silently falling back to 19M per-tx
+        # fetches (which would re-create the bug).
+        block_receipts = None
+        if self._http_rpc_url:
+            try:
+                _items = await asyncio.to_thread(
+                    _fetch_block_receipts_http, self._http_rpc_url, block_number
+                )
+                if _items:
+                    block_receipts = {}
+                    for _r in _items:
+                        _h = _r.get("transactionHash")
+                        if _h:
+                            block_receipts[_h.lower()] = _r
+            except Exception as e:
+                logger.warning(
+                    "eth_getBlockReceipts failed for block %d: %s "
+                    "(sub-monitors skip revert logic this block)", block_number, e
+                )
+                block_receipts = None
+
         # Run sub-monitors on the full block
         self._init_sub_monitors()
         try:
-            await self._selector_monitor.process_block(w3, block, timestamp_iso)
-            await self._revert_detector.process_block(w3, block, timestamp_iso)
+            await self._selector_monitor.process_block(w3, block, timestamp_iso, block_receipts)
+            await self._revert_detector.process_block(w3, block, timestamp_iso, block_receipts)
             await self._event_monitors.process_block(w3, block, timestamp_iso)
             await self._x402_monitor.process_block(w3, block, timestamp_iso)
             # Flag CEX candidates every 500 blocks
