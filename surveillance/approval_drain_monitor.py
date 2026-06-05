@@ -157,6 +157,14 @@ def check_drains(conn: sqlite3.Connection) -> dict:
     skipped = 0
 
     # Method 1: transferFrom() on watched contracts
+    #
+    # NOTE (regression fix 2026-06-05): this connection has NO row_factory,
+    # so rows are plain tuples — access by INTEGER INDEX, not by column name.
+    # A prior edit used dict-style access (p["deployer_address"]) which threw
+    # `TypeError: tuple indices must be integers` on every call. Because the
+    # caller (deployment_monitor heartbeat loop) wraps this in a broad
+    # `except Exception`, the failure was silent and drain detection was dead
+    # from 2026-05-27 until this fix. Column order is fixed by the SELECTs below.
     pending = conn.execute("""
         SELECT aw.victim_address, aw.contract_address, aw.deployer_address,
                aw.approve_timestamp
@@ -165,7 +173,8 @@ def check_drains(conn: sqlite3.Connection) -> dict:
     """).fetchall()
 
     for p in pending:
-        if p["deployer_address"] and p["deployer_address"] in suppressed:
+        victim_address, contract_address, deployer_address, approve_timestamp = p
+        if deployer_address and deployer_address in suppressed:
             skipped += 1
             continue
         # Check for transferFrom on this contract after the approval.
@@ -182,16 +191,17 @@ def check_drains(conn: sqlite3.Connection) -> dict:
             AND te.is_reverted = 0
             AND te.timestamp > ?
             LIMIT 1
-        """, (p["contract_address"], p["approve_timestamp"])).fetchone()
+        """, (contract_address, approve_timestamp)).fetchone()
 
         if drain:
+            drain_tx_hash, drain_timestamp, drain_caller = drain
             conn.execute("""
                 UPDATE approval_watchlist
                 SET drain_detected = 1, drain_tx_hash = ?, drain_timestamp = ?,
                     drain_caller = ?
                 WHERE victim_address = ? AND contract_address = ?
-            """, (drain["tx_hash"], drain["timestamp"], drain["caller"],
-                  p["victim_address"], p["contract_address"]))
+            """, (drain_tx_hash, drain_timestamp, drain_caller,
+                  victim_address, contract_address))
             drains_found += 1
 
     # Method 2: DISABLED 2026-05-27 (Correction #27 / Bug #19b).
