@@ -1675,6 +1675,14 @@ Distribution of the 45 by batch (corrects two earlier wrong guesses in this sess
 
 **Meta-lesson (recurrence of Correction #27's process note #2):** I shipped `d31bf2d` having concluded "TypeError regression" from a bare-harness repro *without verifying the production connection's `row_factory`*. Same failure mode as #27: a conclusion written before the evidence that would test it. Caught this time by reading `db_queue.py` / `process_entries.py` / `db.py` and running a grounding query **before** writing the correction. Read the source and the output, THEN conclude — in separate steps.
 
+**UPDATE (2026-06-06) — backfill complete (open-work item #2 closed for the local snapshot):** `python -m surveillance.approval_drain_monitor --drain-scan-all` cleared the full local pending backlog in one resumable pass (0 Alchemy CU, 40 fetch errors = 0.09%, no rate-limiting). Result on `surveillance/data/surveillance.db`:
+- **40,144 new per-victim-verified drains detected** (the tx_events-join method would have found 2). Total `drain_detected=1` now **46,593 rows / 20,769 distinct victims / 4,191 distinct contracts**, every row carrying an on-chain `drain_tx_hash`.
+- **6,749 approvers verified CLEAN** (`n_out=0`, no outbound leg) and correctly left unflagged — the precision the old method lacked.
+- 8,063 OLI-suppressed (institutional) correctly skipped; 40 fetch-error rows remain pending for retry.
+- `audit_drain_legs` cache now holds 51,329 resolved (victim,contract) verdicts (44,540 with an outbound leg).
+
+Provenance/tier: source = local `approval_watchlist` post-backfill, 2026-06-06; method = Blockscout victim-outbound-leg test; **Tier A** per row (on-chain replicable). Caveat: LOCAL snapshot only — prod converges as its heartbeat clears its own backlog (~400/cycle), or immediately if the completed `audit_drain_legs` cache is synced to prod. The retired "3,437 lifetime drains" headline (CLAUDE.md #14/#25, Correction #27 upper bound) can now be **recomputed as verified counts** against this data — quote with this provenance, not as a pre-existing corpus figure. Note the high drain rate (85.6% of checked) is expected because `approval_watchlist` only tracks approvals to suspected/confirmed adversarial contracts.
+
 ---
 
 ## How to add the next entry
