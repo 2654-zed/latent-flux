@@ -426,7 +426,6 @@ def check_drains_blockscout(conn, max_victims=400, sleep: float = _BS_SLEEP,
         ro.close()
 
     drains = checked = cache_hits = errors = skipped = fetched = 0
-    pending_updates = 0
     budget_exhausted = False
     now = _now()
 
@@ -453,6 +452,15 @@ def check_drains_blockscout(conn, max_victims=400, sleep: float = _BS_SLEEP,
                 "INSERT OR REPLACE INTO audit_drain_legs VALUES (?,?,?,?,?,?,?)",
                 (victim, contract, n_out, n_in, 0, err, now))
             cache[key] = (n_out, err)
+            # Commit on a FETCH cadence (not a drain cadence). In a full
+            # backfill most victims are non-drains, so committing only when a
+            # drain is found would buffer tens of thousands of uncommitted
+            # cache rows — lost on interruption (breaking resumability) and
+            # bloating the WAL against the live DB. Every 200 fetches keeps the
+            # cache durable + the job resumable, and any drain UPDATE issued
+            # since the last commit rides along in the same transaction.
+            if fetched % 200 == 0:
+                conn.commit()
             if err:
                 errors += 1
                 continue  # leave row pending; retry next cycle
@@ -467,10 +475,6 @@ def check_drains_blockscout(conn, max_victims=400, sleep: float = _BS_SLEEP,
                   AND drain_detected = 0
             """, (last_tx, last_ts, last_to, victim, contract))
             drains += 1
-            pending_updates += 1
-            if pending_updates >= 200:
-                conn.commit()
-                pending_updates = 0
 
     conn.commit()
     return {
