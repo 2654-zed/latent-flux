@@ -21,11 +21,32 @@ Usage:
 
 import argparse
 import json
+import logging
 import sqlite3
+import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 DB_PATH = Path(__file__).resolve().parent / "data" / "surveillance.db"
+
+logger = logging.getLogger("surveillance.approval_drain")
+
+# Blockscout free REST endpoints — 0 Alchemy CU. Used by the authoritative
+# victim-outbound-leg drain detector (check_drains_blockscout). The tx_events
+# join (check_drains) is structurally blind to most drains because drain
+# transferFrom() calls target the TOKEN contract, which is usually not in the
+# watched set and so never enters transaction_events. Grounded 2026-06-05:
+# of 54,996 pending approvals only 2 had a tx_events match.
+BLOCKSCOUT_BASE = {
+    "base": "https://base.blockscout.com/api/v2",
+    "arbitrum": "https://arbitrum.blockscout.com/api/v2",
+    "optimism": "https://optimism.blockscout.com/api/v2",
+}
+_BS_MAX_PAGES = 10
+_BS_SLEEP = 0.12
 
 
 def _now() -> str:
@@ -120,15 +141,27 @@ def scan_approvals(conn: sqlite3.Connection) -> dict:
 
     added = 0
     for a in new_approvals:
+        # Tuple-index by position rather than dict-subscript. Defensive: it
+        # works whether or not the caller set a row_factory. Every PRODUCTION
+        # caller does set sqlite3.Row (QueueConnection._ro in the heartbeat
+        # path, db.init_db in standalone, the CLI below), so dict access would
+        # also work there — but a bare `sqlite3.connect()` (tests, ad-hoc
+        # scripts) returns plain tuples on which dict access raises TypeError.
+        # Position-indexing removes that foot-gun. Column order is fixed by the
+        # SELECT above:
+        #   victim, contract_address, tx_hash, timestamp, block_number,
+        #   confidence_tier, deployer_address, is_self_test
+        (victim, contract_address, tx_hash, timestamp, block_number,
+         confidence_tier, deployer_address, is_self_test) = a
         try:
             conn.execute("""
                 INSERT OR IGNORE INTO approval_watchlist
                 (victim_address, contract_address, approve_tx_hash, approve_timestamp,
                  approve_block, contract_tier, is_self_test_trap, deployer_address, logged_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (a["victim"], a["contract_address"], a["tx_hash"],
-                  a["timestamp"], a["block_number"], a["confidence_tier"],
-                  a["is_self_test"], a["deployer_address"], now))
+            """, (victim, contract_address, tx_hash,
+                  timestamp, block_number, confidence_tier,
+                  is_self_test, deployer_address, now))
             added += 1
         except Exception:
             pass
@@ -156,15 +189,21 @@ def check_drains(conn: sqlite3.Connection) -> dict:
     suppressed = _oli_suppressed_deployers(conn)
     skipped = 0
 
-    # Method 1: transferFrom() on watched contracts
+    # Method 1: transferFrom() on watched contracts.
     #
-    # NOTE (regression fix 2026-06-05): this connection has NO row_factory,
-    # so rows are plain tuples — access by INTEGER INDEX, not by column name.
-    # A prior edit used dict-style access (p["deployer_address"]) which threw
-    # `TypeError: tuple indices must be integers` on every call. Because the
-    # caller (deployment_monitor heartbeat loop) wraps this in a broad
-    # `except Exception`, the failure was silent and drain detection was dead
-    # from 2026-05-27 until this fix. Column order is fixed by the SELECTs below.
+    # NOTE: this is the LEGACY fast path, retained for reference and manual
+    # CLI use. It is NO LONGER called from the heartbeat loop — the
+    # authoritative detector is check_drains_blockscout() below, which is not
+    # blind to the common case. Method 1 can only ever see a drain whose
+    # transferFrom targets a WATCHED contract; almost all real drains target a
+    # token contract outside the watched set, so they never enter
+    # transaction_events. Grounded 2026-06-05: of 54,996 pending approvals,
+    # exactly 2 had a Method-1 match. Method 1 also lacks per-victim
+    # from-matching (Bug #19b over-credit risk), which is the other reason the
+    # precise Blockscout per-victim test supersedes it.
+    #
+    # Rows are tuple-indexed by position (defensive — works with or without a
+    # row_factory). Column order is fixed by the SELECTs below.
     pending = conn.execute("""
         SELECT aw.victim_address, aw.contract_address, aw.deployer_address,
                aw.approve_timestamp
@@ -234,6 +273,214 @@ def check_drains(conn: sqlite3.Connection) -> dict:
 
     conn.commit()
     return {"drains_detected": drains_found, "oli_suppressed_skips": skipped}
+
+
+def _blockscout_outbound(base: str, victim: str, contract: str,
+                         sleep: float = _BS_SLEEP):
+    """Victim-outbound-leg test via Blockscout (0 Alchemy CU).
+
+    Returns (n_out, n_in, last_out_tx, last_out_to, last_out_ts, err).
+
+    A (victim, contract) approval row is a REAL drain iff the victim has >=1
+    ERC-20 Transfer of the contract token with from==victim in their Blockscout
+    address token-transfer history (n_out > 0). Inbound-only (n_in>0, n_out==0)
+    is distribution/airdrop, NOT a drain (the FIRE/OFC lesson — never credit a
+    drain on n_in alone).
+
+    last_out_* describe the most-recent outbound leg (Blockscout returns items
+    newest-first), used to populate drain_tx_hash / drain_timestamp /
+    drain_caller. They are best-effort: None if n_out==0, and may be None for
+    cache-hit drains (the cache stores only the n_out verdict, not the tx).
+
+    err is None on success; a short string ("http500", "neterr", ...) on fetch
+    failure — the caller leaves the row pending and retries on the next cycle.
+
+    Mirrors scripts/t1_apply.py::victim_has_outbound (validated on 5,174
+    victim/contract pairs, 0 errors) and extends it to surface the latest leg.
+    Token key is item.token.address_hash (NOT .address). Pages via
+    next_page_params, capped at _BS_MAX_PAGES (matches the proven primitive).
+    """
+    url = f"{base}/addresses/{victim}/token-transfers?type=ERC-20&token={contract}"
+    n_out = n_in = pages = 0
+    last_tx = last_to = last_ts = None
+    vlow, clow = victim.lower(), contract.lower()
+    while url and pages < _BS_MAX_PAGES:
+        req = Request(url, headers={"Accept": "application/json",
+                                    "User-Agent": "Mozilla/5.0 (L3-drain)"})
+        try:
+            with urlopen(req, timeout=25) as r:
+                d = json.loads(r.read().decode())
+        except HTTPError as e:
+            if e.code == 404:  # address never transacted this token => no drain
+                return n_out, n_in, last_tx, last_to, last_ts, None
+            return n_out, n_in, last_tx, last_to, last_ts, f"http{e.code}"
+        except (URLError, TimeoutError, OSError):
+            return n_out, n_in, last_tx, last_to, last_ts, "neterr"
+        for it in d.get("items", []):
+            tok = ((it.get("token") or {}).get("address_hash") or "").lower()
+            if tok and tok != clow:
+                continue
+            frm = ((it.get("from") or {}).get("hash") or "").lower()
+            to = ((it.get("to") or {}).get("hash") or "").lower()
+            if frm == vlow:
+                n_out += 1
+                if last_tx is None:  # newest-first => first seen is most recent
+                    last_tx = it.get("tx_hash") or it.get("transaction_hash")
+                    last_to = to or None
+                    last_ts = it.get("timestamp")
+            elif to == vlow:
+                n_in += 1
+        npp = d.get("next_page_params")
+        if not npp:
+            return n_out, n_in, last_tx, last_to, last_ts, None
+        url = (f"{base}/addresses/{victim}/token-transfers"
+               f"?type=ERC-20&token={contract}&{urlencode(npp)}")
+        pages += 1
+        time.sleep(sleep)
+    return n_out, n_in, last_tx, last_to, last_ts, None
+
+
+def check_drains_blockscout(conn, max_victims=400, sleep: float = _BS_SLEEP,
+                            db_path: str = None) -> dict:
+    """Authoritative drain detection via the Blockscout victim-outbound-leg
+    test. Supersedes the tx_events-join Method 1 (check_drains) as the drain
+    signal wired into the heartbeat loop. 0 Alchemy CU (Blockscout free REST).
+
+    Why this exists: drain transferFrom() calls target the TOKEN contract,
+    which is usually NOT in the watched set, so they never enter
+    transaction_events and the join is blind. Grounded on the local corpus
+    2026-06-05: of 54,996 pending approvals only 2 had a tx_events match, while
+    the Blockscout victim-leg test already confirms 4,396 real drained victims
+    in the audit_drain_legs cache. This is precise (per-victim from-matching),
+    which also fixes the Bug #19b over-credit that Method 1 still carries.
+
+    Threading model (so this is safe under asyncio.to_thread in the async
+    heartbeat loop against a QueueConnection whose _ro is bound to the monitor
+    main thread):
+      * READS go through a fresh thread-local read-only connection (WAL permits
+        many readers). Never touches conn._ro across threads.
+      * WRITES route through `conn`:
+          - QueueConnection.execute() -> writer queue (thread- and process-safe)
+          - a plain CLI connection writes directly (same thread).
+        No second read-write connection is opened in queue mode, so the
+        single-writer architecture is preserved.
+
+    Budget: at most `max_victims` NEW Blockscout fetches per call (cache hits
+    are free). The ~30-min heartbeat passes max_victims=400 so a cycle never
+    stalls; the backlog clears incrementally (each victim is a one-time cost
+    thanks to the cache). Pass max_victims=None for an unbounded out-of-band
+    backfill (CLI --drain-scan-all).
+
+    OLI gate retained: rows whose contract was deployed by an OLI-tagged
+    institution/project are skipped (Correction #20/#24 — do not flag
+    Circle/Animoca-class distribution as drains).
+
+    Returns: {drains_detected, checked, cache_hits, errors,
+              oli_suppressed_skips, budget_exhausted}.
+    """
+    path = db_path or getattr(conn, "_db_path", None) or str(DB_PATH)
+
+    # Ensure the cache table exists (routed through conn -> queue/direct).
+    # Already present on prod (created by scripts/t1_apply.py); IF NOT EXISTS
+    # makes this a no-op after the first ever call, adding no write contention.
+    conn.execute("""CREATE TABLE IF NOT EXISTS audit_drain_legs(
+        victim TEXT, contract TEXT, n_out INTEGER, n_in INTEGER,
+        truncated INTEGER, err TEXT, checked_at TEXT,
+        PRIMARY KEY (victim, contract))""")
+    conn.commit()
+
+    # CLI / standalone path owns its own writes -> give it a long busy_timeout
+    # to coexist with live monitors + db_writer. In queue mode the writer owns
+    # the only RW connection, so this code never contends and PRAGMA on the
+    # QueueConnection (which would cross-thread to _ro) is intentionally avoided.
+    if not hasattr(conn, "_queue"):
+        try:
+            conn.execute("PRAGMA busy_timeout=30000")
+        except Exception:
+            pass
+
+    # Thread-local RO connection for all reads.
+    ro = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=60)
+    try:
+        ro.execute("PRAGMA busy_timeout=30000")
+        suppressed = _oli_suppressed_deployers(ro)
+
+        # Preload the cache once (avoids per-victim SELECTs and is robust to
+        # queued writes not yet visible to this RO connection within a run).
+        cache = {}
+        try:
+            for v, c, n_out, err in ro.execute(
+                    "SELECT victim, contract, n_out, err FROM audit_drain_legs"):
+                cache[(v, c)] = (n_out, err)
+        except sqlite3.OperationalError:
+            pass  # table not yet present on a fresh DB
+
+        pending = ro.execute("""
+            SELECT aw.victim_address, aw.contract_address, aw.deployer_address,
+                   COALESCE(c.chain, 'base')
+            FROM approval_watchlist aw
+            LEFT JOIN contracts c ON c.contract_address = aw.contract_address
+            WHERE aw.drain_detected = 0
+        """).fetchall()
+    finally:
+        ro.close()
+
+    drains = checked = cache_hits = errors = skipped = fetched = 0
+    pending_updates = 0
+    budget_exhausted = False
+    now = _now()
+
+    for victim, contract, deployer, chain in pending:
+        if deployer and deployer in suppressed:
+            skipped += 1
+            continue
+        key = (victim, contract)
+        cached = cache.get(key)
+        if cached is not None and cached[1] is None:
+            # Clean cache hit (definitive verdict, no prior error) — free.
+            n_out = cached[0]
+            last_tx = last_to = last_ts = None
+            cache_hits += 1
+        else:
+            if max_victims is not None and fetched >= max_victims:
+                budget_exhausted = True
+                break
+            base = BLOCKSCOUT_BASE.get(chain, BLOCKSCOUT_BASE["base"])
+            n_out, n_in, last_tx, last_to, last_ts, err = _blockscout_outbound(
+                base, victim, contract, sleep=sleep)
+            fetched += 1
+            conn.execute(
+                "INSERT OR REPLACE INTO audit_drain_legs VALUES (?,?,?,?,?,?,?)",
+                (victim, contract, n_out, n_in, 0, err, now))
+            cache[key] = (n_out, err)
+            if err:
+                errors += 1
+                continue  # leave row pending; retry next cycle
+            time.sleep(sleep)
+        checked += 1
+        if n_out and n_out > 0:
+            conn.execute("""
+                UPDATE approval_watchlist
+                SET drain_detected = 1, drain_tx_hash = ?, drain_timestamp = ?,
+                    drain_caller = ?
+                WHERE victim_address = ? AND contract_address = ?
+                  AND drain_detected = 0
+            """, (last_tx, last_ts, last_to, victim, contract))
+            drains += 1
+            pending_updates += 1
+            if pending_updates >= 200:
+                conn.commit()
+                pending_updates = 0
+
+    conn.commit()
+    return {
+        "drains_detected": drains,
+        "checked": checked,
+        "cache_hits": cache_hits,
+        "errors": errors,
+        "oli_suppressed_skips": skipped,
+        "budget_exhausted": budget_exhausted,
+    }
 
 
 def backfill_oli_suppression(conn: sqlite3.Connection) -> dict:
@@ -346,6 +593,13 @@ if __name__ == "__main__":
         action="store_true",
         help="Reset drain_detected on rows whose contract deployer is OLI-tagged",
     )
+    parser.add_argument(
+        "--drain-scan-all",
+        action="store_true",
+        help="Out-of-band Blockscout victim-leg drain backfill over ALL pending "
+             "approvals (0 Alchemy CU). Unbounded; clears the backlog faster "
+             "than the per-heartbeat cap. Safe to re-run (cache-incremental).",
+    )
     args = parser.parse_args()
 
     conn = sqlite3.connect(str(DB_PATH), timeout=10)
@@ -368,6 +622,18 @@ if __name__ == "__main__":
         print(
             f"[approval_drain] OLI backfill: reset {r['reset']} drain_detected rows "
             f"across {r['suppressed_deployers']} suppressed deployers"
+        )
+    elif args.drain_scan_all:
+        logging.basicConfig(level=logging.INFO)
+        print("[approval_drain] Blockscout drain backfill (0 Alchemy CU) — "
+              "this can take a while over the full pending backlog...")
+        r = check_drains_blockscout(conn, max_victims=None)
+        print(
+            f"[approval_drain] Blockscout drain scan complete: "
+            f"detected={r['drains_detected']} checked={r['checked']} "
+            f"cache_hits={r['cache_hits']} errors={r['errors']} "
+            f"oli_skips={r['oli_suppressed_skips']} "
+            f"budget_exhausted={r['budget_exhausted']}"
         )
     else:
         parser.print_help()

@@ -1632,6 +1632,51 @@ Distribution of the 45 by batch (corrects two earlier wrong guesses in this sess
 
 ---
 
+## Correction #28 — Drain Detection Was Structurally Blind, Not Broken by a TypeError. New Blockscout Victim-Leg Detector Supersedes the tx_events Join. (Retracts the `d31bf2d` "regression" framing.)
+
+**Date:** 2026-06-05
+**Discovery method:** Building `check_drains_blockscout` per `reports/SPEC_blockscout_drain_detection.md`; grounding queries `scripts/_ground_drain_structural.py`; parity gates `scripts/t_drain_blockscout_parity.py`.
+**Severity:** MEDIUM (detection-method change) + a process retraction of a committed claim.
+
+**This correction has two parts: (A) a substantive detection-method change, and (B) a retraction of my own prior misdiagnosis committed earlier this session.**
+
+### Part A — `check_drains()` (tx_events join) is structurally blind to almost all drains
+
+**Claim (implicit):** `check_drains()` Method 1 — join `approval_watchlist` against `transaction_events` for a `transferFrom` (`23b872dd`) on the watched contract — is a working drain detector that simply found few drains.
+
+**Reality:** it is a near-total false-negative by construction. `selector_monitor` only logs txs whose `to` is in the **watched contract set**. A real approval-drain is a `transferFrom` the drainer sends to the **token contract**, which is usually *not* in the watched set — so the drain tx never enters `transaction_events` and the join cannot see it.
+
+**Grounded on the local corpus 2026-06-05 (`_ground_drain_structural.py`):**
+- `transferFrom` rows in `transaction_events`: **3,345 lifetime**, **0** in the last 7 days.
+- Pending approvals (`drain_detected=0`): **54,996**.
+- Pending that Method 1 could match: **2** (of 54,996). The join is blind to ~99.996% of the backlog.
+- Existing `audit_drain_legs` Blockscout cache (from the Bug #19b reconciliation): **5,174** victim/contract pairs already resolved, **4,396** with an outbound leg (real drained victims) — at 0 Alchemy CU.
+
+**Fix:** `surveillance/approval_drain_monitor.py` gains `check_drains_blockscout()` + `_blockscout_outbound()` — the **victim-outbound-leg test**: a `(victim, contract)` row is a real drain iff the victim has ≥1 ERC-20 Transfer of the contract token with `from==victim` on Blockscout (0 Alchemy CU). This is *per-victim* (it also fixes the Bug #19b over-credit that Method 1 carried) and reuses the validated `audit_drain_legs` cache. Wired into the heartbeat loop (`deployment_monitor.py`) via `asyncio.to_thread` (network-bound; must not block the event loop), `max_victims=400`/cycle, writes routed through the single-writer queue. `check_drains()` is retained as a legacy reference path but is **no longer called from the loop**. CLI `--drain-scan-all` clears the backlog out-of-band. All parity/correctness gates pass (`t_drain_blockscout_parity.py`: live cache parity, inbound-only negative control incl. `0xf68425d0`, end-to-end detect + idempotent + zero-error on a temp DB).
+
+### Part B — Retraction: the `d31bf2d` "drains dead since 2026-05-27 (TypeError)" claim is WRONG
+
+**Claim made (commit `d31bf2d`, this session, already on `main`):** drain detection was dead from 2026-05-27 because `check_drains()` used dict-style row access on a connection with *no* `row_factory`, so rows were plain tuples and every call raised `TypeError: tuple indices must be integers`, silently swallowed by the heartbeat's `except`.
+
+**Reality:** **every production path sets `row_factory = sqlite3.Row`**, so reads return `Row` objects and dict-access works. Verified by reading the code, not asserting it:
+- Heartbeat path: `run_surveillance.py` → `process_entries.monitor_entry(..., write_queue)` → `run_monitor(..., write_queue=...)` → `QueueConnection`, whose read connection sets `self._ro.row_factory = sqlite3.Row` (`db_queue.py:65`).
+- Standalone path: `db.init_db()` sets `row_factory = sqlite3.Row` (`db.py:98`).
+- CLI `--scan`: sets it (`approval_drain_monitor.py`).
+- Empirical confirmation (`_ground_drain_structural.py`): a bare `sqlite3.connect()` returns `tuple` and dict-access raises `TypeError`; a `row_factory=Row` connection returns `Row` and dict-access works. The `TypeError` I "reproduced" was in a bare test harness that does **not** reflect how the code runs in production.
+
+**So no `TypeError` ever fired in production.** The real reasons drains read 0 were (1) the 2026-05-27→06-01 dark window (no block ingestion at all — Correction #26) and (2) the Part-A structural blind spot. The tuple-unpacking edits in `d31bf2d` (and the matching `scan_approvals` edit) are harmless **defensive hardening** — `sqlite3.Row` supports integer indexing, so position-unpacking works on both Row and tuple — but they did **not** fix a production outage, and the commit message overstates their effect. The misleading code comments those edits introduced have been corrected in this change.
+
+**Numerical effect on headline stats:** none directly, but it removes a false "9-day outage" from the session record. Drain counts remain governed by Correction #27 (Bug #19b upper-bound caveat); the new per-victim detector is the path to replacing those upper bounds with verified counts as the backlog clears.
+
+**Open work:**
+1. Deploy (git→deploy; detection-method change — gated on user approval). Hot-patch remains forbidden.
+2. Clear the 54,996-pending backlog via `--drain-scan-all` and/or accumulated heartbeat cycles; then recompute the Correction #27 / CLAUDE.md priority #14 & #25 drain headline stats against the verified data.
+3. The `d31bf2d` commit message is immutable in history (no `--force` to `main`); this entry is the durable correction of record.
+
+**Meta-lesson (recurrence of Correction #27's process note #2):** I shipped `d31bf2d` having concluded "TypeError regression" from a bare-harness repro *without verifying the production connection's `row_factory`*. Same failure mode as #27: a conclusion written before the evidence that would test it. Caught this time by reading `db_queue.py` / `process_entries.py` / `db.py` and running a grounding query **before** writing the correction. Read the source and the output, THEN conclude — in separate steps.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.

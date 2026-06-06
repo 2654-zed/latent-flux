@@ -416,15 +416,41 @@ class DeploymentMonitor:
             # Tracks approve() calls on suspected contracts and watches for drains
             if heartbeat_count % 30 == 5:  # offset from self-test scan
                 try:
-                    from surveillance.approval_drain_monitor import scan_approvals, check_drains
+                    from surveillance.approval_drain_monitor import (
+                        scan_approvals, check_drains_blockscout,
+                    )
                     r1 = scan_approvals(self.conn)
-                    r2 = check_drains(self.conn)
                     if r1["new_approvals_tracked"] > 0:
-                        logger.info("Approval monitor: %d new approvals tracked", r1["new_approvals_tracked"])
+                        logger.info("Approval monitor: %d new approvals tracked",
+                                    r1["new_approvals_tracked"])
+                    # Authoritative drain detection via Blockscout victim-leg
+                    # test (0 Alchemy CU). Replaces the tx_events-join Method 1,
+                    # which is structurally blind (2 of 54,996 pending matched on
+                    # 2026-06-05). It is network-bound and sleeps between calls,
+                    # so run it OFF the event loop in a worker thread: reads use
+                    # a thread-local RO connection and writes route through the
+                    # QueueConnection writer queue (both thread-safe). max_victims
+                    # caps Blockscout calls per cycle so a heartbeat never stalls;
+                    # the backlog clears incrementally (cache = one-time cost).
+                    r2 = await asyncio.to_thread(
+                        check_drains_blockscout, self.conn, 400,
+                    )
                     if r2["drains_detected"] > 0:
-                        logger.warning("APPROVAL DRAIN DETECTED: %d victims drained!", r2["drains_detected"])
+                        logger.warning(
+                            "APPROVAL DRAIN DETECTED: %d victims drained "
+                            "(checked=%d cache_hits=%d errors=%d budget_exhausted=%s)",
+                            r2["drains_detected"], r2["checked"],
+                            r2["cache_hits"], r2["errors"], r2["budget_exhausted"],
+                        )
                 except Exception as e:
-                    logger.warning("Approval drain scan failed: %s", e)
+                    # Explicit, typed, with traceback. A bare logger.warning here
+                    # previously made silent failures easy to miss; surface the
+                    # exception type so any future regression is loud (CLAUDE.md
+                    # "loud failures over silent wrong output").
+                    logger.error(
+                        "Approval drain scan FAILED (%s): %s",
+                        type(e).__name__, e, exc_info=True,
+                    )
 
             # Dormant fleet activation monitor every 30 heartbeats (~30 min)
             if heartbeat_count % 30 == 15:  # offset from approval scan
