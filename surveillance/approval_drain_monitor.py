@@ -340,81 +340,163 @@ def _blockscout_outbound(base: str, victim: str, contract: str,
     return n_out, n_in, last_tx, last_to, last_ts, None
 
 
+# Recognized victim-initiated swap/router methods. A token-transfer leg whose
+# top-level tx method matches one of these is a VICTIM SWAP (validated 2026-06-06:
+# every swap-method leg sampled had tx.from == victim), so it is skipped without a
+# tx fetch. Every other leg (transferFrom / transfer / custom selector / unknown)
+# is tx-checked definitively. Substring match, lowercased.
+_SWAP_METHOD_HINTS = ("swap", "exactinput", "exactoutput", "multicall",
+                      "execute", "transferandmulticall", "fillorder", "settle",
+                      "unoswap", "clipperswap")
+
+
+def _tx_initiator(base: str, tx_hash: str):
+    """Return the lowercased tx sender (msg.sender / tx.from), or None on error."""
+    try:
+        req = Request(f"{base}/transactions/{tx_hash}",
+                      headers={"Accept": "application/json",
+                               "User-Agent": "Mozilla/5.0 (L3-drain)"})
+        with urlopen(req, timeout=25) as r:
+            t = json.loads(r.read().decode())
+        return ((t.get("from") or {}).get("hash", "") or "").lower() or None
+    except Exception:
+        return None
+
+
+def _blockscout_drain_check(base: str, victim: str, contract: str,
+                            sleep: float = _BS_SLEEP, max_legs: int = 10):
+    """tx-INITIATOR drain test (Correction #29). 0 Alchemy CU.
+
+    A (victim, contract) is a REAL approval-drain iff the victim has an outbound
+    ERC-20 Transfer of the contract token whose TRANSACTION was initiated by a
+    third party (tx.from != victim) -- a drainer's transferFrom. A victim-initiated
+    swap/transfer (tx.from == victim) is a SALE, not a drain. n_out>0 ALONE is NOT
+    a drain (it counts every seller -- the retired method's ~98% FP bug); this
+    initiator gate is what it lacked.
+
+    Returns (verdict, drainer, collector, drain_tx, n_out, err):
+      verdict in {'DRAIN','SALE','NONE','ERR'}.
+      DRAIN -> drainer=tx.from (the actual drainer), collector=leg.to, drain_tx=hash.
+
+    Fast-path: legs whose top-level tx method is a recognized victim swap are
+    skipped without a tx fetch. Non-swap legs are tx-checked definitively.
+    """
+    vlow, clow = victim.lower(), contract.lower()
+    url = f"{base}/addresses/{victim}/token-transfers?type=ERC-20&token={contract}"
+    legs = []  # (tx_hash, to, method) newest-first
+    pages = 0
+    while url and pages < _BS_MAX_PAGES and len(legs) < max_legs:
+        req = Request(url, headers={"Accept": "application/json",
+                                    "User-Agent": "Mozilla/5.0 (L3-drain)"})
+        try:
+            with urlopen(req, timeout=25) as r:
+                d = json.loads(r.read().decode())
+        except HTTPError as e:
+            if e.code == 404:
+                return ("NONE", None, None, None, 0, None)
+            return ("ERR", None, None, None, len(legs), f"http{e.code}")
+        except (URLError, TimeoutError, OSError):
+            return ("ERR", None, None, None, len(legs), "neterr")
+        for it in d.get("items", []):
+            if ((it.get("from") or {}).get("hash", "") or "").lower() != vlow:
+                continue
+            tok = ((it.get("token") or {}).get("address_hash") or "").lower()
+            if tok and tok != clow:
+                continue
+            legs.append((it.get("transaction_hash") or it.get("tx_hash"),
+                         ((it.get("to") or {}).get("hash", "") or ""),
+                         (it.get("method") or "")))
+        npp = d.get("next_page_params")
+        if not npp:
+            break
+        url = (f"{base}/addresses/{victim}/token-transfers"
+               f"?type=ERC-20&token={contract}&{urlencode(npp)}")
+        pages += 1
+        time.sleep(sleep)
+    if not legs:
+        return ("NONE", None, None, None, 0, None)
+    n_out = len(legs)
+    nonswap_checked = errs = 0
+    for txh, to, method in legs:
+        m = (method or "").lower()
+        if any(h in m for h in _SWAP_METHOD_HINTS):
+            continue  # victim-initiated swap leg -> not a drain
+        if not txh:
+            continue
+        ini = _tx_initiator(base, txh)
+        time.sleep(sleep)
+        if ini is None:
+            errs += 1
+            continue
+        nonswap_checked += 1
+        if ini != vlow:
+            return ("DRAIN", ini, (to.lower() if to else None), txh, n_out, None)
+    if nonswap_checked == 0 and errs > 0:
+        return ("ERR", None, None, None, n_out, "tx_fetch_failed")
+    return ("SALE", None, None, None, n_out, None)
+
+
 def check_drains_blockscout(conn, max_victims=400, sleep: float = _BS_SLEEP,
                             db_path: str = None) -> dict:
-    """Authoritative drain detection via the Blockscout victim-outbound-leg
-    test. Supersedes the tx_events-join Method 1 (check_drains) as the drain
-    signal wired into the heartbeat loop. 0 Alchemy CU (Blockscout free REST).
+    """tx-INITIATOR-gated approval-drain detection (Correction #29). 0 Alchemy CU.
 
-    Why this exists: drain transferFrom() calls target the TOKEN contract,
-    which is usually NOT in the watched set, so they never enter
-    transaction_events and the join is blind. Grounded on the local corpus
-    2026-06-05: of 54,996 pending approvals only 2 had a tx_events match, while
-    the Blockscout victim-leg test already confirms 4,396 real drained victims
-    in the audit_drain_legs cache. This is precise (per-victim from-matching),
-    which also fixes the Bug #19b over-credit that Method 1 still carries.
+    Supersedes the retired n_out>0 victim-outbound-leg method, which conflated
+    drains with legitimate DEX sales (~98% false positives — see Correction #29).
+    A victim is drained iff they have an outbound leg of the contract token whose
+    tx was initiated by a third party (tx.from != victim); a victim-initiated
+    swap/transfer is a SALE, not a drain. See _blockscout_drain_check.
 
-    Threading model (so this is safe under asyncio.to_thread in the async
-    heartbeat loop against a QueueConnection whose _ro is bound to the monitor
-    main thread):
-      * READS go through a fresh thread-local read-only connection (WAL permits
-        many readers). Never touches conn._ro across threads.
-      * WRITES route through `conn`:
-          - QueueConnection.execute() -> writer queue (thread- and process-safe)
-          - a plain CLI connection writes directly (same thread).
-        No second read-write connection is opened in queue mode, so the
-        single-writer architecture is preserved.
+    Caches:
+      * audit_drain_legs (n_out) is reused as a FREE pre-filter — n_out==0 means
+        no outbound legs => NONE without any fetch.
+      * drain_initiator_verdicts persists the tx-initiator verdict so re-runs are
+        incremental (a victim is decided once).
 
-    Budget: at most `max_victims` NEW Blockscout fetches per call (cache hits
-    are free). The ~30-min heartbeat passes max_victims=400 so a cycle never
-    stalls; the backlog clears incrementally (each victim is a one-time cost
-    thanks to the cache). Pass max_victims=None for an unbounded out-of-band
-    backfill (CLI --drain-scan-all).
+    Threading / budget / OLI gate unchanged from the prior version (RO reads via a
+    thread-local connection; writes via conn; OLI suppression retained; at most
+    max_victims NEW drain-checks per call, None = unbounded backfill). NOTE: the
+    heartbeat wiring is currently PAUSED (Correction #29) — this runs via the CLI
+    --drain-scan-all until the operator re-enables a live detector.
 
-    OLI gate retained: rows whose contract was deployed by an OLI-tagged
-    institution/project are skipped (Correction #20/#24 — do not flag
-    Circle/Animoca-class distribution as drains).
-
-    Returns: {drains_detected, checked, cache_hits, errors,
-              oli_suppressed_skips, budget_exhausted}.
+    Returns {drains_detected, checked, sales, none, cache_hits, errors,
+             oli_suppressed_skips, budget_exhausted}.
     """
     path = db_path or getattr(conn, "_db_path", None) or str(DB_PATH)
 
-    # Ensure the cache table exists (routed through conn -> queue/direct).
-    # Already present on prod (created by scripts/t1_apply.py); IF NOT EXISTS
-    # makes this a no-op after the first ever call, adding no write contention.
     conn.execute("""CREATE TABLE IF NOT EXISTS audit_drain_legs(
         victim TEXT, contract TEXT, n_out INTEGER, n_in INTEGER,
         truncated INTEGER, err TEXT, checked_at TEXT,
         PRIMARY KEY (victim, contract))""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS drain_initiator_verdicts(
+        victim TEXT, contract TEXT, verdict TEXT, drainer TEXT, collector TEXT,
+        drain_tx TEXT, checked_at TEXT, PRIMARY KEY (victim, contract))""")
     conn.commit()
 
-    # CLI / standalone path owns its own writes -> give it a long busy_timeout
-    # to coexist with live monitors + db_writer. In queue mode the writer owns
-    # the only RW connection, so this code never contends and PRAGMA on the
-    # QueueConnection (which would cross-thread to _ro) is intentionally avoided.
     if not hasattr(conn, "_queue"):
         try:
             conn.execute("PRAGMA busy_timeout=30000")
         except Exception:
             pass
 
-    # Thread-local RO connection for all reads.
     ro = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=60)
     try:
         ro.execute("PRAGMA busy_timeout=30000")
         suppressed = _oli_suppressed_deployers(ro)
-
-        # Preload the cache once (avoids per-victim SELECTs and is robust to
-        # queued writes not yet visible to this RO connection within a run).
-        cache = {}
+        nout_cache = {}
         try:
             for v, c, n_out, err in ro.execute(
                     "SELECT victim, contract, n_out, err FROM audit_drain_legs"):
-                cache[(v, c)] = (n_out, err)
+                nout_cache[(v, c)] = (n_out, err)
         except sqlite3.OperationalError:
-            pass  # table not yet present on a fresh DB
-
+            pass
+        verdict_cache = {}
+        try:
+            for v, c, verdict, drainer, collector, drain_tx in ro.execute(
+                    "SELECT victim, contract, verdict, drainer, collector, drain_tx "
+                    "FROM drain_initiator_verdicts"):
+                verdict_cache[(v, c)] = (verdict, drainer, collector, drain_tx)
+        except sqlite3.OperationalError:
+            pass
         pending = ro.execute("""
             SELECT aw.victim_address, aw.contract_address, aw.deployer_address,
                    COALESCE(c.chain, 'base')
@@ -426,6 +508,7 @@ def check_drains_blockscout(conn, max_victims=400, sleep: float = _BS_SLEEP,
         ro.close()
 
     drains = checked = cache_hits = errors = skipped = fetched = 0
+    sales = none = writes = 0
     budget_exhausted = False
     now = _now()
 
@@ -434,52 +517,60 @@ def check_drains_blockscout(conn, max_victims=400, sleep: float = _BS_SLEEP,
             skipped += 1
             continue
         key = (victim, contract)
-        cached = cache.get(key)
-        if cached is not None and cached[1] is None:
-            # Clean cache hit (definitive verdict, no prior error) — free.
-            n_out = cached[0]
-            last_tx = last_to = last_ts = None
+        vc = verdict_cache.get(key)
+        if vc is not None and vc[0] in ("DRAIN", "SALE", "NONE"):
+            verdict, drainer, collector, drain_tx = vc
             cache_hits += 1
         else:
-            if max_victims is not None and fetched >= max_victims:
-                budget_exhausted = True
-                break
-            base = BLOCKSCOUT_BASE.get(chain, BLOCKSCOUT_BASE["base"])
-            n_out, n_in, last_tx, last_to, last_ts, err = _blockscout_outbound(
-                base, victim, contract, sleep=sleep)
-            fetched += 1
-            conn.execute(
-                "INSERT OR REPLACE INTO audit_drain_legs VALUES (?,?,?,?,?,?,?)",
-                (victim, contract, n_out, n_in, 0, err, now))
-            cache[key] = (n_out, err)
-            # Commit on a FETCH cadence (not a drain cadence). In a full
-            # backfill most victims are non-drains, so committing only when a
-            # drain is found would buffer tens of thousands of uncommitted
-            # cache rows — lost on interruption (breaking resumability) and
-            # bloating the WAL against the live DB. Every 200 fetches keeps the
-            # cache durable + the job resumable, and any drain UPDATE issued
-            # since the last commit rides along in the same transaction.
-            if fetched % 200 == 0:
-                conn.commit()
-            if err:
-                errors += 1
-                continue  # leave row pending; retry next cycle
-            time.sleep(sleep)
-        checked += 1
-        if n_out and n_out > 0:
+            nc = nout_cache.get(key)
+            if nc is not None and nc[1] is None and (nc[0] or 0) == 0:
+                # free pre-filter: no outbound legs => cannot be a drain
+                verdict, drainer, collector, drain_tx = "NONE", None, None, None
+                conn.execute("INSERT OR REPLACE INTO drain_initiator_verdicts VALUES (?,?,?,?,?,?,?)",
+                             (victim, contract, verdict, None, None, None, now))
+                writes += 1
+            else:
+                if max_victims is not None and fetched >= max_victims:
+                    budget_exhausted = True
+                    break
+                base = BLOCKSCOUT_BASE.get(chain, BLOCKSCOUT_BASE["base"])
+                verdict, drainer, collector, drain_tx, _n_out, err = _blockscout_drain_check(
+                    base, victim, contract, sleep=sleep)
+                fetched += 1
+                if verdict == "ERR":
+                    errors += 1
+                    if fetched % 100 == 0:
+                        conn.commit()
+                    continue  # leave pending; retry next run
+                conn.execute("INSERT OR REPLACE INTO drain_initiator_verdicts VALUES (?,?,?,?,?,?,?)",
+                             (victim, contract, verdict, drainer, collector, drain_tx, now))
+                writes += 1
+                time.sleep(sleep)
+        if verdict == "DRAIN":
             conn.execute("""
                 UPDATE approval_watchlist
-                SET drain_detected = 1, drain_tx_hash = ?, drain_timestamp = ?,
+                SET drain_detected = 1, drain_tx_hash = ?, drain_timestamp = NULL,
                     drain_caller = ?
                 WHERE victim_address = ? AND contract_address = ?
                   AND drain_detected = 0
-            """, (last_tx, last_ts, last_to, victim, contract))
+            """, (drain_tx, drainer, victim, contract))
             drains += 1
+            writes += 1
+        elif verdict == "SALE":
+            sales += 1
+        else:
+            none += 1
+        checked += 1
+        if writes >= 200:
+            conn.commit()
+            writes = 0
 
     conn.commit()
     return {
         "drains_detected": drains,
         "checked": checked,
+        "sales": sales,
+        "none": none,
         "cache_hits": cache_hits,
         "errors": errors,
         "oli_suppressed_skips": skipped,
@@ -633,8 +724,9 @@ if __name__ == "__main__":
               "this can take a while over the full pending backlog...")
         r = check_drains_blockscout(conn, max_victims=None)
         print(
-            f"[approval_drain] Blockscout drain scan complete: "
-            f"detected={r['drains_detected']} checked={r['checked']} "
+            f"[approval_drain] tx-initiator drain scan complete: "
+            f"DRAINS={r['drains_detected']} sales={r.get('sales',0)} "
+            f"none={r.get('none',0)} checked={r['checked']} "
             f"cache_hits={r['cache_hits']} errors={r['errors']} "
             f"oli_skips={r['oli_suppressed_skips']} "
             f"budget_exhausted={r['budget_exhausted']}"
