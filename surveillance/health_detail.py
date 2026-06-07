@@ -75,8 +75,11 @@ def component_health(conn) -> dict:
         ).fetchall()
         if rows:
             for comp, ts in rows:
-                if "rout" in (comp or "").lower():
+                cl = (comp or "").lower()
+                if "rout" in cl:
                     continue  # routing monitor handled explicitly below (#23 note)
+                if cl == "deployment_monitor":
+                    continue  # legacy aggregate name, superseded by per-chain rows
                 add(comp, ts, 5, "chain monitor heartbeat (60s cadence)")
         else:
             add("chain_monitors", None, 5, "no heartbeat rows")

@@ -64,17 +64,33 @@ def _oli_suppressed_deployers(conn: sqlite3.Connection) -> set:
     # `self-confirming` is excluded because that severity tier means the OLI
     # tag agrees with our adversarial classification (scam, phishing, drain
     # hub). Those drains are legitimate detections — keep them.
+    #
+    # FAIL-SAFE (Correction #29 / priority #22): only suppress deployers that
+    # carry a VALID OLI tag (tag_count>0 AND primary_entity present). The
+    # oli_labels fetch pipeline is currently broken — all rows have
+    # tag_count=0/entity NULL — so the old query suppressed 13 deployers on
+    # empty data, including org_004 (0xbaed383e, an adversarial target). That is
+    # a false-negative trap: suppressing on unverified data hides real drains.
+    # Requiring a valid tag means broken data suppresses NOTHING (loudly logged),
+    # and suppression self-heals once the fetch is repaired. Conservative
+    # direction: when in doubt, DO NOT suppress (a missed institution FP is
+    # cheaper than a hidden adversary).
     try:
-        return {
-            r[0]
-            for r in conn.execute(
-                "SELECT address FROM oli_labels "
-                "WHERE severity IN ('HIGH', 'LOW')"
-            )
-        }
+        rows = conn.execute(
+            "SELECT address, COALESCE(tag_count, 0), primary_entity "
+            "FROM oli_labels WHERE severity IN ('HIGH', 'LOW')"
+        ).fetchall()
     except sqlite3.OperationalError:
-        # oli_labels table not yet migrated in this DB
-        return set()
+        return set()  # oli_labels table not yet migrated in this DB
+    valid = {r[0] for r in rows if (r[1] or 0) > 0 and r[2]}
+    if rows and not valid:
+        logger.warning(
+            "OLI suppression DISABLED: %d HIGH/LOW oli_labels rows but ALL have "
+            "empty tags (tag_count=0/entity NULL) — fetch pipeline broken "
+            "(priority #22). Failing safe to NO suppression so real adversarial "
+            "deployers (e.g. org_004) are not silently hidden.", len(rows)
+        )
+    return valid
 
 
 def ensure_tables(conn: sqlite3.Connection):
