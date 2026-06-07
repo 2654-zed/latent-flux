@@ -366,17 +366,44 @@ _SWAP_METHOD_HINTS = ("swap", "exactinput", "exactoutput", "multicall",
                       "unoswap", "clipperswap")
 
 
+def _bs_fetch_json(url: str, retries: int = 4):
+    """GET JSON from Blockscout with exponential backoff on rate-limit / transient
+    errors. Returns (data, err): err is None on success, '404' for not-found, or a
+    short string after retries are exhausted.
+
+    Without this, a tx-fetch-heavy scan trips Blockscout's 429 rate limit and drops
+    victims wholesale — the first tx-initiator re-run (Correction #29) failed ~70%
+    of victims this way; a follow-up sample of those same victims resolved 12/12
+    cleanly once the limit reset, confirming the errors were transient throttling.
+    """
+    delay = 1.0
+    last = "neterr"
+    for _ in range(retries):
+        req = Request(url, headers={"Accept": "application/json",
+                                    "User-Agent": "Mozilla/5.0 (L3-drain)"})
+        try:
+            with urlopen(req, timeout=25) as r:
+                return json.loads(r.read().decode()), None
+        except HTTPError as e:
+            if e.code == 404:
+                return None, "404"
+            last = f"http{e.code}"
+            if e.code not in (429, 500, 502, 503, 504):
+                return None, last  # non-retryable
+        except (URLError, TimeoutError, OSError):
+            last = "neterr"
+        time.sleep(delay)
+        delay = min(delay * 2, 12.0)
+    return None, last
+
+
 def _tx_initiator(base: str, tx_hash: str):
-    """Return the lowercased tx sender (msg.sender / tx.from), or None on error."""
-    try:
-        req = Request(f"{base}/transactions/{tx_hash}",
-                      headers={"Accept": "application/json",
-                               "User-Agent": "Mozilla/5.0 (L3-drain)"})
-        with urlopen(req, timeout=25) as r:
-            t = json.loads(r.read().decode())
-        return ((t.get("from") or {}).get("hash", "") or "").lower() or None
-    except Exception:
+    """Return the lowercased tx sender (msg.sender / tx.from), or None on error
+    (after backoff retries)."""
+    d, err = _bs_fetch_json(f"{base}/transactions/{tx_hash}")
+    if err or not d:
         return None
+    return ((d.get("from") or {}).get("hash", "") or "").lower() or None
 
 
 def _blockscout_drain_check(base: str, victim: str, contract: str,
@@ -402,17 +429,11 @@ def _blockscout_drain_check(base: str, victim: str, contract: str,
     legs = []  # (tx_hash, to, method) newest-first
     pages = 0
     while url and pages < _BS_MAX_PAGES and len(legs) < max_legs:
-        req = Request(url, headers={"Accept": "application/json",
-                                    "User-Agent": "Mozilla/5.0 (L3-drain)"})
-        try:
-            with urlopen(req, timeout=25) as r:
-                d = json.loads(r.read().decode())
-        except HTTPError as e:
-            if e.code == 404:
-                return ("NONE", None, None, None, 0, None)
-            return ("ERR", None, None, None, len(legs), f"http{e.code}")
-        except (URLError, TimeoutError, OSError):
-            return ("ERR", None, None, None, len(legs), "neterr")
+        d, err = _bs_fetch_json(url)
+        if err == "404":
+            return ("NONE", None, None, None, 0, None)
+        if err or d is None:
+            return ("ERR", None, None, None, len(legs), err or "neterr")
         for it in d.get("items", []):
             if ((it.get("from") or {}).get("hash", "") or "").lower() != vlow:
                 continue
