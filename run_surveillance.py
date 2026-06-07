@@ -75,6 +75,24 @@ class StatsHandler(BaseHTTPRequestHandler):
             # alive during /admin/upload-db recovery windows.
             self._json(200, {"status": "alive"})
             return
+        if self.path == "/api/health/detailed":
+            # Per-component freshness — surfaces SILENT failures the liveness
+            # probe and the raw heartbeat list miss (a stopped component simply
+            # vanishes from the heartbeat table). Flags STALE/DEAD/ABSENT/BROKEN
+            # per component so dead background scans cannot masquerade as quiet.
+            # op priorities #17/#18; reports/adversarial_audit_2026-06-06.md.
+            try:
+                from surveillance.health_detail import component_health
+                con = _ro_connect()
+                try:
+                    report = component_health(con)
+                finally:
+                    con.close()
+                # HTTP 503 when degraded so external monitors/alerts can trip on it
+                self._json(503 if report.get("overall") == "degraded" else 200, report)
+            except Exception as e:
+                self._json(500, {"error": type(e).__name__, "detail": str(e)})
+            return
         if self.path == "/stats":
             # Single connection, all fresh queries, no caching.
             # Wrapped so DB unreachability reports 200 with degraded shape
