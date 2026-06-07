@@ -678,9 +678,12 @@ def _build_risk(conn: sqlite3.Connection, row: dict) -> dict:
             "revert_rate": stats["revert_rate"],
             "camouflaged": stats["revert_rate"] < 0.10 if stats["total"] >= 10 else None,
             "camouflage_note": (
-                "Camouflaged = revert rate < 10% on 10+ interactions. "
-                "Threshold chosen because contracts below 10% attract 4.5x "
-                "more victims than overt traps (empirical, two-week assessment)."
+                "Low revert rate (<10% on 10+ interactions) is a POPULATION "
+                "descriptor, NOT validated adversarial evidence. RETIRED framing "
+                "(Correction #22, 2026-05-19): confirmed-tier predators are FAR "
+                "LESS likely to be low-revert (30.44%) than baseline (~90%) — the "
+                "camouflage-as-predator interpretation is reversed. Treat "
+                "'camouflaged' as a weak descriptor only, not evidence."
             ) if stats["total"] >= 10 else None,
             "sample_revert_tx_hashes": sample_tx_hashes,
         },
@@ -1656,7 +1659,8 @@ async def methodology_confidence():
 
 @router.get("/methodology/camouflage")
 async def methodology_camouflage():
-    """Published camouflage methodology. See Correction #13 (2026-04-20)."""
+    """Published camouflage methodology. See Correction #13 (2026-04-20) and
+    Correction #22 (2026-05-19, predator-camouflage framing REVERSED/retired)."""
     return JSONResponse({"status": "ok", "data": {
         "metrics": {
             "camouflage_ratio": {
@@ -1690,23 +1694,26 @@ async def methodology_camouflage():
             },
         },
         "threshold_justification": (
-            "10% was chosen because contracts below this threshold "
-            "attract 4.5x more unique victims than overt traps (>50% "
-            "revert rate). Empirical from two-week assessment: "
-            "low-revert contracts averaged 66 victims vs 15 for overt. "
-            "The multiplier is stable across chains (Base 4.2x, "
-            "Arbitrum 4.8x) and weeks (W1 4.3x, W2 4.7x)."
+            "[RETIRED — Correction #22, 2026-05-19] The 4.5x predator-victim "
+            "multiplier and the low-revert-as-camouflage interpretation are "
+            "retired. A two-proportion z-test on 8,252 contracts shows "
+            "confirmed-tier predators are FAR LESS likely to be low-revert "
+            "(30.44%) than the unanalyzed baseline (~90%), z=-36.61, p<1e-6 — "
+            "the opposite of the camouflage claim. The 10% revert-rate "
+            "arithmetic remains deductive; the adversarial interpretation does not."
         ),
         "historical_anchor": (
-            "camouflage_ratio observed at 70-79% across 23+ days pre-"
-            "Correction-#13. Whether that stability reflects adversary "
-            "Nash equilibrium or ecosystem contract-design baseline is "
-            "only answerable via adversary_low_revert_ratio comparison."
+            "[RETIRED — Correction #22] The 68% and 70-79% camouflage_ratio "
+            "anchors are the BASELINE-population low-revert rate, NOT a predator "
+            "measurement; the 'Camouflage Equilibrium' framing is retired. "
+            "Confirmed predators sit at 30.44% low-revert, BELOW baseline — there "
+            "is no predator camouflage equilibrium."
         ),
         "epistemic": (
-            "MIXED — the revert rate computation is deductive (arithmetic "
-            "on on-chain receipts). The 10% threshold is a policy choice "
-            "informed by empirical data but not the only defensible "
-            "boundary. The 4.5x multiplier is a measured observation."
+            "MIXED — the revert-rate computation is deductive (arithmetic on "
+            "on-chain receipts, Tier-A). The 10% threshold is a policy choice. "
+            "The 4.5x predator multiplier and the camouflage-as-predator framing "
+            "are RETIRED (Correction #22): confirmed-tier predators revert MORE "
+            "than baseline, not less."
         ),
     }})

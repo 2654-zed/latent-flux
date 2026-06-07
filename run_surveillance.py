@@ -210,6 +210,36 @@ class StatsHandler(BaseHTTPRequestHandler):
                 "shared_deployers": shared_deployers,
             }
 
+            # Epistemic-honesty annotation (additive, non-breaking). Counts are
+            # observations, not adjudicated verdicts. Heuristic tiers are LEADS
+            # with unmeasured PPV — not proof of malice (Correction #25 found
+            # >=7% of 'confirmed' were verified-legit tokens). See the
+            # adversarial audit + the citation gate in claude.md.
+            stats["_methodology"] = {
+                "note": (
+                    "Counts are observations, not adjudicated verdicts. "
+                    "'confirmed'/'suspected' tiers and behavioral/bot scores are "
+                    "HEURISTIC LEADS (shape-based; positive predictive value "
+                    "UNMEASURED; Correction #25 found >=7% of 'confirmed' were "
+                    "verified-legitimate tokens). Treat them as leads requiring "
+                    "deductive confirmation, not evidence of malice."
+                ),
+                "epistemic_class": {
+                    "tx_events": "TIER_A_DEDUCTIVE — raw on-chain capture count",
+                    "deployers": "TIER_A_DEDUCTIVE — distinct deployer addresses observed",
+                    "contracts.confirmed": "INFERENTIAL_LEAD — heuristic; PPV unmeasured (Correction #25)",
+                    "contracts.suspected": "INFERENTIAL_LEAD — heuristic; FP-dominated at ~0.8% base rate",
+                    "contracts.unanalyzed": "RAW_BUCKET — not yet classified",
+                    "contracts.unknown": "RAW_BUCKET — not yet classified",
+                    "trap_events": "INFERENTIAL_LEAD — 'trap' derives from heuristic tiers",
+                    "bot_candidates": "INFERENTIAL_LEAD — reverts observed (Tier-A) but 'bot' label inferential",
+                    "clusters": "INFERENTIAL_LEAD",
+                    "longitudinal": "INFERENTIAL_LEAD — behavioral score is a heuristic",
+                },
+                "health": "GET /api/health/detailed for per-component freshness",
+                "references": "reports/adversarial_audit_2026-06-06.md; CORRECTIONS.md (retirements)",
+            }
+
             # Recent alerts
             alert_rows = c.execute(
                 "SELECT alert_type, address, tx_hash, timestamp FROM alerts WHERE COALESCE(false_positive, 0) = 0 ORDER BY id DESC LIMIT 5"
