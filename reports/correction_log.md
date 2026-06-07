@@ -1685,6 +1685,34 @@ Provenance/tier: source = local `approval_watchlist` post-backfill, 2026-06-06; 
 
 ---
 
+## Correction #29 — The Blockscout Drain Detector Counted DEX Sales as Drains. `n_out>0` Is Not a Drain Signal. (Retracts #28's backfill numbers.)
+
+**Date:** 2026-06-06
+**Discovery method:** Adversarial verification prompted by the operator's question "are we misattributing real activity?" On-chain tx-initiator sampling: `scripts/verify_oli_suppression.py`, `scripts/validate_drain_initiator.py`.
+**Severity:** HIGH — invalidates the Correction #28 backfill (40,144 "drains") and the same-day recompute (44,540 "verified drains / 19,533 victims"). Both retracted here.
+
+**Claim made (Correction #28, this session):** `check_drains_blockscout`'s victim-outbound-leg test (`n_out>0` — the victim has ≥1 ERC-20 Transfer of the contract token with `from==victim`) is a per-victim-verified drain signal. Backfill reported **40,144 new drains**; recompute reported **44,540 verified drain rows / 19,533 victims / 4,324 collectors**, claimed to dwarf the retired 3,437.
+
+**Reality:** `n_out>0` only proves the victim's tokens *left their wallet*. It **cannot distinguish a malicious drain from a legitimate DEX sale** — both produce `Transfer(from=victim)`. The discriminator is the **transaction initiator**: a drain's outbound leg is initiated by a third party (`tx.from != victim`, a `transferFrom` by the drainer); a sale is initiated by the victim (`tx.from == victim`, a swap). Evidence:
+- **OFC (`0x752c5a95`, the 8,063 OLI-suppressed):** 400/400 sampled approvers had outbound legs, 80.8% to 3 collectors — but the top collectors are `Volatile AMM - OFC/USDC` (a DEX pool) and `BaseSettler` (a DEX aggregator). The "drains" are holders **trading**. OFC is legit; **Correction #24 stands.**
+- **Two independent tx-initiator samples:** most-recent-leg 3 drains / 120; detection-leg **0 drains / 62** (all flagged legs were victim-initiated swaps — `swapExactTokensForETH` / `execute` / `exactInputSingle`).
+- **Validated discriminator** (`validate_drain_initiator.py`): OFC negative control **0/25** flagged; stratified true drain rate **confirmed 1/45 (2%), suspected 0/40, unanalyzed 0/46**; one genuine drain found with full attribution (drainer `0xcaf438ef…`, tx `0x326f0f1f…`).
+
+**True drain rate: ~0–2%** (concentrated in confirmed tier). The 40,144 / 44,540 figures are ~98–99% legitimate DEX trading.
+
+**Why the parity test missed it:** `scripts/t_drain_blockscout_parity.py`'s negative control was *inbound-only* (`n_out=0`) — it never tested a **seller** (`n_out>0`, victim-initiated). `n_out>0` is necessary but **not sufficient** for a drain. A discriminator must be validated against the realistic confound, not just the trivial negative.
+
+**Remediation (operator-approved):**
+1. **Prod detector PAUSED** (commit `5257aab`, deployed) — heartbeat runs `scan_approvals` only; no drain write until the tx-initiator-gated detector is validated. Stops further FP accumulation.
+2. **All 46,593 local `drain_detected=1` flags reverted to 0** (`scripts/revert_drain_fps_20260606.py`), snapshotted to `drain_flags_backup_20260606` (reversible). `audit_drain_legs` cache (51,329 `n_out` verdicts) preserved — still valid raw input.
+3. **Rebuild** `check_drains_blockscout` with the tx-initiator gate (drain iff an outbound leg has `tx.from != victim`), re-validate against the seller negative-control, then re-run the full "audit all" pass to derive the true drain set with correct drainer attribution.
+
+**OLI finding (same investigation):** `oli_labels` is the broken priority-#22 table — all 13 rows have `tag_count=0, primary_entity=NULL`. The suppression gate rests on `severity` alone with no actual tags. It coincidentally suppressed OFC (legit) correctly, but also suppresses `org_004` (`0xbaed383e`) and `0xc5d133296e` (226 contracts incl. confirmed/suspected) — adversarial deployers that would be false-negatived if they ever carry pending drains. No compromised named wallets were found; OFC's "drains" were sales.
+
+**Meta-lesson (third recurrence this session of "shape ≠ ground truth"):** #28 misdiagnosed a regression from a bare-harness repro; this entry shipped a detector that inferred intent (drain) from shape (`n_out>0`) without a ground-truth discriminator (tx initiator). The corpus's entire correction history (#20, #22, #24, #25, #27, this) is the same failure: **legitimate and adversarial activity are shape-identical at the resolution Layer 3 observes; only a deductive signal separates them.** No "adversarial / drain / predator" claim should ship without a deductive discriminator, validated against the realistic legitimate confound — not just a trivial negative control.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.
