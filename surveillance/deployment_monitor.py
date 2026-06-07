@@ -416,39 +416,28 @@ class DeploymentMonitor:
             # Tracks approve() calls on suspected contracts and watches for drains
             if heartbeat_count % 30 == 5:  # offset from self-test scan
                 try:
-                    from surveillance.approval_drain_monitor import (
-                        scan_approvals, check_drains_blockscout,
-                    )
+                    from surveillance.approval_drain_monitor import scan_approvals
                     r1 = scan_approvals(self.conn)
                     if r1["new_approvals_tracked"] > 0:
                         logger.info("Approval monitor: %d new approvals tracked",
                                     r1["new_approvals_tracked"])
-                    # Authoritative drain detection via Blockscout victim-leg
-                    # test (0 Alchemy CU). Replaces the tx_events-join Method 1,
-                    # which is structurally blind (2 of 54,996 pending matched on
-                    # 2026-06-05). It is network-bound and sleeps between calls,
-                    # so run it OFF the event loop in a worker thread: reads use
-                    # a thread-local RO connection and writes route through the
-                    # QueueConnection writer queue (both thread-safe). max_victims
-                    # caps Blockscout calls per cycle so a heartbeat never stalls;
-                    # the backlog clears incrementally (cache = one-time cost).
-                    r2 = await asyncio.to_thread(
-                        check_drains_blockscout, self.conn, 400,
-                    )
-                    if r2["drains_detected"] > 0:
-                        logger.warning(
-                            "APPROVAL DRAIN DETECTED: %d victims drained "
-                            "(checked=%d cache_hits=%d errors=%d budget_exhausted=%s)",
-                            r2["drains_detected"], r2["checked"],
-                            r2["cache_hits"], r2["errors"], r2["budget_exhausted"],
-                        )
+                    # DRAIN DETECTION PAUSED 2026-06-06 (Correction #29).
+                    # check_drains_blockscout() used the victim-outbound-leg test
+                    # (n_out>0), which CONFLATES a real approval-drain with a
+                    # legitimate DEX sale: it only proves the victim's tokens
+                    # left the wallet, not that a third party took them. On-chain
+                    # sampling (two independent passes, ~180 legs) showed ~98% of
+                    # the flagged "drains" were victim-INITIATED swaps
+                    # (swapExactTokensForETH / execute / exactInputSingle...),
+                    # not drains. A correct detector must gate on the tx INITIATOR
+                    # (drain == outbound leg whose tx.from != victim, i.e. a
+                    # third-party transferFrom). That fix is being built; until it
+                    # is validated against a seller negative-control, no drain
+                    # write happens here. scan_approvals (watchlist tracking)
+                    # continues. See reports/correction_log.md Correction #29.
                 except Exception as e:
-                    # Explicit, typed, with traceback. A bare logger.warning here
-                    # previously made silent failures easy to miss; surface the
-                    # exception type so any future regression is loud (CLAUDE.md
-                    # "loud failures over silent wrong output").
                     logger.error(
-                        "Approval drain scan FAILED (%s): %s",
+                        "Approval scan FAILED (%s): %s",
                         type(e).__name__, e, exc_info=True,
                     )
 
