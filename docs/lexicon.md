@@ -6,77 +6,90 @@
 
 ---
 
+> ## ⚠️ ARCHIVED & PRUNED (2026-06-08) — read this first
+> Layer 3 is archived (see `reports/WHAT_WE_LEARNED.md`). This lexicon is the project's most durable artifact — **but only in stratified form.** Read every entry through this classification (the index below is tagged):
+>
+> - **`[DURABLE]`** — conceptual/analytical frameworks that survive the project's failure and transfer beyond it (several were *vindicated* by it). Keep. e.g. Adversarial Topology, Compositional Harm, Forced Deterministic Neutrality, Confused Deputy, the Epistemic Tier discipline.
+> - **`[EXTERNAL]`** — field notes on real, publicly-documented incidents / threat actors (Drift, Kelp, Wasabi, UNC4899, key/operator/RPC compromises). Accurate *because* sourced from post-mortems, not from Layer 3's own detection. Keep as reference.
+> - **`[RETIRED]`** — corpus-derived empirical claims that were **reversed or retracted. Do not cite.** See `CORRECTIONS.md` + `reports/correction_log.md`. e.g. Camouflage Ratio (#22, direction reversed), Pattern D (#21, reversed), Trust Amplification 14.2× (#17), Victim-to-Predator Pipeline.
+> - **`[UNVALIDATED]`** — inferential typologies (operator profiles, behavioral-laundering patterns, lifecycle/calibration predictions) built on the classifier + org/cluster layer that the 2026-06 teardown showed has **~0 ground-truth harm** (Corrections #25/#29/#30/#31: 266 real drains, 104 drainers, ~1 real org_001 contract, the org/operator layer is funding/infra clustering). Treat as hypotheses/leads, **never verdicts**.
+> - **`[POSITIONING]`** — commercial framings, several now undercut by the findings (the "detection gap" was mostly false positives). Re-evaluate before reuse.
+>
+> **The discriminating test for any entry:** does it rest on a *deductive control fact* (who signed, what moved, a documented incident) or on *inferred intent from on-chain shape*? The first survives; the second is the house of cards. **Any specific number in any entry must pass the citation gate** (check CORRECTIONS first) before reuse — even inside `[DURABLE]` entries.
+
+---
+
 ## Index
 
 ### Core Architectural
-- [Stored Potential](#stored-potential)
-- [Adversarial Topology](#adversarial-topology)
-- [Compositional Harm](#compositional-harm)
-- [Trust Amplification Factor](#trust-amplification-factor)
-- [Thermodynamic Fundamentalism](#thermodynamic-fundamentalism)
-- [Neutrality Trap](#neutrality-trap)
-- [Forced Deterministic Neutrality](#forced-deterministic-neutrality)
-- [Normative Shell Game](#normative-shell-game)
-- [Confused Deputy Problem](#confused-deputy-problem)
-- [Distributed Confused Deputy Chain](#distributed-confused-deputy-chain)
-- [Camouflage Ratio](#camouflage-ratio)
+- [Stored Potential](#stored-potential) — **`[DURABLE]`** (the *concept*/capability-surface; its predictive claims are not — see entry)
+- [Adversarial Topology](#adversarial-topology) — **`[DURABLE]`**
+- [Compositional Harm](#compositional-harm) — **`[DURABLE]`** (vindicated by Drift)
+- [Trust Amplification Factor](#trust-amplification-factor) — **`[RETIRED]`** (14.2× figure, #17; concept caveated inline)
+- [Thermodynamic Fundamentalism](#thermodynamic-fundamentalism) — **`[UNVALIDATED]`** (anchors retracted #20; mostly worldview)
+- [Neutrality Trap](#neutrality-trap) — **`[DURABLE]`**
+- [Forced Deterministic Neutrality](#forced-deterministic-neutrality) — **`[DURABLE]`** (states the on-chain/off-chain ceiling)
+- [Normative Shell Game](#normative-shell-game) — **`[DURABLE]`**
+- [Confused Deputy Problem](#confused-deputy-problem) — **`[DURABLE]`**
+- [Distributed Confused Deputy Chain](#distributed-confused-deputy-chain) — **`[DURABLE]`**
+- [Camouflage Ratio](#camouflage-ratio) — **`[RETIRED]`** (#22, direction reversed; revised inline)
 
 ### Detection Methodology
-- [Behavioral Laundering](#behavioral-laundering)
-- [Pattern A — Reputation-Building Sacrifices](#pattern-a--reputation-building-sacrifices)
-- [Pattern B — Temporal Pattern Normalization](#pattern-b--temporal-pattern-normalization)
-- [Pattern C — Funding Chain Laundering](#pattern-c--funding-chain-laundering)
-- [Pattern D — Cross-Chain Reputation Import](#pattern-d--cross-chain-reputation-import)
-- [Pattern E — Fake Legitimate Projects](#pattern-e--fake-legitimate-projects)
-- [Pattern F — Advisor-Parasite Pattern](#pattern-f--advisor-parasite-pattern)
-- [Pristine Solo Operator](#pristine-solo-operator)
-- [Infrastructure-Scale Operator](#infrastructure-scale-operator)
-- [Single-Purpose Infrastructure Funder](#single-purpose-infrastructure-funder)
-- [Adversarial Vanity Branding](#adversarial-vanity-branding)
-- [Protocol-Family Specialist Operator](#protocol-family-specialist-operator)
-- [Self-Deploying Single-Contract Mass-Drain](#self-deploying-single-contract-mass-drain)
-- [UNC4899 / TraderTraitor](#unc4899--tradertraitor)
+- [Behavioral Laundering](#behavioral-laundering) — **`[UNVALIDATED]`**
+- [Pattern A — Reputation-Building Sacrifices](#pattern-a--reputation-building-sacrifices) — **`[UNVALIDATED]`**
+- [Pattern B — Temporal Pattern Normalization](#pattern-b--temporal-pattern-normalization) — **`[UNVALIDATED]`**
+- [Pattern C — Funding Chain Laundering](#pattern-c--funding-chain-laundering) — **`[UNVALIDATED]`** (the funding-cluster basis the org teardown gutted, #31)
+- [Pattern D — Cross-Chain Reputation Import](#pattern-d--cross-chain-reputation-import) — **`[RETIRED]`** (#21, reversed)
+- [Pattern E — Fake Legitimate Projects](#pattern-e--fake-legitimate-projects) — **`[UNVALIDATED]`**
+- [Pattern F — Advisor-Parasite Pattern](#pattern-f--advisor-parasite-pattern) — **`[UNVALIDATED]`**
+- [Pristine Solo Operator](#pristine-solo-operator) — **`[UNVALIDATED]`**
+- [Infrastructure-Scale Operator](#infrastructure-scale-operator) — **`[UNVALIDATED]`** (org layer = 0 ground-truth harm, #31)
+- [Single-Purpose Infrastructure Funder](#single-purpose-infrastructure-funder) — **`[UNVALIDATED]`**
+- [Adversarial Vanity Branding](#adversarial-vanity-branding) — **`[UNVALIDATED]`**
+- [Protocol-Family Specialist Operator](#protocol-family-specialist-operator) — **`[UNVALIDATED]`**
+- [Self-Deploying Single-Contract Mass-Drain](#self-deploying-single-contract-mass-drain) — **`[UNVALIDATED]`** (drain claims corrected, #29)
+- [UNC4899 / TraderTraitor](#unc4899--tradertraitor) — **`[EXTERNAL]`**
 
 ### Structural and Psychological
-- [Participatory Asymmetry / Predatory Literacy](#participatory-asymmetry--predatory-literacy)
-- [Static vs Dynamic Behavior](#static-vs-dynamic-behavior)
-- [Cost-Habituation Asymmetry](#cost-habituation-asymmetry)
-- [Micro-Cost Habituation](#micro-cost-habituation)
-- [Cognitive Load Concentration](#cognitive-load-concentration)
-- [Tuition Extraction Markets](#tuition-extraction-markets)
+- [Participatory Asymmetry / Predatory Literacy](#participatory-asymmetry--predatory-literacy) — **`[DURABLE]`**
+- [Static vs Dynamic Behavior](#static-vs-dynamic-behavior) — **`[DURABLE]`**
+- [Cost-Habituation Asymmetry](#cost-habituation-asymmetry) — **`[DURABLE]`**
+- [Micro-Cost Habituation](#micro-cost-habituation) — **`[DURABLE]`**
+- [Cognitive Load Concentration](#cognitive-load-concentration) — **`[DURABLE]`**
+- [Tuition Extraction Markets](#tuition-extraction-markets) — **`[DURABLE]`** (concept; corpus anchors unverified)
 
 ### Ecosystem-Level
-- [The Proofreading Trap](#the-proofreading-trap)
-- [The Self-Cannibalizing System](#the-self-cannibalizing-system)
-- [Victim-to-Predator Pipeline](#victim-to-predator-pipeline)
-- [Accountability-as-Load-Bearing](#accountability-as-load-bearing)
-- [External Accountability Infrastructure](#external-accountability-infrastructure)
-- [Convergent Calibration](#convergent-calibration)
+- [The Proofreading Trap](#the-proofreading-trap) — **`[DURABLE]`**
+- [The Self-Cannibalizing System](#the-self-cannibalizing-system) — **`[DURABLE]`**
+- [Victim-to-Predator Pipeline](#victim-to-predator-pipeline) — **`[RETIRED]`** (49→2; narrative collapsed)
+- [Accountability-as-Load-Bearing](#accountability-as-load-bearing) — **`[DURABLE]`**
+- [External Accountability Infrastructure](#external-accountability-infrastructure) — **`[DURABLE]`**
+- [Convergent Calibration](#convergent-calibration) — **`[RETIRED]`** (predator-calibration; camouflage-adjacent, #22)
 
 ### Attack Pattern
-- [Publishing-Induced Recursive Evasion](#publishing-induced-recursive-evasion)
-- [Strategy Lifecycle](#strategy-lifecycle)
-- [Operational Layer Attack](#operational-layer-attack)
-- [Configuration-Level Vulnerability](#configuration-level-vulnerability)
-- [Verification-Path Trust Failure](#verification-path-trust-failure)
-- [RPC-Layer Honesty-Assumption Violation](#rpc-layer-honesty-assumption-violation)
-- [Operator-Layer Cross-Chain Compromise](#operator-layer-cross-chain-compromise)
-- [Pooled Custody Amplification](#pooled-custody-amplification)
-- [Cross-Domain Compositional Harm](#cross-domain-compositional-harm)
+- [Publishing-Induced Recursive Evasion](#publishing-induced-recursive-evasion) — **`[UNVALIDATED]`** (speculative)
+- [Strategy Lifecycle](#strategy-lifecycle) — **`[UNVALIDATED]`** (Tier-C prediction; OFC retraction #24)
+- [Operational Layer Attack](#operational-layer-attack) — **`[EXTERNAL]`**
+- [Configuration-Level Vulnerability](#configuration-level-vulnerability) — **`[EXTERNAL]`**
+- [Verification-Path Trust Failure](#verification-path-trust-failure) — **`[EXTERNAL]`**
+- [RPC-Layer Honesty-Assumption Violation](#rpc-layer-honesty-assumption-violation) — **`[EXTERNAL]`**
+- [Operator-Layer Cross-Chain Compromise](#operator-layer-cross-chain-compromise) — **`[EXTERNAL]`**
+- [Pooled Custody Amplification](#pooled-custody-amplification) — **`[EXTERNAL]`**
+- [Cross-Domain Compositional Harm](#cross-domain-compositional-harm) — **`[DURABLE]`**
 
 ### Operational Doctrine
-- [The Hybrid Gameboard](#the-hybrid-gameboard)
-- [Adversarial Maneuver](#adversarial-maneuver)
-- [Maneuver Primitives](#maneuver-primitives)
-- [Counter-Maneuver](#counter-maneuver)
-- [Vulnerability-Centric vs Maneuver-Centric Framing](#vulnerability-centric-vs-maneuver-centric-framing)
+- [The Hybrid Gameboard](#the-hybrid-gameboard) — **`[DURABLE]`**
+- [Adversarial Maneuver](#adversarial-maneuver) — **`[DURABLE]`**
+- [Maneuver Primitives](#maneuver-primitives) — **`[DURABLE]`**
+- [Counter-Maneuver](#counter-maneuver) — **`[DURABLE]`**
+- [Vulnerability-Centric vs Maneuver-Centric Framing](#vulnerability-centric-vs-maneuver-centric-framing) — **`[DURABLE]`**
 
 ### Commercial / Positioning
-- [The Detection Gap as Product](#the-detection-gap-as-product)
-- [Observational Edge Non-Convertibility](#observational-edge-non-convertibility)
-- [Intelligence-as-Compounding-Asset](#intelligence-as-compounding-asset)
-- [The Bug-Bounty Structural Gap](#the-bug-bounty-structural-gap)
-- [Epistemic Tier Classification](#epistemic-tier-classification)
+- [The Detection Gap as Product](#the-detection-gap-as-product) — **`[POSITIONING]`** (undercut — the "gap" was mostly false positives)
+- [Observational Edge Non-Convertibility](#observational-edge-non-convertibility) — **`[POSITIONING]`**
+- [Intelligence-as-Compounding-Asset](#intelligence-as-compounding-asset) — **`[POSITIONING]`** (undercut)
+- [The Bug-Bounty Structural Gap](#the-bug-bounty-structural-gap) — **`[DURABLE]`** (vindicated — audits miss compositional harm)
+- [Epistemic Tier Classification](#epistemic-tier-classification) — **`[DURABLE]`** (the discipline that caught everything)
 
 ---
 
