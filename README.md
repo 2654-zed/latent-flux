@@ -1,8 +1,12 @@
 # Layer 3 — On-Chain Behavioral Threat Intel
 
-**What's running:** A passive surveillance system monitoring smart contract deployments on Base, Arbitrum, and Optimism in real time. Detects trap contracts (honeypots, Permit2 drainers, fee skimmers), traces organizational structures, documents active criminal operations, and serves a pre-transaction risk API for AI agent frameworks.
+> ## ⚠️ ARCHIVED (2026-06-08) — read [`reports/WHAT_WE_LEARNED.md`](reports/WHAT_WE_LEARNED.md) first.
+> The service is stopped. A ground-truth audit established that the core premise (rampant, shape-detectable on-chain theft) is **false**: ~99% of flagged activity was legitimate, and the real adversarial signal is **266 verified approval-drains**, not the figures below.
+> **The headline numbers in this README are RETIRED**, including the "$10–15M+ drain operation," the "7 rogue facilitators," and the "1,404 confirmed traps" — see `CORRECTIONS.md` (Quick Retirement Index) and `reports/correction_log.md` (#25, #29, #30, #31). Treat the marketing/pitch framing throughout this file as historical and uncorrected.
 
-**Live deployment:** `https://stellar-embrace-production-2020.up.railway.app` — 24/7 on Railway since March 2026 (migrated from earlier `spypy` service mid-2026). Corpus (as of 2026-05-10): **284,777 contracts, 16.8M transaction events, 67,459 deployers** across 3 chains; **1,404 confirmed traps + 115,514 suspected**. $10-15M+ drain operation documented, 7 rogue facilitators tracked. (Static numbers; live state in `memory/STATE.md` or the `/stats` endpoint.)
+**What it was:** A passive surveillance system monitoring smart contract deployments on Base, Arbitrum, and Optimism in real time. Built to detect trap contracts and map criminal organizations. The detection approach (inferring intent from on-chain shape) was found to be structurally unsound — see the retrospective.
+
+**Former deployment:** `https://stellar-embrace-production-2020.up.railway.app` (now stopped). Corpus (static snapshot 2026-05-10, **headline numbers retired — see banner above**): 284,777 contracts, 16.8M transaction events, 67,459 deployers across 3 chains.
 
 ## Run It (3 commands)
 
