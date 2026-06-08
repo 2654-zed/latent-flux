@@ -1751,6 +1751,31 @@ This supersedes BOTH the retracted 44,540 (#28/#29 — ~99.4% were victim-initia
 
 ---
 
+## Correction #31 — The Entire Named Org/Cluster/Entity Layer Has ~Zero Ground-Truth Adversarial Output
+
+**Date:** 2026-06-08
+**Discovery method:** Operator-requested forensic teardown of every named org/cluster/entity against the tx-initiator-verified drain set (Correction #29) + on-chain identity checks. Full report: `reports/org_cluster_teardown_2026-06-08.md`.
+**Severity:** HIGH — extends Correction #30 from org_001 to the whole org/cluster layer; affects any "N organizations mapped / criminal infrastructure tracked" framing in pitch/narrative materials.
+
+**Claim:** Layer 3 has mapped multiple coordinated criminal organizations plus curated criminal infrastructure (role-wallets, rogue facilitators, known-attacker entities).
+
+**Reality (Tier A cross-reference against the 266-drain / 104-drainer verified set):**
+- **5 funding orgs** (001/002/005/006/007): ~4,990 deployers, ~10,307 contracts, 21 confirmed → **1 verified-drain contract, 0 draining deployers**.
+- **53 curated role-wallets** (treasury/cashout/laundry/gas_station/exit_cex…): **0 drain**. Org graphs list legit infra (Coinbase, Binance, LI.FI, WETH, MEV bots, Chainlink oracles) as "nodes."
+- **22 adversarial-classified entities** (16 `known_attacker`, circularly labeled; 6 `trap_contract` = org_001 bait): **0 in drain set**.
+- **7 "rogue facilitators"**: **0 in approval-drain set**; modest active EOAs, `vol=0.0`, no industrial-drainer signature; only **D270** has real harm (~$5K OP drain — the retired "$3.1 quadrillion" event).
+- **437 x402 facilitators**: legitimate Coinbase payment infrastructure; **0 in drain set**.
+- `bytecode_families` table **empty**; "Coffee fleet" / "T2-eaef6a5d family" are doc-only narratives (T2 = the uncharacterized ~75% NULL bytecode bucket — *unclassified*, not adversarial).
+- **Total demonstrable on-chain harm across the entire named layer:** ~1 drained contract (org_001) + D270's ~$5K + the 2 named tokens. Out of ~5,000 deployers / ~10,300 contracts / ~500 named addresses.
+
+**Mechanism:** identical to the drain and org_001 layers — shape-vs-intent (shared funding + curated roles + circular labels → "organization / attacker / facilitator") with no ground-truth harm test, plus harm inflated by external-incident `SUM`s (org_001 $285M, Correction #30).
+
+**Fix:** demote the org/cluster layer to "funding/infrastructure clusters" (leads, not verdicts). No "organization / criminal infrastructure" claim ships without ground-truth harm from the entity's OWN monitored-chain activity + an explicit attribution chain. Retract org-scale / $-extraction claims from pitch/narrative materials. Keep the small real signal (266 drains / 104 drainers / org_001's ~1 contract / D270's OP drain) as forensics.
+
+**Meta-lesson:** "N organizations mapped" and "N criminal-infrastructure addresses" are **inventory counts of a clustering algorithm, not measured adversaries.** The corpus repeatedly mistook the size of its own labels for the size of the threat — at the contract tier (#25), the drain count (#29), the flagship org (#30), and now the whole org/cluster layer.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.
