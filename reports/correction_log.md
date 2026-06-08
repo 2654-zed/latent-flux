@@ -1711,6 +1711,12 @@ Provenance/tier: source = local `approval_watchlist` post-backfill, 2026-06-06; 
 
 **Meta-lesson (third recurrence this session of "shape ≠ ground truth"):** #28 misdiagnosed a regression from a bare-harness repro; this entry shipped a detector that inferred intent (drain) from shape (`n_out>0`) without a ground-truth discriminator (tx initiator). The corpus's entire correction history (#20, #22, #24, #25, #27, this) is the same failure: **legitimate and adversarial activity are shape-identical at the resolution Layer 3 observes; only a deductive signal separates them.** No "adversarial / drain / predator" claim should ship without a deductive discriminator, validated against the realistic legitimate confound — not just a trivial negative control.
 
+**UPDATE (2026-06-08) — the true drain set (tx-initiator re-run result):** the corrected detector scanned **50,351 of 61,445** watchlist approvers (**82%**; the tail stalled on Blockscout throughput after 24h+ and was stopped — cache-resumable, won't move the order of magnitude). Verdicts: 43,159 SALE, 6,926 NONE, **266 DRAIN**.
+
+**Corrected headline — verified drain set (Tier-A):** **266 confirmed real approval-drains** / **259 distinct victims** / **59 contracts** / **104 distinct drainers**, every row carrying an on-chain `drain_tx_hash` with the actual drainer (`tx.from`) attributed. By contract tier: unanalyzed 115, confirmed 85, suspected 65, unknown 1 — the unanalyzed drains are genuine drains on contracts the Correction #25 migration downgraded (the #27 amendment, now confirmed by ground truth). Drain rate 0.53% → **~325 projected** at 100% scan.
+
+This supersedes BOTH the retracted 44,540 (#28/#29 — ~99.4% were victim-initiated DEX sales) AND the retired 3,437 / 2,963 victims / 94 drainers (#27 — Bug #19b-inflated + tx_events-blind). Provenance: local `surveillance.db` `approval_watchlist` (drain_detected=1) + `drain_initiator_verdicts`, 2026-06-08; method = Blockscout tx-initiator test (`tx.from != victim`), 0 Alchemy CU. The 266 are now the ONLY drain_detected=1 rows locally; the 11,094 unscanned remain drain_detected=0 (cache-resumable). Quote with this provenance — it is a real but small, fully-attributed set, not a corpus headline aggregate.
+
 ---
 
 ## How to add the next entry
