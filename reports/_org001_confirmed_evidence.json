@@ -1,0 +1,200 @@
+[
+  {
+    "addr": "0x3b8b8e550997541816882c778ae0ac031e86b5a8",
+    "chain": "arbitrum",
+    "verified_drains": 0,
+    "bs_name": null,
+    "is_contract": true,
+    "token_name": null,
+    "token_symbol": null,
+    "holders": null,
+    "reason": "CONFIRMED TRAP. Received $3,980-$3,985 USDC bait deposits from CONFIRMED OPERATOR 0xe93d64... Deposit traced via alchemy"
+  },
+  {
+    "addr": "0x79a2f71187dc9fd9b173781e6dd4ff9960f6f61b",
+    "chain": "arbitrum",
+    "verified_drains": 0,
+    "bs_name": null,
+    "is_contract": true,
+    "token_name": null,
+    "token_symbol": null,
+    "holders": null,
+    "reason": "CONFIRMED TRAP. Received $3,980-$3,985 USDC bait deposits from CONFIRMED OPERATOR 0xe93d64... Deposit traced via alchemy"
+  },
+  {
+    "addr": "0xc8e6a328d094609a97024978657c29920cabf7c3",
+    "chain": "arbitrum",
+    "verified_drains": 0,
+    "bs_name": null,
+    "is_contract": true,
+    "token_name": null,
+    "token_symbol": null,
+    "holders": null,
+    "reason": "CONFIRMED TRAP. Received $3,980-$3,985 USDC bait deposits from CONFIRMED OPERATOR 0xe93d64... Deposit traced via alchemy"
+  },
+  {
+    "addr": "0x74b9a8351bd725ca3edd654c9728873b8c6f051e",
+    "chain": "arbitrum",
+    "verified_drains": 0,
+    "bs_name": null,
+    "is_contract": true,
+    "token_name": null,
+    "token_symbol": null,
+    "holders": null,
+    "reason": "CONFIRMED TRAP. Received $3,980-$3,985 USDC bait deposits from CONFIRMED OPERATOR 0xe93d64... Deposit traced via alchemy"
+  },
+  {
+    "addr": "0xc8f28b043feb244c7e9df76af45a68271013a335",
+    "chain": "arbitrum",
+    "verified_drains": 0,
+    "bs_name": null,
+    "is_contract": true,
+    "token_name": null,
+    "token_symbol": null,
+    "holders": null,
+    "reason": "CONFIRMED TRAP. Received $3,980-$3,985 USDC bait deposits from CONFIRMED OPERATOR 0xe93d64... Deposit traced via alchemy"
+  },
+  {
+    "addr": "0x3e6800980a97038ce5e746cde46c49d45e4966de",
+    "chain": "arbitrum",
+    "verified_drains": 0,
+    "bs_name": null,
+    "is_contract": true,
+    "token_name": null,
+    "token_symbol": null,
+    "holders": null,
+    "reason": "CONFIRMED TRAP. Received $3,980-$3,985 USDC bait deposits from CONFIRMED OPERATOR 0xe93d64... Deposit traced via alchemy"
+  },
+  {
+    "addr": "0xec6819ecc7c7b4b51661099fa1a1460f41e75b81",
+    "chain": "arbitrum",
+    "verified_drains": 0,
+    "bs_name": null,
+    "is_contract": true,
+    "token_name": null,
+    "token_symbol": null,
+    "holders": null,
+    "reason": "Behavioral confirmation: bot 0x5f7476ee17eccbc57de45f3444852f5141f650f2 trapped in tx d6618fd5d5cf5e4efad78acbae07e158c9"
+  },
+  {
+    "addr": "0x7ff6f0d5d216b9ba8e218633c18bc75ebf439671",
+    "chain": "arbitrum",
+    "verified_drains": 0,
+    "bs_name": "AccessControlledOCR2Aggregator",
+    "is_contract": true,
+    "token_name": null,
+    "token_symbol": null,
+    "holders": null,
+    "reason": "Behavioral confirmation: bot 0xbd620be125abf8b569b9a3cc132aad0bcf1ff0e7 trapped in tx 1e62fef6bf938ce168133b792bf4021f91"
+  },
+  {
+    "addr": "0xcf2226fe6c672e7355866fa00e9e329600b56526",
+    "chain": "arbitrum",
+    "verified_drains": 0,
+    "bs_name": "AccessControlledOCR2Aggregator",
+    "is_contract": true,
+    "token_name": null,
+    "token_symbol": null,
+    "holders": null,
+    "reason": "Behavioral confirmation: bot 0xbd620be125abf8b569b9a3cc132aad0bcf1ff0e7 trapped in tx 4dea81b4ee312f8ea4349f4586d95eb2ae"
+  },
+  {
+    "addr": "0x307d64f72eefdddbe93011ab0f90112c89bba206",
+    "chain": "arbitrum",
+    "verified_drains": 0,
+    "bs_name": null,
+    "is_contract": true,
+    "token_name": null,
+    "token_symbol": null,
+    "holders": null,
+    "reason": "Behavioral confirmation: bot 0x3f2cdae910cd13638e38b45881e7a4fc3a9fe320 trapped in tx d72eede3c60311e3a286a2a6f45a1a7481"
+  },
+  {
+    "addr": "0x50e95f8c19c4c4f260a256a916f80550e3635f80",
+    "chain": "optimism",
+    "verified_drains": 0,
+    "bs_name": null,
+    "is_contract": true,
+    "token_name": null,
+    "token_symbol": null,
+    "holders": null,
+    "reason": "Behavioral confirmation: bot 0xe3150ab1618f9ed050b1082aa56ad7d25ce75eeb trapped in tx c6af42b21639e4f843504b1579b93aa44c"
+  },
+  {
+    "addr": "0xc220c09eb544f6438d9da296478f90bb8f37c602",
+    "chain": "arbitrum",
+    "verified_drains": 0,
+    "bs_name": null,
+    "is_contract": true,
+    "token_name": null,
+    "token_symbol": null,
+    "holders": null,
+    "reason": "Behavioral confirmation: bot 0x3f2cdae910cd13638e38b45881e7a4fc3a9fe320 trapped in tx 9af0fca29eef98d68c5c161e108e526846"
+  },
+  {
+    "addr": "0x11bad5dac6508e4f8ff8c41215488d04b805cb11",
+    "chain": "base",
+    "verified_drains": 0,
+    "bs_name": null,
+    "is_contract": true,
+    "token_name": null,
+    "token_symbol": null,
+    "holders": null,
+    "reason": "Behavioral confirmation: bot 0x11a968128adb249441d9d279a4ddd8968e158a11 trapped in tx 89ad53ce2d28c867246f27591e326a27fe"
+  },
+  {
+    "addr": "0xd6cd943bfc0711125bc01cff7b7dfb87be1d10c8",
+    "chain": "arbitrum",
+    "verified_drains": 1,
+    "bs_name": "Yupp AI",
+    "is_contract": true,
+    "token_name": "Yupp AI",
+    "token_symbol": "YUPP",
+    "holders": "419",
+    "reason": "[RESTORED 2026-06-01 / Correction #27 Finding 4: on-chain-verified drainer (104 victims with outbound token legs via Blo"
+  },
+  {
+    "addr": "0x4e44f8e5c19533742b84a922477e56e8b54f07ae",
+    "chain": "arbitrum",
+    "verified_drains": 0,
+    "bs_name": "AccessControlledOCR2Aggregator",
+    "is_contract": true,
+    "token_name": null,
+    "token_symbol": null,
+    "holders": null,
+    "reason": "Behavioral confirmation: bot 0x27c56a6d40f20a33349f0822201fbc10d455be66 trapped in tx aaca59f61d5f7538351ef129442ada1ed5"
+  },
+  {
+    "addr": "0x14e7fbb92339899e53be52bf4492802d65b343ba",
+    "chain": "base",
+    "verified_drains": 0,
+    "bs_name": null,
+    "is_contract": true,
+    "token_name": null,
+    "token_symbol": null,
+    "holders": null,
+    "reason": "Behavioral confirmation: bot 0x9b3405f78585d61f0b9ed72529ee620d6715dc9c trapped in tx ceff78ad64986b8f19d700d358653bd96f"
+  },
+  {
+    "addr": "0x2e8b6bcb9e2dad7ba021d065657b30b436df2923",
+    "chain": "base",
+    "verified_drains": 0,
+    "bs_name": null,
+    "is_contract": true,
+    "token_name": null,
+    "token_symbol": null,
+    "holders": null,
+    "reason": "Behavioral confirmation: bot 0x01720d1bdfb479bb61eaab1d620fab459ed8512e trapped in tx d9378528267cf6a6aba77ed99feb970b7f"
+  },
+  {
+    "addr": "0x73970dbd1c4eced5a6a8d2cfb3783df0b50c5cf2",
+    "chain": "base",
+    "verified_drains": 0,
+    "bs_name": "nGRND Runes",
+    "is_contract": true,
+    "token_name": "nGRND Runes",
+    "token_symbol": "RNS",
+    "holders": "173",
+    "reason": "Behavioral confirmation: bot 0x640f66bcdb9c843559740e6e839c4e47d379a656 trapped in tx 206b030bf68c3bdb3440f633b9217b721d"
+  }
+]

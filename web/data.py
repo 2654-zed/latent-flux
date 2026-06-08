@@ -138,7 +138,22 @@ def get_org_001_stats(conn) -> dict:
     total_c = gas_contracts + whale_contracts
     whale_pct = round(whale_deployers / max(total_d, 1) * 100) if total_d > 0 else 50
     gas_pct = 100 - whale_pct
-    usd = conn.execute("SELECT SUM(total_usd_moved) FROM extraction_events WHERE event_id LIKE 'EXTRACTION_00%'").fetchone()[0] or 0
+    # Correction #30 (2026-06-08): the old `WHERE event_id LIKE 'EXTRACTION_00%'`
+    # SUMMED EVERY catalogued incident into org_001 — including EXTRACTION_005
+    # ($285M Drift governance hack on SOLANA, DPRK-attributed), EXTRACTION_004
+    # ($18.4M Rhea on NEAR), and EXTRACTION_009 ($5M Wasabi). None are org_001;
+    # 004/005 aren't even on a monitored chain. That fabricated a "$285M+" org
+    # from a SQL artifact. The data model has no org_id, so we explicitly
+    # enumerate the only monitored-chain extraction events attributable to
+    # org_001: EXTRACTION_001 (names org_001), 002 (references the 001 cycle),
+    # 003 (one-shot monitored-L2 extraction). ~$257K, not $308M. CAVEAT: even
+    # these are unverified against flow-vs-theft and need the same ground-truth
+    # re-check the drain set got (Correction #29) — treat as an upper bound.
+    usd = conn.execute(
+        "SELECT COALESCE(SUM(total_usd_moved), 0) FROM extraction_events "
+        "WHERE monitored_chain = 1 "
+        "AND event_id IN ('EXTRACTION_001','EXTRACTION_002','EXTRACTION_003')"
+    ).fetchone()[0] or 0
     return {
         "total_deployers": total_d,
         "total_contracts": total_c,

@@ -1719,6 +1719,38 @@ This supersedes BOTH the retracted 44,540 (#28/#29 — ~99.4% were victim-initia
 
 ---
 
+## Correction #30 — org_001 Is Not a $285M Criminal Organization. The "Extraction" Headline Is a SQL Artifact Summing Unrelated External Incidents.
+
+**Date:** 2026-06-08
+**Discovery method:** Operator-prompted ground-truth audit of the documented orgs against the verified 266-drain set + `extraction_events` attribution. Inline queries; evidence in `reports/_org001_confirmed_evidence.json`.
+**Severity:** HIGH — org_001 is the corpus's flagship organization and the "$285M+" figure is the headline in pitch/narrative materials.
+
+**Claim:** org_001 is a coordinated criminal extraction organization responsible for **$285M+** across hundreds–thousands of deployers/contracts.
+
+**Reality (Tier A):**
+1. **Membership is a funding-chain clustering artifact.** Defined by a shared `funding_trail`; the count is method-arbitrary — **899** (retired) → "use 308" → **1,445** (funding_trail method). The org graph's own nodes are legitimate infrastructure: Coinbase, Binance, **LI.FI Bridge** (`0x1231deb6…`, a real cross-chain router), WETH wrapper, MEV bots. Sharing a funding source (an exchange) is near-universal and is not evidence of coordination.
+2. **It does not drain anyone.** Of **6,842** contracts: **18 confirmed** (0.26%), 76% unknown/unanalyzed. Against the verified 266-drain set: **1** contract drains anyone; **0** of its 1,445 deployers are among the 104 real drainers.
+3. **The "$285M+" is a SQL artifact.** `get_org_001_stats` computed `SUM(total_usd_moved) WHERE event_id LIKE 'EXTRACTION_00%'`, sweeping in **every** catalogued incident regardless of org linkage or chain:
+   - EXTRACTION_005 **$285M** = Drift Protocol governance takeover on **Solana** (`monitored_chain=0`), **attributed to DPRK** by Elliptic/TRM.
+   - EXTRACTION_004 **$18.4M** = Rhea/Burrow Finance oracle exploit on **NEAR** (`monitored_chain=0`).
+   - EXTRACTION_009 **$5M** = Wasabi Protocol admin-key compromise (multi-chain incident).
+   - These three (**$308.4M**) are external, well-documented, **non-org_001** protocol incidents on chains Layer 3 does not monitor.
+   - Real org_001 observed activity (EXTRACTION_001/002/003, monitored L2, summaries name "org_001"): **~$257K** — and itself uncertain given the corpus's flow-vs-theft track record.
+4. **Even the 18-contract "confirmed core" is mostly FPs.** **3** are verified-source **Chainlink `AccessControlledOCR2Aggregator` price feeds** (confirmed-as-trap because Chainlink keeper bots transmit to them — a pure shape FP); **6** are "bait deposit" inferences ($3,980–3,985 USDC received) with **0 drains**; **~7** are "behavioral confirmation: bot interacted" (#25-FP pattern) with **0 drains**; **2** are named tokens (Yupp AI, 419 holders, carries the lone verified drain; nGRND Runes, 173 holders). Genuine ground-truth-adversarial contracts: **~1**.
+
+**Numerical effect:** org_001 "$285M+" → real observed **~$257K** (~1,100× overstatement); the $285M/$18.4M/$5M are external incidents, not org_001. "Confirmed-adversarial contracts" 18 → ~1 with ground-truth harm.
+
+**Other orgs:** org_002 = 3,507 deployers / 3,249 contracts / **2 confirmed / 0 verified drains / 0 real drainers** (a funding cluster with no demonstrated adversarial core). org_003 / org_004 are not built as funding-chain orgs (0 members; org_004 is the single address `0xbaed383e` flagged as a "next target").
+
+**Fix:**
+- `web/data.py::get_org_001_stats` — stop summing unrelated incidents; gate on `monitored_chain=1 AND summary LIKE '%org_001%'` (this change), so it reports the real ~$257K, not $308M.
+- Retract org_001's $285M/scale in `CORRECTIONS.md` + all pitch/narrative materials.
+- The `extraction_events` catalog (Drift/Rhea/Wasabi) is legitimate incident research — keep it as a *catalog*, but it must never be auto-attributed to org_001.
+
+**Meta-lesson:** the org layer is the same house of cards as the drain layer — shape-vs-intent (shared funding/infra → "organization") plus harm-inflation (a `LIKE`-query stapling a DPRK Solana governance hack and a NEAR exploit onto a Base/Arb/Op cluster). No "organization" or "$X extracted" claim should ship without (a) ground-truth harm from the org's OWN monitored-chain activity and (b) an explicit attribution chain — not a `SUM` over an incident catalog.
+
+---
+
 ## How to add the next entry
 
 1. Append a new `## Correction #N` section in chronological order.
